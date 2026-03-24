@@ -1,3 +1,6 @@
+## Dependency Graph
+
+```mermaid
 graph LR
     subgraph Common
         DataService["DBC Data Service"]
@@ -109,3 +112,4 @@ graph LR
     %% SIFO internal deps
     SIFOPlatform --> SIFOFound
     SIFOPlatform --> EditGL
+```
