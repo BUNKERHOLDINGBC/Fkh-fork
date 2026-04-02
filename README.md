@@ -164,7 +164,7 @@ terraform/               Terraform configuration
   deploy.ps1             Full environment deploy (GitHub check + terraform apply)
   deploy-function.ps1    Function-only deploy (targeted apply + func publish)
   checkGitHubTeam.ps1    Imports existing GitHub team into Terraform state
-azure-function/          Azure Function source (C#, .NET 8, isolated worker)
+fk8s-functions/          Azure Function source (C#, .NET 8, isolated worker)
 fk8s-vsix/              VS Code extension source (TypeScript)
 fk8s-cli/               C#/.NET command line interface
 ```
