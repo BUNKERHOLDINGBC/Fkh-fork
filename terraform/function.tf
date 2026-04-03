@@ -16,13 +16,13 @@ resource "azurerm_service_plan" "function" {
   name                = local.function_plan_name
   resource_group_name = azurerm_resource_group.this.name
   location            = azurerm_resource_group.this.location
-  os_type             = "Linux"
+  os_type             = "Windows"
   sku_name            = "Y1"
 }
 
 # ── Azure Function App ───────────────────────────────────────────────────────
 
-resource "azurerm_linux_function_app" "this" {
+resource "azurerm_windows_function_app" "this" {
   name                = local.function_app_name
   resource_group_name = azurerm_resource_group.this.name
   location            = azurerm_resource_group.this.location
@@ -38,7 +38,7 @@ resource "azurerm_linux_function_app" "this" {
 
   site_config {
     application_stack {
-      dotnet_version              = "8.0"
+      dotnet_version              = "v8.0"
       use_dotnet_isolated_runtime = true
     }
   }
@@ -49,6 +49,7 @@ resource "azurerm_linux_function_app" "this" {
     AKS_SUBSCRIPTION_ID      = var.subscription_id
     AKS_RESOURCE_GROUP       = azurerm_resource_group.this.name
     AKS_CLUSTER_NAME         = azurerm_kubernetes_cluster.this.name
+    ACR_NAME                 = azurerm_container_registry.this.name
     ALLOWED_ORG_TEAMS        = jsonencode(var.allowed_org_teams)
   }
 

@@ -25,12 +25,12 @@ output "sql_service_fqdn" {
 
 output "function_app_name" {
   description = "Name of the Azure Function App. Used by deploy-functionupdate.ps1 to publish code."
-  value       = azurerm_linux_function_app.this.name
+  value       = azurerm_windows_function_app.this.name
 }
 
 output "function_url" {
   description = "Base URL of the Azure Function. Paste this into FUNCTION_URL in the VS Code extension."
-  value       = "https://${azurerm_linux_function_app.this.default_hostname}/api/CreateNode"
+  value       = "https://${azurerm_windows_function_app.this.default_hostname}/api/CreateNode"
 }
 
 output "github_team_url" {
@@ -46,4 +46,14 @@ output "managed_identity_client_id" {
 output "kube_config_command" {
   description = "Command to fetch kubeconfig."
   value       = "az aks get-credentials --resource-group ${azurerm_resource_group.this.name} --name ${azurerm_kubernetes_cluster.this.name} --overwrite-existing"
+}
+
+output "acr_name" {
+  description = "Name of the Azure Container Registry."
+  value       = azurerm_container_registry.this.name
+}
+
+output "acr_login_server" {
+  description = "Login server URL for the Azure Container Registry."
+  value       = azurerm_container_registry.this.login_server
 }
