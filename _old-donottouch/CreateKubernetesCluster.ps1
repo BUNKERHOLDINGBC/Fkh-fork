@@ -394,7 +394,7 @@ Write-Host "ClusterIP service 'mssql-service' created (internal only)." -Foregro
 Write-Host "Creating network policy to restrict SQL Server access..." -ForegroundColor Cyan
 
 $networkPolicyYaml = @"
-apiVersion: networking.k8s.io/v1
+apiVersion: networking.fk8s.io/v1
 kind: NetworkPolicy
 metadata:
   name: mssql-allow-windows-app-only
