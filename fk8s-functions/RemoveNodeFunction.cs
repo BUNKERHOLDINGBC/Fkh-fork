@@ -9,9 +9,9 @@ public class RemoveNodeFunction : FunctionBase
 {
     private readonly ILogger<RemoveNodeFunction> _logger;
     private readonly GitHubAuthService _gitHub;
-    private readonly AksService _aks;
+    private readonly FK8sService _aks;
 
-    public RemoveNodeFunction(ILogger<RemoveNodeFunction> logger, GitHubAuthService gitHub, AksService aks)
+    public RemoveNodeFunction(ILogger<RemoveNodeFunction> logger, GitHubAuthService gitHub, FK8sService aks)
     {
         _logger = logger;
         _gitHub = gitHub;

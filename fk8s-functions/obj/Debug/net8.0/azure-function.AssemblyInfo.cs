@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("azure-function")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+fd3c3e5771076e216b616469d68f9cb3c5066288")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+08003d82e9d16b92637b1108c86dd52ae065087a")]
 [assembly: System.Reflection.AssemblyProductAttribute("azure-function")]
 [assembly: System.Reflection.AssemblyTitleAttribute("azure-function")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

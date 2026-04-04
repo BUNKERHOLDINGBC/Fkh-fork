@@ -90,6 +90,11 @@ variable "github_team_name" {
   default     = "FK8s-members"
 }
 
+variable "github_repo" {
+  description = "GitHub repository name (without org) that is allowed to authenticate via OIDC for image builds."
+  type        = string
+}
+
 variable "github_team_members" {
   description = "List of GitHub usernames to add to the access team."
   type        = list(string)
@@ -104,4 +109,12 @@ variable "allowed_org_teams" {
     org  = string
     team = string
   }))
+}
+
+# ── Container image ──────────────────────────────────────────────────────────
+
+variable "base_image" {
+  description = "Base Docker image for Business Central container builds."
+  type        = string
+  default     = "mcr.microsoft.com/businesscentral:ltsc2022"
 }

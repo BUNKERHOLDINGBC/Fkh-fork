@@ -1,0 +1,38 @@
+# ── Log Analytics Workspace (shared by App Insights + Container Insights) ─────
+
+resource "azurerm_log_analytics_workspace" "this" {
+  name                = "${local.product_prefix}-${var.customer_name}-logs"
+  resource_group_name = azurerm_resource_group.this.name
+  location            = azurerm_resource_group.this.location
+  sku                 = "PerGB2018"
+  retention_in_days   = 30
+
+  tags = azurerm_resource_group.this.tags
+}
+
+# ── Application Insights (for Azure Function logging) ────────────────────────
+
+resource "azurerm_application_insights" "this" {
+  name                = "${local.product_prefix}-${var.customer_name}-insights"
+  resource_group_name = azurerm_resource_group.this.name
+  location            = azurerm_resource_group.this.location
+  workspace_id        = azurerm_log_analytics_workspace.this.id
+  application_type    = "web"
+
+  tags = azurerm_resource_group.this.tags
+}
+
+# ── Container Insights for AKS (logs K8s events, pod logs, metrics) ──────────
+
+resource "azurerm_log_analytics_solution" "container_insights" {
+  solution_name         = "ContainerInsights"
+  workspace_resource_id = azurerm_log_analytics_workspace.this.id
+  workspace_name        = azurerm_log_analytics_workspace.this.name
+  location              = azurerm_resource_group.this.location
+  resource_group_name   = azurerm_resource_group.this.name
+
+  plan {
+    publisher = "Microsoft"
+    product   = "OMSGallery/ContainerInsights"
+  }
+}

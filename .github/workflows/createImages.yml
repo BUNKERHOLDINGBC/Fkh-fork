@@ -1,0 +1,63 @@
+name: Create Images
+
+on:
+  workflow_dispatch:
+    inputs:
+      artifactUrls:
+        description: 'Comma-separated list of artifact URLs'
+        required: true
+        type: string
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  AZURE_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  ACR_LOGIN_SERVER: ${{ secrets.ACR_LOGIN_SERVER }}
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Build matrix from input
+        id: set-matrix
+        shell: pwsh
+        env:
+          ARTIFACT_URLS: ${{ github.event.inputs.artifactUrls }}
+        run: |
+          $urls = $env:ARTIFACT_URLS -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ -ne '' }
+          $matrix = @{ artifactUrl = $urls } | ConvertTo-Json -Compress
+          "matrix=$matrix" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+  build:
+    needs: prepare
+    runs-on: windows-2022
+    strategy:
+      matrix: ${{ fromJson(needs.prepare.outputs.matrix) }}
+      fail-fast: false
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ env.AZURE_CLIENT_ID }}
+          tenant-id: ${{ env.AZURE_TENANT_ID }}
+          subscription-id: ${{ env.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Login to ACR
+        run: az acr login --name ${{ env.ACR_LOGIN_SERVER }}
+
+      - name: Build image
+        shell: pwsh
+        env:
+          ARTIFACT_URL: ${{ matrix.artifactUrl }}
+        run: |
+          $artifactUrl = $env:ARTIFACT_URL
+          Write-Host "Building image for artifact: $artifactUrl"

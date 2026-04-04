@@ -84,15 +84,10 @@ public abstract class FunctionBase
             await response.WriteAsJsonAsync(new { message = result });
             return response;
         }
-        catch (NotImplementedException ex)
-        {
-            logger.LogError(ex, "AKS operation not yet implemented.");
-            return Respond(req, HttpStatusCode.InternalServerError, "AKS operation is not yet implemented.");
-        }
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to execute {Operation} for user {Username}.", operationName, username);
-            return Respond(req, HttpStatusCode.InternalServerError, "An error occurred while executing the operation.");
+            return Respond(req, HttpStatusCode.InternalServerError, ex.Message);
         }
     }
 

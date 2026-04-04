@@ -9,9 +9,9 @@ public class CreateNodeFunction : FunctionBase
 {
     private readonly ILogger<CreateNodeFunction> _logger;
     private readonly GitHubAuthService _gitHub;
-    private readonly AksService _aks;
+    private readonly FK8sService _aks;
 
-    public CreateNodeFunction(ILogger<CreateNodeFunction> logger, GitHubAuthService gitHub, AksService aks)
+    public CreateNodeFunction(ILogger<CreateNodeFunction> logger, GitHubAuthService gitHub, FK8sService aks)
     {
         _logger = logger;
         _gitHub = gitHub;

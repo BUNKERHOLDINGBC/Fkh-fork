@@ -16,3 +16,16 @@ resource "azurerm_role_assignment" "function_aks" {
   role_definition_name = "Azure Kubernetes Service Contributor Role"
   principal_id         = azurerm_user_assigned_identity.function.principal_id
 }
+
+# ── Federated credential for GitHub Actions OIDC ──────────────────────────────
+# Allows the createImages workflow in the configured repo to authenticate
+# as the managed identity and push images to ACR.
+
+resource "azurerm_federated_identity_credential" "github_actions" {
+  name                = "github-actions-createimages"
+  resource_group_name = azurerm_resource_group.this.name
+  parent_id           = azurerm_user_assigned_identity.function.id
+  audience            = ["api://AzureADTokenExchange"]
+  issuer              = "https://token.actions.githubusercontent.com"
+  subject             = "repo:${var.github_org}/${var.github_repo}:ref:refs/heads/main"
+}

@@ -38,6 +38,31 @@ output "github_team_url" {
   value       = "https://github.com/orgs/${var.github_org}/teams/${github_team.provisioners.slug}"
 }
 
+output "acr_login_server" {
+  description = "ACR login server for docker login."
+  value       = azurerm_container_registry.this.login_server
+}
+
+output "identity_client_id" {
+  description = "Client ID of the managed identity (used for OIDC federation)."
+  value       = azurerm_user_assigned_identity.function.client_id
+}
+
+output "tenant_id" {
+  description = "Azure AD tenant ID (used for OIDC federation)."
+  value       = var.tenant_id
+}
+
+output "subscription_id" {
+  description = "Azure subscription ID (used for OIDC federation)."
+  value       = var.subscription_id
+}
+
+output "github_repo" {
+  description = "GitHub org/repo for Actions secret sync."
+  value       = "${var.github_org}/${var.github_repo}"
+}
+
 output "managed_identity_client_id" {
   description = "Client ID of the Function's Managed Identity."
   value       = azurerm_user_assigned_identity.function.client_id

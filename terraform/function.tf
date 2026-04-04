@@ -44,13 +44,16 @@ resource "azurerm_windows_function_app" "this" {
   }
 
   app_settings = {
-    FUNCTIONS_WORKER_RUNTIME = "dotnet-isolated"
-    AZURE_CLIENT_ID          = azurerm_user_assigned_identity.function.client_id
-    AKS_SUBSCRIPTION_ID      = var.subscription_id
-    AKS_RESOURCE_GROUP       = azurerm_resource_group.this.name
-    AKS_CLUSTER_NAME         = azurerm_kubernetes_cluster.this.name
-    ACR_NAME                 = azurerm_container_registry.this.name
-    ALLOWED_ORG_TEAMS        = jsonencode(var.allowed_org_teams)
+    FUNCTIONS_WORKER_RUNTIME                = "dotnet-isolated"
+    AZURE_CLIENT_ID                         = azurerm_user_assigned_identity.function.client_id
+    AKS_SUBSCRIPTION_ID                     = var.subscription_id
+    AKS_RESOURCE_GROUP                      = azurerm_resource_group.this.name
+    AKS_CLUSTER_NAME                        = azurerm_kubernetes_cluster.this.name
+    ACR_NAME                                = azurerm_container_registry.this.name
+    BASE_IMAGE                              = var.base_image
+    ALLOWED_ORG_TEAMS                       = jsonencode(var.allowed_org_teams)
+    APPINSIGHTS_INSTRUMENTATIONKEY          = azurerm_application_insights.this.instrumentation_key
+    APPLICATIONINSIGHTS_CONNECTION_STRING   = azurerm_application_insights.this.connection_string
   }
 
   tags = azurerm_resource_group.this.tags

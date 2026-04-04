@@ -10,8 +10,11 @@ var host = new HostBuilder()
         // Register GitHubAuthService with a named HttpClient
         services.AddHttpClient<GitHubAuthService>();
 
-        // Register AksService
-        services.AddSingleton<AksService>();
+        // Register FK8sService
+        services.AddSingleton<FK8sService>();
+
+        // Register AcrBuildService
+        services.AddSingleton<AcrBuildService>();
     })
     .Build();
 

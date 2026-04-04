@@ -90,6 +90,10 @@ resource "azurerm_kubernetes_cluster" "this" {
     type = "SystemAssigned"
   }
 
+  oms_agent {
+    log_analytics_workspace_id = azurerm_log_analytics_workspace.this.id
+  }
+
   tags = azurerm_resource_group.this.tags
 }
 

@@ -259,6 +259,41 @@ if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($resourceGroupName)) {
 & (Join-Path $scriptDir "deploy-functionupdate.ps1") -FunctionAppName $functionAppName -ResourceGroupName $resourceGroupName -FunctionProjectPath $FunctionProjectPath
 if ($LASTEXITCODE -ne 0) { throw "Function publish failed." }
 
+# ── Step 6: Sync GitHub Actions secrets from Terraform outputs ────────────────
+
+$ghCommand = Get-Command gh -ErrorAction SilentlyContinue
+if ($ghCommand) {
+    Write-Host ""
+    Write-Host "Syncing GitHub Actions secrets from Terraform outputs..." -ForegroundColor Cyan
+
+    $secrets = @{
+        AZURE_CLIENT_ID        = terraform output -raw identity_client_id
+        AZURE_TENANT_ID        = terraform output -raw tenant_id
+        AZURE_SUBSCRIPTION_ID  = terraform output -raw subscription_id
+        ACR_LOGIN_SERVER       = terraform output -raw acr_login_server
+    }
+
+    $repo = terraform output -raw github_repo
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($repo)) {
+        Write-Host "  Could not determine GitHub repo from Terraform output — skipping secret sync." -ForegroundColor Yellow
+        return
+    }
+
+    foreach ($kv in $secrets.GetEnumerator()) {
+        if (-not [string]::IsNullOrWhiteSpace($kv.Value)) {
+            gh secret set $kv.Key --repo $repo --body $kv.Value
+            Write-Host "  Set secret $($kv.Key)" -ForegroundColor Green
+        }
+        else {
+            Write-Host "  Skipped $($kv.Key) (empty output)" -ForegroundColor Yellow
+        }
+    }
+}
+else {
+    Write-Host "GitHub CLI (gh) not found — skipping GitHub Actions secret sync." -ForegroundColor Yellow
+    Write-Host "Set these secrets manually in the repo: AZURE_CLIENT_ID, AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, ACR_LOGIN_SERVER" -ForegroundColor Yellow
+}
+
 Write-Host ""
 Write-Host -ForegroundColor Green @'
  _____             _                                  _                               _      _       
