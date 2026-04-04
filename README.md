@@ -128,7 +128,7 @@ Run from the publish folder (or add it to PATH):
 
 ```powershell
 cd .\dist
-.k8s.exe createnode
+.fk8s.exe createnode
 ```
 
 Set the function base URL:

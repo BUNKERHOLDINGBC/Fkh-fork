@@ -22,7 +22,7 @@ resource "azurerm_application_insights" "this" {
   tags = azurerm_resource_group.this.tags
 }
 
-# ── Container Insights for AKS (logs K8s events, pod logs, metrics) ──────────
+# ── Container Insights for AKS (logs Kubernetes events, pod logs, metrics) ──────────
 
 resource "azurerm_log_analytics_solution" "container_insights" {
   solution_name         = "ContainerInsights"

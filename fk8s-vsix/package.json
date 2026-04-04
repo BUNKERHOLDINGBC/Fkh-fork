@@ -1,6 +1,6 @@
 {
   "name": "fk8s",
-  "displayName": "Freddy's K8s Provisioner",
+  "displayName": "Freddy's Kubernetes Provisioner",
   "description": "Provision AKS nodes via authenticated Azure Function",
   "version": "0.0.1",
   "engines": {
