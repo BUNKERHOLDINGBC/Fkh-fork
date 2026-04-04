@@ -257,6 +257,13 @@ if ($LASTEXITCODE -ne 0) {
     throw "Bootstrap apply failed."
 }
 
+# ── Refresh kubeconfig after bootstrap (AKS now exists) ──────────────────────
+$aksRg   = "fk8s-$tfCustomerName"
+$aksName = "fk8s-$tfCustomerName-aks"
+Write-Host "Fetching AKS credentials for $aksName..." -ForegroundColor Cyan
+az aks get-credentials --resource-group $aksRg --name $aksName --overwrite-existing
+if ($LASTEXITCODE -ne 0) { Write-Host "Warning: could not fetch AKS credentials." -ForegroundColor Yellow }
+
 # ── Step 3: Check / import GitHub team ───────────────────────────────────────
 
 Write-Host ""
