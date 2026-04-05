@@ -125,7 +125,7 @@ public class FK8sCreateNode : FK8sServiceBase
                                 Image = fullImage,
                                 Ports = new List<V1ContainerPort>
                                 {
-                                    new(80), new(443), new(7047), new(7048), new(7049),
+                                    new() { ContainerPort = 80 }, new() { ContainerPort = 443 }, new() { ContainerPort = 7047 }, new() { ContainerPort = 7048 }, new() { ContainerPort = 7049 },
                                 },
                                 Env = BuildEnvVars(adminUsername, secretName, publicDnsName)
                             }

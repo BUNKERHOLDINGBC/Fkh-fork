@@ -74,7 +74,7 @@ jobs:
           $appUri = [Uri]::new($artifactUrl)
           $imageTag = "$($appUri.AbsolutePath.Replace('/','-').TrimStart('-'))".ToLowerInvariant()
           $imageName = "my:$imageTag"
-          $artifactPath = Download-Artifact -artifactUrl $artifactUrl -includePlatform
+          $artifactPath = Download-Artifacts -artifactUrl $artifactUrl -includePlatform
           $manifest = Get-Content -Path (Join-Path $artifactPath[0] "manifest.json") | ConvertFrom-Json
           $bakFile = Join-Path $artifactPath[0] $manifest.database
           if (!(Test-Path $bakFile)) {
