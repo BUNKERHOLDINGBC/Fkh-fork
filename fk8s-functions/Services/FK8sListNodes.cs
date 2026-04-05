@@ -60,7 +60,7 @@ public class FK8sListNodes : FK8sServiceBase
         catch { /* metrics API not available */ }
 
         var sb = new StringBuilder();
-        sb.AppendLine(showAll ? "All nodes:" : $"Nodes for '{githubUsername}':");
+        sb.Append(showAll ? "All nodes:" : $"Nodes for '{githubUsername}':");
 
         // Get services to resolve FQDNs
         var services = await client.ListNamespacedServiceAsync(Namespace);
@@ -82,7 +82,12 @@ public class FK8sListNodes : FK8sServiceBase
 
             var status = replicas == 0 ? "Stopped" : readyReplicas >= replicas ? "Running" : "Starting";
 
-            sb.Append($"\n  {appLabel}");
+            // Extract container name by stripping the "username-" prefix
+            var containerName = appLabel.Contains('-') && appLabel.IndexOf('-') < appLabel.Length - 1
+                ? appLabel[(appLabel.IndexOf('-') + 1)..] : appLabel;
+
+            sb.Append($"\n\n  {appLabel}");
+            sb.Append($"\n    Name:   {containerName}");
             sb.Append($"\n    Status: {status} ({readyReplicas}/{replicas} ready)");
             sb.Append($"\n    Image:  {shortImage}");
 
