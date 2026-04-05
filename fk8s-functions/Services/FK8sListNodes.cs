@@ -92,7 +92,7 @@ public class FK8sListNodes : FK8sServiceBase
                 var dnsLabel = svc.Metadata.Annotations?.TryGetValue("service.beta.kubernetes.io/azure-dns-label-name", out var label) == true ? label : null;
                 if (dnsLabel != null)
                 {
-                    sb.Append($"\n    URL:    https://{dnsLabel}.{AksLocation}.cloudapp.azure.com/BC/");
+                    sb.Append($"\n    WebClient:    https://{dnsLabel}.{AksLocation}.cloudapp.azure.com/BC/");
                 }
             }
 
@@ -109,15 +109,15 @@ public class FK8sListNodes : FK8sServiceBase
                         var usedBytes = memVal.ToDouble();
                         var limitBytes = container?.Resources?.Limits?.TryGetValue("memory", out var limVal) == true
                             ? limVal.ToDouble() : 0;
+                        var usedMb = usedBytes / (1024 * 1024);
                         if (limitBytes > 0)
                         {
-                            var usedMb = usedBytes / (1024 * 1024);
                             var limitMb = limitBytes / (1024 * 1024);
                             sb.Append($"\n    Memory: {usedMb:F0}Mb used (of {limitMb:F0}Mb)");
                         }
                         else
                         {
-                            sb.Append($"\n    Memory: {memVal} used");
+                            sb.Append($"\n    Memory: {usedMb:F0}Mb used");
                         }
                     }
                 }

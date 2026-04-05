@@ -3,6 +3,11 @@
   "displayName": "Freddy's Kubernetes Provisioner",
   "description": "Provision AKS nodes via authenticated Azure Function",
   "version": "0.0.1",
+  "publisher": "Freddy-DK",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Freddy-DK/FK8s"
+  },
   "engines": {
     "vscode": "^1.85.0"
   },
