@@ -45,6 +45,36 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v6
 
+      - name: Download artifacts
+        shell: pwsh
+        env:
+          ARTIFACT_URL: ${{ matrix.artifactUrl }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          Install-Module -Name BcContainerHelper -Force
+          Import-Module BcContainerHelper -disableNameChecking
+          $artifactUrl = $env:ARTIFACT_URL
+          $baseImage = Get-BestGenericImageName
+          $labels = Get-BcContainerImageLabels $baseImage
+          $osversion = $labels.osversion
+          Write-Host "Downloading artifacts for: $artifactUrl"
+          Write-Host "Using base image: $baseImage"
+          $appUri = [Uri]::new($artifactUrl)
+          $imageTag = "$($appUri.AbsolutePath.Replace('/','-').TrimStart('-'))".ToLowerInvariant()
+          $artifactPath = Download-Artifacts -artifactUrl $artifactUrl -includePlatform
+          $manifest = Get-Content -Path (Join-Path $artifactPath[0] "manifest.json") | ConvertFrom-Json
+          $bakFile = Join-Path $artifactPath[0] $manifest.database
+          if (!(Test-Path $bakFile)) {
+              throw "Unable to locate database backup in artifacts"
+          }
+          # Save variables for subsequent steps
+          "IMAGE_TAG=$imageTag" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "IMAGE_NAME=my:$imageTag" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "OS_VERSION=$osversion" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "BAK_FILE=$bakFile" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "ARTIFACT_URL=$artifactUrl" | Out-File -FilePath $env:GITHUB_ENV -Append
+          "BASE_IMAGE=$baseImage" | Out-File -FilePath $env:GITHUB_ENV -Append
+
       - name: Azure login (OIDC)
         uses: azure/login@v3
         with:
@@ -56,34 +86,16 @@ jobs:
         shell: pwsh
         run: az acr login --name $env:ACR_LOGIN_SERVER
 
-      - name: Build image
+      - name: Upload database backup
         shell: pwsh
         env:
-          ARTIFACT_URL: ${{ matrix.artifactUrl }}
           DBS_STORAGE_ACCOUNT: ${{ secrets.DBS_STORAGE_ACCOUNT }}
         run: |
           $ErrorActionPreference = "Stop"
-          $artifactUrl = $env:ARTIFACT_URL
-          Install-Module -Name BcContainerHelper -Force
-          Import-Module BcContainerHelper -disableNameChecking
-          $baseImage = Get-BestGenericImageName
-          $labels = Get-BcContainerImageLabels $baseImage
-          $osversion = $labels.osversion
-          Write-Host "Building image for artifact: $artifactUrl"
-          Write-Host "Using base image: $baseImage"
-          $appUri = [Uri]::new($artifactUrl)
-          $imageTag = "$($appUri.AbsolutePath.Replace('/','-').TrimStart('-'))".ToLowerInvariant()
-          $imageName = "my:$imageTag"
-          $artifactPath = Download-Artifacts -artifactUrl $artifactUrl -includePlatform
-          $manifest = Get-Content -Path (Join-Path $artifactPath[0] "manifest.json") | ConvertFrom-Json
-          $bakFile = Join-Path $artifactPath[0] $manifest.database
-          if (!(Test-Path $bakFile)) {
-              throw "Unable to locate database backup in artifacts"
-          }
-          # Upload the BAK file to the dbs storage account (if it doesn't already exist)
           $storageAccount = $env:DBS_STORAGE_ACCOUNT
           $containerName = "cronus"
-          $blobName = $imageTag
+          $blobName = $env:IMAGE_TAG
+          $bakFile = $env:BAK_FILE
           $existingBlob = az storage blob show --account-name $storageAccount --container-name $containerName --name $blobName --auth-mode login 2>&1
           if ($LASTEXITCODE -ne 0) {
               Write-Host "Blob '$blobName' not found in container '$containerName'. Uploading..."
@@ -94,10 +106,16 @@ jobs:
           } else {
               Write-Host "Blob '$blobName' already exists in container '$containerName'. Skipping upload."
           }
-          New-BcImage -artifactUrl $artifactUrl -imageName $imageName -baseImage $baseImage
-          docker tag $imageName "$env:ACR_LOGIN_SERVER/businesscentral:$imageTag"
-          docker push "$env:ACR_LOGIN_SERVER/businesscentral:$imageTag"
-          docker tag $imageName "$env:ACR_LOGIN_SERVER/businesscentral-$($osversion):$imageTag"
-          docker push "$env:ACR_LOGIN_SERVER/businesscentral-$($osversion):$imageTag"
+
+      - name: Build and push image
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = "Stop"
+          Import-Module BcContainerHelper -disableNameChecking
+          New-BcImage -artifactUrl $env:ARTIFACT_URL -imageName $env:IMAGE_NAME -baseImage $env:BASE_IMAGE
+          docker tag $env:IMAGE_NAME "$env:ACR_LOGIN_SERVER/businesscentral:$env:IMAGE_TAG"
+          docker push "$env:ACR_LOGIN_SERVER/businesscentral:$env:IMAGE_TAG"
+          docker tag $env:IMAGE_NAME "$env:ACR_LOGIN_SERVER/businesscentral-$($env:OS_VERSION):$env:IMAGE_TAG"
+          docker push "$env:ACR_LOGIN_SERVER/businesscentral-$($env:OS_VERSION):$env:IMAGE_TAG"
 
 
