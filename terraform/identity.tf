@@ -17,6 +17,14 @@ resource "azurerm_role_assignment" "function_aks" {
   principal_id         = azurerm_user_assigned_identity.function.principal_id
 }
 
+# Grant the Function's identity "Storage Blob Data Contributor" on the dbs
+# storage account so the createImages workflow can upload database backups.
+resource "azurerm_role_assignment" "function_dbs_storage" {
+  scope                = azurerm_storage_account.dbs.id
+  role_definition_name = "Storage Blob Data Contributor"
+  principal_id         = azurerm_user_assigned_identity.function.principal_id
+}
+
 # ── Federated credential for GitHub Actions OIDC ──────────────────────────────
 # Allows the createImages workflow in the configured repo to authenticate
 # as the managed identity and push images to ACR.
