@@ -38,7 +38,7 @@ public class GitHubAppTokenService
     {
         var token = await GetInstallationTokenAsync();
 
-        var url = $"https://api.github.com/repos/{_repoOwner}/{_repoName}/actions/workflows/createImages.yml/dispatches";
+        var url = $"https://api.github.com/repos/{_repoOwner}/{_repoName}/actions/workflows/CreateImages.yml/dispatches";
 
         using var request = new HttpRequestMessage(HttpMethod.Post, url);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
@@ -56,7 +56,7 @@ public class GitHubAppTokenService
         {
             var body = await response.Content.ReadAsStringAsync();
             throw new InvalidOperationException(
-                $"Failed to trigger workflow (HTTP {(int)response.StatusCode}): {body}");
+                $"Failed to trigger workflow (HTTP {(int)response.StatusCode} from {url}): {body}");
         }
 
         _logger.LogInformation("Triggered createImages workflow for {ArtifactUrl}", artifactUrl);
@@ -74,7 +74,12 @@ public class GitHubAppTokenService
         request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue("application/vnd.github+json"));
 
         var response = await _http.SendAsync(request);
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+        {
+            var body = await response.Content.ReadAsStringAsync();
+            throw new InvalidOperationException(
+                $"Failed to get GitHub App installation token (HTTP {(int)response.StatusCode} from {url}): {body}");
+        }
 
         var doc = await response.Content.ReadFromJsonAsync<JsonElement>();
         return doc.GetProperty("token").GetString()

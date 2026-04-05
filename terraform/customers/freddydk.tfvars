@@ -41,6 +41,6 @@ allowed_org_teams = [
 contact_email_for_letsencrypt = "fk@freddy.dk"
 
 # GitHub App — triggers image-build workflows
-github_app_id              = ""  # paste your App ID here
+github_app_id              = "3279814"  # paste your App ID here
 # github_app_private_key   = ""  # set via TF_VAR_github_app_private_key environment variable
-github_app_installation_id = ""  # paste your Installation ID here
+github_app_installation_id = "121515383"  # paste your Installation ID here
