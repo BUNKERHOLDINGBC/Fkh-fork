@@ -223,7 +223,7 @@ public class FK8sCreateNode : FK8sServiceBase
             await _gitHubAppTokenService.TriggerCreateImagesWorkflowAsync(artifactUrl);
             throw new InvalidOperationException(
                 $"Image does not exist yet: {fullImage}. The createImages workflow has been triggered automatically. " +
-                $"Please retry in a few minutes once the image is built.");
+                $"Please retry in ~30 minutes once the image is built.");
         }
     }
 
