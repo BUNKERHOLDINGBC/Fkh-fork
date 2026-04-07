@@ -126,6 +126,10 @@ public abstract class FunctionBase
         }
 
         var incoming = invokeRequest.Parameters ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        if (incoming.Comparer != StringComparer.OrdinalIgnoreCase)
+        {
+            incoming = new Dictionary<string, string>(incoming, StringComparer.OrdinalIgnoreCase);
+        }
         var allowedNames = function.Parameters.Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
 
         var unknown = incoming.Keys.Where(k => !allowedNames.Contains(k)).ToList();
