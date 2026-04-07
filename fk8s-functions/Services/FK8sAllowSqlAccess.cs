@@ -144,10 +144,54 @@ public class FK8sAllowSqlAccess : FK8sServiceBase
 
         var endpoint = externalIp is not null ? $"{externalIp},1433" : "(pending — check service status)";
 
+        // ── Create SQL login and database users if mySqlPassword is set ───────────
+        var sqlLoginInfo = "";
+        if (parameters.TryGetValue("mySqlPassword", out var mySqlPassword) && !string.IsNullOrWhiteSpace(mySqlPassword))
+        {
+            var sqlLogin = sanitizedUser.Replace("'", "''");
+            var escapedPassword = mySqlPassword.Replace("'", "''");
+
+            var podName = await FindMssqlPodAsync(client);
+
+            // Create or update the server-level login
+            var loginScript = $"{SqlcmdPath} -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -C -b -Q " +
+                $"\"IF NOT EXISTS (SELECT 1 FROM sys.server_principals WHERE name = '{sqlLogin}') " +
+                $"CREATE LOGIN [{sqlLogin}] WITH PASSWORD = '{escapedPassword}'; " +
+                $"ELSE ALTER LOGIN [{sqlLogin}] WITH PASSWORD = '{escapedPassword}';\"";
+            await ExecInMssqlPodAsync(client, podName, loginScript);
+            Logger.LogInformation("Created/updated SQL login '{Login}'.", sqlLogin);
+
+            // Find all databases matching <username>_*
+            var listDbScript = $"{SqlcmdPath} -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -C -h -1 -W " +
+                $"-Q \"SELECT name FROM sys.databases WHERE name LIKE '{sqlLogin}[_]%'\"";
+            var dbResult = await ExecInMssqlPodAsync(client, podName, listDbScript);
+            var databases = dbResult.Stdout
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(l => !string.IsNullOrWhiteSpace(l) && l != "name" && !l.StartsWith("---") && !l.StartsWith("("))
+                .ToList();
+
+            foreach (var db in databases)
+            {
+                var safeDb = db.Replace("'", "''");
+                var userScript = $"{SqlcmdPath} -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -C -b -Q " +
+                    $"\"USE [{safeDb}]; " +
+                    $"IF NOT EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '{sqlLogin}') " +
+                    $"CREATE USER [{sqlLogin}] FOR LOGIN [{sqlLogin}]; " +
+                    $"ALTER ROLE [db_owner] ADD MEMBER [{sqlLogin}];\"";
+                await ExecInMssqlPodAsync(client, podName, userScript);
+                Logger.LogInformation("Granted db_owner on '{Database}' to '{Login}'.", db, sqlLogin);
+            }
+
+            sqlLoginInfo = databases.Count > 0
+                ? $"\n  SQL Login: {sqlLogin} (db_owner on {string.Join(", ", databases)})"
+                : $"\n  SQL Login: {sqlLogin} (no databases matching '{sqlLogin}_*' found)";
+        }
+
         return $"SQL access granted for user '{githubUsername}'.\n" +
                $"  Allowed IP: {cidr}\n" +
                $"  SQL Endpoint: {endpoint}\n" +
-               $"  Auto-revoke: {revokeAt:yyyy-MM-dd HH:mm} UTC ({hours}h)";
+               $"  Auto-revoke: {revokeAt:yyyy-MM-dd HH:mm} UTC ({hours}h)" +
+               sqlLoginInfo;
     }
 
     public async Task<string> RevokeSqlAccessAsync(Dictionary<string, string> parameters)
@@ -167,6 +211,43 @@ public class FK8sAllowSqlAccess : FK8sServiceBase
         var client = await GetKubernetesClientAsync();
 
         var removed = new List<string>();
+
+        // ── Drop the SQL login (cascades to all database users) ───────────────────
+        try
+        {
+            var sqlLogin = sanitizedUser.Replace("'", "''");
+            var podName = await FindMssqlPodAsync(client);
+
+            // Drop database users first (login can't be dropped while users exist)
+            var listDbScript = $"{SqlcmdPath} -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -C -h -1 -W " +
+                $"-Q \"SELECT name FROM sys.databases WHERE name LIKE '{sqlLogin}[_]%'\"";
+            var dbResult = await ExecInMssqlPodAsync(client, podName, listDbScript);
+            var databases = dbResult.Stdout
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(l => !string.IsNullOrWhiteSpace(l) && l != "name" && !l.StartsWith("---") && !l.StartsWith("("))
+                .ToList();
+
+            foreach (var db in databases)
+            {
+                var safeDb = db.Replace("'", "''");
+                var dropUserScript = $"{SqlcmdPath} -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -C -b -Q " +
+                    $"\"USE [{safeDb}]; " +
+                    $"IF EXISTS (SELECT 1 FROM sys.database_principals WHERE name = '{sqlLogin}') " +
+                    $"DROP USER [{sqlLogin}];\"";
+                await ExecInMssqlPodAsync(client, podName, dropUserScript);
+            }
+
+            var dropLoginScript = $"{SqlcmdPath} -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -C -b -Q " +
+                $"\"IF EXISTS (SELECT 1 FROM sys.server_principals WHERE name = '{sqlLogin}') " +
+                $"DROP LOGIN [{sqlLogin}];\"";
+            await ExecInMssqlPodAsync(client, podName, dropLoginScript);
+            removed.Add($"SQL login '{sqlLogin}'");
+            Logger.LogInformation("Dropped SQL login '{Login}'.", sqlLogin);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to drop SQL login for '{User}' (may not exist).", displayName);
+        }
 
         try
         {

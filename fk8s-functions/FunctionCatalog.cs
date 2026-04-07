@@ -153,6 +153,14 @@ public static class FunctionCatalog
                     Description = "Hours to keep SQL access open (e.g. '2'). Access is auto-revoked after this period.",
                     Required = false,
                     DefaultValue = "2"
+                },
+                new()
+                {
+                    Name = "mySqlPassword",
+                    Type = "string",
+                    Description = "If set, creates a SQL login for your GitHub username with this password and grants db_owner on all your databases.",
+                    Required = false,
+                    DefaultValue = null
                 }
             }
         },
