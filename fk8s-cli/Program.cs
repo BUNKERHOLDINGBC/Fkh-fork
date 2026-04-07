@@ -213,15 +213,26 @@ static void EnsureRequiredParameters(FunctionDefinition function, Dictionary<str
         {
             if (parameter.Required)
             {
+                // Auto-detect public IP for parameters named 'ip'
+                string? detectedDefault = null;
+                if (string.Equals(parameter.Name, "ip", StringComparison.OrdinalIgnoreCase))
+                {
+                    detectedDefault = DetectPublicIp();
+                }
+
                 var prompt = $"Enter {parameter.Name}";
                 if (!string.IsNullOrWhiteSpace(parameter.Description))
                 {
                     prompt += $" ({parameter.Description})";
                 }
+                if (detectedDefault is not null)
+                {
+                    prompt += $" [{detectedDefault}]";
+                }
                 prompt += ": ";
 
                 var secret = parameter.Name.Contains("password", StringComparison.OrdinalIgnoreCase);
-                value = ReadRequiredValue(prompt, secret);
+                value = ReadValueWithDefault(prompt, secret, detectedDefault);
             }
             else if (!string.IsNullOrWhiteSpace(parameter.DefaultValue))
             {
@@ -236,7 +247,7 @@ static void EnsureRequiredParameters(FunctionDefinition function, Dictionary<str
     }
 }
 
-static string ReadRequiredValue(string prompt, bool secret)
+static string ReadValueWithDefault(string prompt, bool secret, string? defaultValue)
 {
     while (true)
     {
@@ -252,12 +263,32 @@ static string ReadRequiredValue(string prompt, bool secret)
             value = Console.ReadLine();
         }
 
+        if (string.IsNullOrWhiteSpace(value) && defaultValue is not null)
+        {
+            return defaultValue;
+        }
+
         if (!string.IsNullOrWhiteSpace(value))
         {
             return value.Trim();
         }
 
         Console.WriteLine("Value is required.");
+    }
+}
+
+static string? DetectPublicIp()
+{
+    try
+    {
+        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
+        var response = client.GetStringAsync("https://api.ipify.org?format=text").GetAwaiter().GetResult();
+        var ip = response.Trim();
+        return string.IsNullOrWhiteSpace(ip) ? null : ip;
+    }
+    catch
+    {
+        return null;
     }
 }
 

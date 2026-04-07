@@ -130,6 +130,38 @@ public static class FunctionCatalog
                     DefaultValue = "false"
                 }
             }
+        },
+        new FunctionDefinition
+        {
+            Name = "AllowSqlAccess",
+            Description = "Opens external SQL Server access for your IP address. Creates a temporary LoadBalancer service and network policy.",
+            Route = "AllowSqlAccess",
+            Parameters = new List<FunctionParameterDefinition>
+            {
+                new()
+                {
+                    Name = "ip",
+                    Type = "string",
+                    Description = "Your public IP address (e.g. 203.0.113.10). VSIX and CLI auto-detect this.",
+                    Required = true,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "hours",
+                    Type = "string",
+                    Description = "Hours to keep SQL access open (e.g. '2'). Access is auto-revoked after this period.",
+                    Required = false,
+                    DefaultValue = "2"
+                }
+            }
+        },
+        new FunctionDefinition
+        {
+            Name = "RevokeSqlAccess",
+            Description = "Revokes your external SQL Server access immediately, removing the LoadBalancer service and network policy.",
+            Route = "RevokeSqlAccess",
+            Parameters = new List<FunctionParameterDefinition>()
         }
     };
 

@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import { createReadSettingsOptions, readSettings } from './readALGoSettings';
+import { determineArtifactUrl } from './bcArtifactHelper';
 
 let functionCatalog: FunctionCatalogResponse | undefined;
 let outputChannel: vscode.OutputChannel;
@@ -41,7 +43,60 @@ export function activate(context: vscode.ExtensionContext) {
       await invokeFunctionByName(picked.functionName);
     }),
     vscode.commands.registerCommand('fk8s.createContainer', async () => {
-      const artifactUrl = 'https://example.com';
+      const session = await getGitHubSession();
+      if (!session) { return; }
+
+      const options = await createReadSettingsOptions(session.accessToken);
+      if (!options) { return; }
+      if (!options.baseFolder) {
+        vscode.window.showErrorMessage('FK8s: No Git repository found in the current workspace.');
+        return;
+      }
+
+      let settings: Record<string, unknown>;
+      try {
+        settings = readSettings(options);
+      } catch (err) {
+        vscode.window.showErrorMessage(`FK8s: Failed to read AL-Go settings: ${err instanceof Error ? err.message : String(err)}`);
+        return;
+      }
+
+      const artifact = String(settings['artifact'] ?? '');
+      const country = String(settings['country'] ?? 'us');
+
+      outputChannel.appendLine('--- ReadSettings Options ---');
+      outputChannel.appendLine(`  baseFolder: ${options.baseFolder}`);
+      outputChannel.appendLine(`  repoName: ${options.repoName}`);
+      outputChannel.appendLine(`  project: ${options.project || '(empty)'}`);
+      outputChannel.appendLine(`  buildMode: ${options.buildMode}`);
+      outputChannel.appendLine(`  workflowName: ${options.workflowName || '(empty)'}`);
+      outputChannel.appendLine(`  userName: ${options.userName}`);
+      outputChannel.appendLine(`  branchName: ${options.branchName}`);
+      outputChannel.appendLine(`  orgSettingsVariableValue: ${options.orgSettingsVariableValue || '(empty)'}`);
+      outputChannel.appendLine(`  repoSettingsVariableValue: ${options.repoSettingsVariableValue || '(empty)'}`);
+      outputChannel.appendLine(`  environmentSettingsVariableValue: ${options.environmentSettingsVariableValue || '(empty)'}`);
+      outputChannel.appendLine(`  environmentName: ${options.environmentName || '(empty)'}`);
+      outputChannel.appendLine(`  customSettings: ${options.customSettings || '(empty)'}`);
+      outputChannel.appendLine('--- Resolved Settings ---');
+      outputChannel.appendLine(`  Country: ${country}`);
+      outputChannel.appendLine(`  Artifact: ${artifact || '(not set)'}`);
+      outputChannel.show(true);
+
+      if (!artifact) {
+        vscode.window.showWarningMessage('FK8s: No artifact setting found in AL-Go settings.');
+        return;
+      }
+
+      let artifactUrl: string;
+      try {
+        artifactUrl = await determineArtifactUrl(settings);
+        outputChannel.appendLine(`  ArtifactUrl: ${artifactUrl}`);
+        outputChannel.show(true);
+      } catch (err) {
+        vscode.window.showErrorMessage(`FK8s: Failed to resolve artifact URL: ${err instanceof Error ? err.message : String(err)}`);
+        return;
+      }
+
       await invokeFunctionByName('CreateNode', { artifactUrl });
     })
   );
@@ -69,6 +124,16 @@ type FunctionCatalogResponse = {
 type FunctionInvokeRequest = {
   parameters: Record<string, string>;
 };
+
+async function getPublicIp(): Promise<string | undefined> {
+  try {
+    const response = await fetch('https://api.ipify.org?format=text');
+    if (response.ok) {
+      return (await response.text()).trim();
+    }
+  } catch { /* ignore */ }
+  return undefined;
+}
 
 async function getGitHubSession(): Promise<vscode.AuthenticationSession | undefined> {
   try {
@@ -114,6 +179,7 @@ async function promptForParameters(
   prefilled: Record<string, string> = {}
 ): Promise<Record<string, string> | undefined> {
   const parameters: Record<string, string> = { ...prefilled };
+  const config = vscode.workspace.getConfiguration('fk8s');
 
   for (const param of definition.parameters) {
     const prefilledKey = Object.keys(prefilled).find(
@@ -123,13 +189,29 @@ async function promptForParameters(
       continue;
     }
 
+    const settingKey = `${definition.name}.${param.name}`;
+    const settingValue = config.get<string>(settingKey, '').trim();
+    if (settingValue) {
+      parameters[param.name] = settingValue;
+      continue;
+    }
+
     let value: string | undefined = undefined;
+    let defaultVal = param.defaultValue ?? '';
+
+    // Auto-detect public IP for parameters named 'ip'
+    if (param.name.toLowerCase() === 'ip') {
+      const detectedIp = await getPublicIp();
+      if (detectedIp) {
+        defaultVal = detectedIp;
+      }
+    }
 
     while (true) {
       value = await vscode.window.showInputBox({
-        prompt: `${param.name}: ${param.description}`,
-        placeHolder: param.defaultValue ?? '',
-        value: param.defaultValue ?? '',
+        prompt: `${param.name}: ${param.description} (Tip: set "fk8s.${settingKey}" in settings to skip this prompt)`,
+        placeHolder: defaultVal,
+        value: defaultVal,
         password: param.name.toLowerCase().includes('password'),
         ignoreFocusOut: true,
       });
@@ -153,6 +235,12 @@ async function promptForParameters(
   }
 
   return parameters;
+}
+
+function logOutput(message: string, isError = false): void {
+  outputChannel.appendLine(message);
+  outputChannel.show(true);
+  if (isError) { vscode.window.showErrorMessage(message); }
 }
 
 async function invokeFunctionByName(functionName: string, prefilled: Record<string, string> = {}): Promise<void> {
@@ -192,20 +280,15 @@ async function invokeFunctionByName(functionName: string, prefilled: Record<stri
 
         if (response.ok) {
           const result = await response.json() as { message: string };
-          outputChannel.appendLine(`[${definition.name}] ${result.message}`);
-          outputChannel.show(true);
-        } else if (response.status === 401 || response.status === 403) {
-          vscode.window.showErrorMessage(
-            'Access denied. Make sure your GitHub account is a member of an authorized team.'
-          );
+          logOutput(`[${definition.name}] ${result.message}`);
         } else {
-          const error = await response.text();
-          vscode.window.showErrorMessage(`Failed to ${definition.name}: ${error}`);
+          const error = response.status === 401 || response.status === 403
+            ? `Access denied (${response.status}). Make sure your GitHub account is a member of an authorized team.`
+            : `Failed (${response.status}): ${await response.text()}`;
+          logOutput(`[${definition.name}] ${error}`, true);
         }
       } catch (err) {
-        vscode.window.showErrorMessage(
-          `Could not reach the provisioning service: ${err instanceof Error ? err.message : String(err)}`
-        );
+        logOutput(`[${definition.name}] Could not reach the provisioning service: ${err instanceof Error ? err.message : String(err)}`, true);
       }
     }
   );

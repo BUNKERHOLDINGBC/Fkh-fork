@@ -5,7 +5,8 @@
     "outDir": "./out",
     "rootDir": "./src",
     "strict": true,
-    "lib": ["ES2022", "DOM"]
+    "lib": ["ES2022", "DOM"],
+    "types": ["node", "vscode"]
   },
   "exclude": ["node_modules", ".vscode-test"]
 }
