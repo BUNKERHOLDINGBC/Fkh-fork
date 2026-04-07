@@ -88,7 +88,14 @@ public abstract class FunctionBase
         catch (Exception ex)
         {
             logger.LogError(ex, "Failed to execute {Operation} for user {Username}.", operationName, username);
-            return Respond(req, HttpStatusCode.InternalServerError, ex.Message);
+            var detail = $"[{ex.GetType().Name}] {ex.Message}";
+            if (ex.InnerException is { } inner)
+                detail += $"\n  Inner: [{inner.GetType().Name}] {inner.Message}";
+            // Include first few frames to identify the call site
+            var frames = ex.StackTrace?.Split('\n').Take(5);
+            if (frames != null)
+                detail += "\n" + string.Join("\n", frames);
+            return Respond(req, HttpStatusCode.InternalServerError, detail);
         }
     }
 
