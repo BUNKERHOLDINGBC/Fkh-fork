@@ -150,6 +150,8 @@ fk8s.exe createnode
 fk8s.exe removenode
 fk8s.exe stopnode
 fk8s.exe startnode
+fk8s.exe allowsqlaccess
+fk8s.exe revokesqlaccess
 ```
 
 Pass optional payload parameters:
@@ -160,7 +162,40 @@ fk8s.exe createnode --name bcserver --artifactUrl "https://example/artifact.zip"
 fk8s.exe removenode --name bcserver
 fk8s.exe stopnode --name bcserver
 fk8s.exe startnode --name bcserver
+fk8s.exe allowsqlaccess                          # auto-detects your public IP
+fk8s.exe allowsqlaccess --ip 203.0.113.10 --hours 4
+fk8s.exe revokesqlaccess
 ```
+
+### Direct SQL Server access
+
+Use `allowsqlaccess` to temporarily expose the shared SQL Server to your public IP.
+The command returns a SQL endpoint (`<ip>,1433`) you can connect to from SSMS or
+Azure Data Studio using the SA credentials. Access auto-revokes after the specified
+number of hours (default 2). Revoke manually anytime with `revokesqlaccess`.
+
+---
+
+## VS Code extension settings
+
+The extension reads parameter defaults from VS Code settings using the pattern
+`fk8s.<FunctionName>.<parameterName>`. If a value is set, that parameter is
+skipped during prompting. These settings are fully dynamic — any parameter from
+the function catalog can be defaulted without rebuilding the extension.
+
+Examples (add to `settings.json`):
+
+```json
+{
+  "fk8s.baseUrl": "https://fk8smyapp.azurewebsites.net/api",
+  "fk8s.CreateNode.adminUsername": "admin",
+  "fk8s.StartNode.autostop": "4",
+  "fk8s.AllowSqlAccess.hours": "4"
+}
+```
+
+The `ip` parameter for `AllowSqlAccess` is auto-detected via `api.ipify.org`
+in both the VS Code extension and the CLI.
 
 ---
 

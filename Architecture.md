@@ -24,11 +24,14 @@ graph TB
         SNDF["StopNodeFunction"]
         SNTF["StartNodeFunction"]
         LNF["ListNodesFunction"]
+        ASAF["AllowSqlAccessFunction"]
+        RSAF["RevokeSqlAccessFunction"]
         CAT["GetFunctionCatalog"]
         CN["FK8sCreateNode"]
         RN["FK8sRemoveNode"]
         SN["FK8sScaleNode"]
         LN["FK8sListNodes"]
+        SA["FK8sAllowSqlAccess"]
         GAS["GitHubAppTokenService"]
         GHS["GitHubAuthService"]
     end
@@ -38,6 +41,8 @@ graph TB
             MSSQL["SQL Server 2022<br/>(Linux Pod)"]
             BC["Business Central<br/>(Windows Pod)"]
             LB["LoadBalancer Service<br/>(Public IP + DNS)"]
+            SQL_LB["SQL LoadBalancer Service<br/>(Temporary, per-user IP)"]
+            NP["NetworkPolicy<br/>(per-user IP allow)"]
             SEC["Kubernetes Secrets"]
         end
     end
@@ -58,12 +63,14 @@ graph TB
     %% Function internal flow
     FB -->|validate token| GHS
     GHS -->|"GET /user + team membership"| GH_AUTH
-    FB --> CNF & RNF & SNDF & SNTF & LNF & CAT
+    FB --> CNF & RNF & SNDF & SNTF & LNF & ASAF & RSAF & CAT
     CNF --> CN
     RNF --> RN
     SNDF --> SN
     SNTF --> SN
     LNF --> LN
+    ASAF --> SA
+    RSAF --> SA
 
     %% CN operations
     CN -->|"check image exists"| ACR
@@ -79,7 +86,7 @@ graph TB
     GH_ACTIONS -->|"upload .bak"| DBS
 
     %% Identity
-    MI -.->|"auth"| CN & RN & SN & LN
+    MI -.->|"auth"| CN & RN & SN & LN & SA
     MI -.->|"AKS Contributor"| BC
     MI -.->|"Blob Data Contributor"| DBS
     MI -.->|"AcrPull"| ACR
@@ -88,8 +95,13 @@ graph TB
     BC -->|"TCP 1433"| MSSQL
     LB -->|"ports 80,443,7047-7049"| BC
 
+    %% SQL external access
+    SA -->|"create/delete service + policy"| SQL_LB & NP
+    SQL_LB -->|"TCP 1433 (IP-restricted)"| MSSQL
+    NP -.->|"allow CIDR"| MSSQL
+
     %% Monitoring
-    CN & RN & SN & LN -.-> LOGS
+    CN & RN & SN & LN & SA -.-> LOGS
     FB -.-> LOGS
 ```
 
@@ -99,8 +111,8 @@ graph TB
 
 | Component | Path | Description |
 |-----------|------|-------------|
-| **VS Code Extension** | `fk8s-vsix/` | Registers commands to create/remove nodes. Uses VS Code's built-in GitHub auth to obtain a Bearer token and calls the Function App API. Fetches the function catalog for dynamic parameter prompts. |
-| **CLI Tool** | `fk8s-cli/` | Standalone .NET executable (`fk8s.exe`). Reads GitHub token from `GH_TOKEN`, `GITHUB_TOKEN`, or `gh auth token`. Interactively prompts for parameters with masked password input. |
+| **VS Code Extension** | `fk8s-vsix/` | Registers commands to create/remove nodes. Uses VS Code's built-in GitHub auth to obtain a Bearer token and calls the Function App API. Fetches the function catalog for dynamic parameter prompts. Auto-detects public IP for SQL access. Parameter defaults can be set via `fk8s.<Function>.<param>` settings. |
+| **CLI Tool** | `fk8s-cli/` | Standalone .NET executable (`fk8s.exe`). Reads GitHub token from `GH_TOKEN`, `GITHUB_TOKEN`, or `gh auth token`. Interactively prompts for parameters with masked password input. Auto-detects public IP for SQL access. |
 
 ### Azure Functions Backend
 
@@ -113,6 +125,7 @@ graph TB
 | **FK8sRemoveNode** | `fk8s-functions/Services/FK8sRemoveNode.cs` | Removes Kubernetes resources (deployment, service, secret) and drops the database for a given node. |
 | **FK8sScaleNode** | `fk8s-functions/Services/FK8sScaleNode.cs` | Scales a node's deployment: StopNode sets replicas to 0, StartNode sets replicas to 1. Database is preserved across stop/start. |
 | **FK8sListNodes** | `fk8s-functions/Services/FK8sListNodes.cs` | Lists nodes filtered by user (or all). Shows status, image, web client URL, and CPU/memory usage via the metrics API. |
+| **FK8sAllowSqlAccess** | `fk8s-functions/Services/FK8sAllowSqlAccess.cs` | Manages temporary external SQL Server access. Creates a per-user LoadBalancer service (IP-restricted via `loadBalancerSourceRanges`) and a NetworkPolicy allowing the user's IP through to the MSSQL pod. Auto-revokes expired grants via the timer-triggered AutoStop function. |
 | **FK8sServiceBase** | `fk8s-functions/Services/FK8sServiceBase.cs` | Shared base class with AKS/ACR/Storage config, Kubernetes client creation via managed identity, and k8s exec helpers (`FindMssqlPodAsync`, `ExecInMssqlPodAsync`). |
 
 ### Infrastructure (Terraform)
@@ -121,7 +134,7 @@ graph TB
 |----------|------|-------------|
 | **AKS Cluster** | `main.tf` | Linux system pool (1× D2s_v3) + Windows autoscale pool (0–10 nodes). Azure CNI overlay networking. |
 | **Function App** | `function.tf` | Windows Consumption (Y1) plan. Isolated .NET 8 worker. All config injected via app settings. |
-| **SQL Server** | `kubernetes.tf` | `mssql/server:2022-latest` on Linux pod with 128 Gi Premium SSD PVC. ClusterIP service on port 1433. Network policy restricts ingress to `app-type: windows-servicetier` pods. |
+| **SQL Server** | `kubernetes.tf` | `mssql/server:2022-latest` on Linux pod with 128 Gi Premium SSD PVC. ClusterIP service on port 1433. Network policy restricts ingress to `app-type: windows-servicetier` pods. External access can be temporarily granted per-user via `AllowSqlAccess`. |
 | **ACR** | `acr.tf` | Basic SKU. AKS kubelet identity gets `AcrPull`; GitHub Actions federated identity gets `AcrPush`. |
 | **Managed Identity** | `identity.tf` | User-assigned identity with AKS Contributor + Storage Blob Data Contributor roles. Federated credential for GitHub Actions OIDC. |
 | **Storage (DBS)** | `function.tf` | `fk8s{customer}dbs` — holds database backup blobs in a `cronus` container, keyed by image tag. |
@@ -175,6 +188,22 @@ sequenceDiagram
 4. **Database restore** — K8s exec to `curl` the backup into the pod, then `sqlcmd` to `RESTORE DATABASE` with `MOVE` clauses for data/log files.
 5. **Kubernetes resources** — Create a Secret (admin password), a Deployment (Windows pod with BC image and database env vars), and a LoadBalancer Service (public IP with Azure DNS label).
 6. **Return** — FQDN (`{appName}.{region}.cloudapp.azure.com`), deployment name, and database name.
+
+## SQL Access Flow
+
+`AllowSqlAccess` grants temporary direct SQL Server access from a user's public IP:
+
+1. **Create LoadBalancer service** — `mssql-ext-{username}` with `loadBalancerSourceRanges` set to the user's IP/32. Targets the mssql pod on port 1433.
+2. **Create NetworkPolicy** — `mssql-allow-ip-{username}` with an ingress rule allowing the user's CIDR to reach the mssql pod on port 1433.
+3. **Wait for external IP** — Polls the service status until Azure assigns a public IP (up to ~2.5 minutes).
+4. **Return** — SQL endpoint (`{externalIp},1433`), allowed IP, and auto-revoke time.
+
+Access is auto-revoked by the `AutoStop` timer function (runs every 30 minutes),
+which checks for `fk8s/sql-access-revoke-at` annotations on the services and
+deletes expired resources. Users can also revoke access immediately via `RevokeSqlAccess`.
+
+Each user can have only one active SQL access grant. Calling `AllowSqlAccess` again
+replaces the existing grant (updating the allowed IP and extending the timer).
 
 ## Deployment
 
