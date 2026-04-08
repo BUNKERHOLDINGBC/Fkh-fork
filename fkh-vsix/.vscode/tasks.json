@@ -2,11 +2,11 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "compile-fkh-vsix",
+      "label": "build-fkh-vsix",
       "type": "shell",
-      "command": "npm run compile",
+      "command": "npm run build:node",
       "options": {
-        "cwd": "c:\\src\\GitHub\\Freddy-DK\\FKH\\fkh-vsix"
+        "cwd": "${workspaceFolder}"
       },
       "group": "build",
       "presentation": {

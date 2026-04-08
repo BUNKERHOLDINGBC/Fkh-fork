@@ -21,3 +21,23 @@ resource "github_team_membership" "members" {
   username = each.value
   role     = "member"
 }
+
+# ── GitHub Admin Team ────────────────────────────────────────────────────────
+
+resource "github_team" "admins" {
+  name        = var.github_admin_team_name
+  description = "Admins can manage AKS nodes and access admin-only features."
+  privacy     = "closed"
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+resource "github_team_membership" "admin_members" {
+  for_each = toset(var.github_admin_team_members)
+
+  team_id  = github_team.admins.id
+  username = each.value
+  role     = "member"
+}

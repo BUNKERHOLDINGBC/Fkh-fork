@@ -64,6 +64,7 @@ resource "azurerm_windows_function_app" "this" {
     ACR_NAME                                = azurerm_container_registry.this.name
     BASE_IMAGE                              = var.base_image
     ALLOWED_ORG_TEAMS                       = jsonencode(var.allowed_org_teams)
+    ADMIN_ORG_TEAMS                          = jsonencode(var.admin_org_teams)
     AKS_LOCATION                             = var.location
     CONTACT_EMAIL_FOR_LETSENCRYPT             = var.contact_email_for_letsencrypt
     GITHUB_APP_ID                            = var.github_app_id

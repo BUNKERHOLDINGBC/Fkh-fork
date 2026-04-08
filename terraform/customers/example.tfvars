@@ -23,19 +23,31 @@ aks_sku_tier    = "Free"    # Free (dev/test, no SLA) | Standard (99.95% SLA) | 
 namespace        = "app"
 sql_storage_size = "128Gi"
 
-# GitHub — primary org for team membership validation
-github_org        = "my-company"
+# GitHub token for deployment
 # github_token    = ""  # set via TF_VAR_github_token environment variable
+
+# GitHub — primary org for team membership validation
+# Note that values here are case sensitive
+github_org        = "my-company"
 github_team_name  = "FKH-members"
 github_team_members = [
   "freddyk"
 ]
-
-# Orgs and teams the Azure Function will accept
 allowed_org_teams = [
-  { org = "my-company",     team = "FKH-members" },
-  { org = "customer-a-org", team = "FKH-members" }
+  { org = "my-company",     team = "Fkh-members" },
+  { org = "customer-a-org", team = "Fkh-members" }
 ]
+
+# Admin teams — members get admin access (and also have normal access)
+# Note that values here are case sensitive
+github_admin_team_name = "Fkh-admins"
+github_admin_team_members = [
+  # "admin-username"
+]
+admin_org_teams = [
+  { org = "my-company",     team = "Fkh-admins" }
+]
+
 
 # Contact email for Let's Encrypt
 contact_email_for_letsencrypt = "admin@example.com"

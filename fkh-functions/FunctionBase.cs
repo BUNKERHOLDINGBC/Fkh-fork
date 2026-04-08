@@ -14,7 +14,8 @@ namespace FKH;
 /// </summary>
 public abstract class FunctionBase
 {
-    private static readonly List<OrgTeamConfig> AllowedOrgTeams = LoadOrgTeamConfig();
+    private static readonly List<OrgTeamConfig> AllowedOrgTeams = LoadOrgTeamConfig("ALLOWED_ORG_TEAMS");
+    private static readonly List<OrgTeamConfig> AdminOrgTeams = LoadOrgTeamConfig("ADMIN_ORG_TEAMS", required: false);
 
     /// <summary>
     /// Authenticates the caller, authorises via GitHub team membership, then
@@ -51,15 +52,35 @@ public abstract class FunctionBase
 
         // ── Step 3: Check team membership ────────────────────────────────────────────
         var authorized = false;
-        foreach (var orgTeam in AllowedOrgTeams)
+        var isAdmin = false;
+
+        // Check admin teams first
+        foreach (var orgTeam in AdminOrgTeams)
         {
             if (await gitHub.IsTeamMemberAsync(token, orgTeam.Org, orgTeam.Team, username))
             {
                 logger.LogInformation(
-                    "User {Username} authorized via org={Org} team={Team}",
+                    "User {Username} authorized as admin via org={Org} team={Team}",
                     username, orgTeam.Org, orgTeam.Team);
                 authorized = true;
+                isAdmin = true;
                 break;
+            }
+        }
+
+        // If not admin, check regular member teams
+        if (!authorized)
+        {
+            foreach (var orgTeam in AllowedOrgTeams)
+            {
+                if (await gitHub.IsTeamMemberAsync(token, orgTeam.Org, orgTeam.Team, username))
+                {
+                    logger.LogInformation(
+                        "User {Username} authorized via org={Org} team={Team}",
+                        username, orgTeam.Org, orgTeam.Team);
+                    authorized = true;
+                    break;
+                }
             }
         }
 
@@ -77,6 +98,7 @@ public abstract class FunctionBase
         }
         // Inject the authenticated GitHub username so services can use it
         parametersResult.Parameters!["_githubUsername"] = username;
+        parametersResult.Parameters!["_isAdmin"] = isAdmin.ToString();
         // ── Step 5: Execute AKS operation ────────────────────────────────────────────
         try
         {
@@ -174,17 +196,21 @@ public abstract class FunctionBase
         return response;
     }
 
-    private static List<OrgTeamConfig> LoadOrgTeamConfig()
+    private static List<OrgTeamConfig> LoadOrgTeamConfig(string envVarName, bool required = true)
     {
-        var raw = Environment.GetEnvironmentVariable("ALLOWED_ORG_TEAMS");
+        var raw = Environment.GetEnvironmentVariable(envVarName);
         if (string.IsNullOrWhiteSpace(raw))
-            throw new InvalidOperationException(
-                "ALLOWED_ORG_TEAMS app setting is missing. " +
-                "Expected JSON array, e.g. [{\"Org\":\"my-org\",\"Team\":\"FKH-members\"}]");
+        {
+            if (required)
+                throw new InvalidOperationException(
+                    $"{envVarName} app setting is missing. " +
+                    "Expected JSON array, e.g. [{\"Org\":\"my-org\",\"Team\":\"FKH-members\"}]");
+            return [];
+        }
 
         return JsonSerializer.Deserialize<List<OrgTeamConfig>>(raw,
             new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
-            ?? throw new InvalidOperationException("Failed to parse ALLOWED_ORG_TEAMS.");
+            ?? throw new InvalidOperationException($"Failed to parse {envVarName}.");
     }
 
     private sealed class ParameterValidationResult

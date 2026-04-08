@@ -1,0 +1,10 @@
+{
+  "folders": [
+    {
+      "path": "C:\\src\\GitHub\\BUNKERHOLDINGBC\\DBC"
+    }
+  ],
+  "settings": {
+    "fkh.baseUrl": "https://fkh-freddydk-functions.azurewebsites.net/api"
+  }
+}

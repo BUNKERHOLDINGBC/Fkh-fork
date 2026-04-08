@@ -87,7 +87,7 @@ variable "github_token" {
 variable "github_team_name" {
   description = "Name of the GitHub team that controls access to the provisioner. Created if it does not exist."
   type        = string
-  default     = "FKH-members"
+  default     = "Fkh-members"
 }
 
 variable "github_repo" {
@@ -109,6 +109,27 @@ variable "allowed_org_teams" {
     org  = string
     team = string
   }))
+}
+
+variable "admin_org_teams" {
+  description = "List of GitHub org/team pairs that grant admin access. Members also have normal access."
+  type = list(object({
+    org  = string
+    team = string
+  }))
+  default = []
+}
+
+variable "github_admin_team_name" {
+  description = "Name of the GitHub admin team. Created if it does not exist."
+  type        = string
+  default     = "Fkh-admins"
+}
+
+variable "github_admin_team_members" {
+  description = "List of GitHub usernames to add to the admin team."
+  type        = list(string)
+  default     = []
 }
 
 # ── Container image ──────────────────────────────────────────────────────────
