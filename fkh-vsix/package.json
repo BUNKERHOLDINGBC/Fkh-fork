@@ -1,0 +1,170 @@
+{
+  "name": "fkh",
+  "displayName": "Freddy's Kubernetes Helper",
+  "description": "Provision AKS nodes via authenticated Azure Function",
+  "version": "0.0.1",
+  "publisher": "Freddy.DK ApS",
+  "icon": "images/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Freddy-DK/FKH"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "extensionKind": [
+    "workspace",
+    "web"
+  ],
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "browser": "./dist/web/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "fkh.run",
+        "title": "FKH: Run Command"
+      },
+      {
+        "command": "fkh.createContainer",
+        "title": "FKH: Create Container"
+      },
+      {
+        "command": "fkh.refreshProjects",
+        "title": "FKH: Refresh Projects",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "fkh.refreshContainers",
+        "title": "FKH: Refresh Containers",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "fkh.startNode",
+        "title": "Start",
+        "icon": "$(debug-start)"
+      },
+      {
+        "command": "fkh.stopNode",
+        "title": "Stop",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "fkh.removeNode",
+        "title": "Remove",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "fkh.createContainerForProject",
+        "title": "Create Container",
+        "icon": "$(vm)"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "fkh-explorer",
+          "title": "FKH",
+          "icon": "images/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "fkh-explorer": [
+        {
+          "id": "fkhProjects",
+          "name": "AL-Go Projects",
+          "icon": "$(project)"
+        },
+        {
+          "id": "fkhContainers",
+          "name": "Containers",
+          "icon": "$(server)"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "fkh.refreshProjects",
+          "when": "view == fkhProjects",
+          "group": "navigation"
+        },
+        {
+          "command": "fkh.refreshContainers",
+          "when": "view == fkhContainers",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "fkh.createContainerForProject",
+          "when": "view == fkhProjects && viewItem == algoProject",
+          "group": "inline"
+        },
+        {
+          "command": "fkh.createContainerForProject",
+          "when": "view == fkhProjects && viewItem == algoProject",
+          "group": "1_actions"
+        },
+        {
+          "command": "fkh.startNode",
+          "when": "view == fkhContainers && viewItem == node-stopped",
+          "group": "inline"
+        },
+        {
+          "command": "fkh.stopNode",
+          "when": "view == fkhContainers && viewItem =~ /node-(running|starting)/",
+          "group": "inline"
+        },
+        {
+          "command": "fkh.removeNode",
+          "when": "view == fkhContainers && viewItem =~ /^node-/",
+          "group": "inline"
+        },
+        {
+          "command": "fkh.startNode",
+          "when": "view == fkhContainers && viewItem == node-stopped",
+          "group": "1_actions"
+        },
+        {
+          "command": "fkh.stopNode",
+          "when": "view == fkhContainers && viewItem =~ /node-(running|starting)/",
+          "group": "1_actions"
+        },
+        {
+          "command": "fkh.removeNode",
+          "when": "view == fkhContainers && viewItem =~ /^node-/",
+          "group": "2_destructive"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "FKH",
+      "properties": {
+        "fkh.baseUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Base URL of the FKH Azure Function app, e.g. https://<app>.azurewebsites.net/api"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "compile": "tsc -p ./",
+    "build": "npm run build:node && npm run build:web",
+    "build:node": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
+    "build:web": "esbuild ./src/extension.ts --bundle --outfile=dist/web/extension.js --external:vscode --format=cjs --platform=browser",
+    "watch": "npm run build:node -- --watch"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.28.0",
+    "typescript": "^5.3.0"
+  }
+}

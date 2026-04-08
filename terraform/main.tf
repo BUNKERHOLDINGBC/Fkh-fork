@@ -38,7 +38,7 @@ provider "github" {
 }
 
 locals {
-  product_prefix              = "fk8s"
+  product_prefix              = "fkh"
   storage_account_customer_id = substr(replace(var.customer_name, "-", ""), 0, 14)
 
   resource_group_name    = "${local.product_prefix}-${var.customer_name}"

@@ -1,32 +1,32 @@
-# FK8s Cheat Sheet
+# FKH Cheat Sheet
 
 ## Manage Nodes (via CLI)
 
 ```powershell
 # List your nodes
-.\fk8s.exe listnodes
+.\fkh.exe listnodes
 
 # List all nodes
-.\fk8s.exe listnodes --all
+.\fkh.exe listnodes --all
 
 # Create a node
-.\fk8s.exe createnode --name bcserver --artifactUrl 'https://...' --adminUsername 'admin' --adminPassword 'P@ssword1'
+.\fkh.exe createnode --name bcserver --artifactUrl 'https://...' --adminUsername 'admin' --adminPassword 'P@ssword1'
 
 # Stop a node (scales deployment to 0, keeps database)
-.\fk8s.exe stopnode --name bcserver
+.\fkh.exe stopnode --name bcserver
 
 # Start a stopped node (scales deployment back to 1)
-.\fk8s.exe startnode --name bcserver
+.\fkh.exe startnode --name bcserver
 
 # Remove a node (deletes deployment, service, secret, and database)
-.\fk8s.exe removenode --name bcserver
+.\fkh.exe removenode --name bcserver
 ```
 
 ## Setup (for kubectl commands)
 
 ```powershell
 # Get AKS credentials (one-time per machine)
-az aks get-credentials --resource-group fk8s-freddydk --name fk8s-freddydk-aks --overwrite-existing
+az aks get-credentials --resource-group fkh-freddydk --name fkh-freddydk-aks --overwrite-existing
 ```
 
 ## View Nodes
@@ -111,9 +111,9 @@ kubectl exec -n app -l app=mssql -- /opt/mssql-tools18/bin/sqlcmd -S localhost -
 .\deploy.ps1 -CustomerFile customers\freddydk.tfvars
 
 # Publish function code only
-cd ..\fk8s-functions
+cd ..\fkh-functions
 dotnet publish -c Release -o bin\publish
-az functionapp deployment source config-zip -g fk8s-freddydk -n fk8s-freddydk-functions --src bin\publish.zip
+az functionapp deployment source config-zip -g fkh-freddydk -n fkh-freddydk-functions --src bin\publish.zip
 ```
 
 ## Node Pool & Scaling

@@ -1,14 +1,14 @@
-# FK8s Architecture
+# FKH Architecture
 
-FK8s is a **GitHub-authenticated AKS node provisioner** that allows authorized GitHub team members to create on-demand Business Central environments on Azure Kubernetes Service — directly from VS Code or a CLI — without requiring Azure credentials.
+FKH is a **GitHub-authenticated AKS node provisioner** that allows authorized GitHub team members to create on-demand Business Central environments on Azure Kubernetes Service — directly from VS Code or a CLI — without requiring Azure credentials.
 
 ## High-Level Overview
 
 ```mermaid
 graph TB
     subgraph "User Interfaces"
-        VSIX["VS Code Extension<br/>(fk8s-vsix)"]
-        CLI["CLI Tool<br/>(fk8s)"]
+        VSIX["VS Code Extension<br/>(fkh-vsix)"]
+        CLI["CLI Tool<br/>(fkh)"]
     end
 
     subgraph "GitHub"
@@ -27,11 +27,11 @@ graph TB
         ASAF["AllowSqlAccessFunction"]
         RSAF["RevokeSqlAccessFunction"]
         CAT["GetFunctionCatalog"]
-        CN["FK8sCreateNode"]
-        RN["FK8sRemoveNode"]
-        SN["FK8sScaleNode"]
-        LN["FK8sListNodes"]
-        SA["FK8sAllowSqlAccess"]
+        CN["FKHCreateNode"]
+        RN["FKHRemoveNode"]
+        SN["FKHScaleNode"]
+        LN["FKHListNodes"]
+        SA["FKHAllowSqlAccess"]
         GAS["GitHubAppTokenService"]
         GHS["GitHubAuthService"]
     end
@@ -111,22 +111,22 @@ graph TB
 
 | Component | Path | Description |
 |-----------|------|-------------|
-| **VS Code Extension** | `fk8s-vsix/` | Registers commands to create/remove nodes. Uses VS Code's built-in GitHub auth to obtain a Bearer token and calls the Function App API. Fetches the function catalog for dynamic parameter prompts. Auto-detects public IP for SQL access. Parameter defaults can be set via `fk8s.<Function>.<param>` settings. |
-| **CLI Tool** | `fk8s-cli/` | Standalone .NET executable (`fk8s.exe`). Reads GitHub token from `GH_TOKEN`, `GITHUB_TOKEN`, or `gh auth token`. Interactively prompts for parameters with masked password input. Auto-detects public IP for SQL access. |
+| **VS Code Extension** | `fkh-vsix/` | Registers commands to create/remove nodes. Uses VS Code's built-in GitHub auth to obtain a Bearer token and calls the Function App API. Fetches the function catalog for dynamic parameter prompts. Auto-detects public IP for SQL access. Parameter defaults can be set via `fkh.<Function>.<param>` settings. |
+| **CLI Tool** | `fkh-cli/` | Standalone .NET executable (`fkh.exe`). Reads GitHub token from `GH_TOKEN`, `GITHUB_TOKEN`, or `gh auth token`. Interactively prompts for parameters with masked password input. Auto-detects public IP for SQL access. |
 
 ### Azure Functions Backend
 
 | Component | Path | Description |
 |-----------|------|-------------|
-| **FunctionBase** | `fk8s-functions/FunctionBase.cs` | Base class for all HTTP functions. Extracts Bearer token, validates it against GitHub API, checks team membership, parses and validates parameters against the function catalog, and injects the GitHub username. |
-| **GitHubAuthService** | `fk8s-functions/Services/GitHubAuthService.cs` | Calls `GET /user` and `GET /orgs/{org}/teams/{team}/memberships/{username}` to authenticate and authorize requests. Allowed org/team pairs loaded from `ALLOWED_ORG_TEAMS` env var. |
-| **GitHubAppTokenService** | `fk8s-functions/Services/GitHubAppTokenService.cs` | Creates JWTs signed with the GitHub App private key, exchanges for installation access tokens, and dispatches the `createImages` workflow when an image is missing from ACR. |
-| **FK8sCreateNode** | `fk8s-functions/Services/FK8sCreateNode.cs` | Orchestrates node creation: ACR image check → database backup SAS URL → k8s exec to download and restore database → create K8s deployment, service, and secret. |
-| **FK8sRemoveNode** | `fk8s-functions/Services/FK8sRemoveNode.cs` | Removes Kubernetes resources (deployment, service, secret) and drops the database for a given node. |
-| **FK8sScaleNode** | `fk8s-functions/Services/FK8sScaleNode.cs` | Scales a node's deployment: StopNode sets replicas to 0, StartNode sets replicas to 1. Database is preserved across stop/start. |
-| **FK8sListNodes** | `fk8s-functions/Services/FK8sListNodes.cs` | Lists nodes filtered by user (or all). Shows status, image, web client URL, and CPU/memory usage via the metrics API. |
-| **FK8sAllowSqlAccess** | `fk8s-functions/Services/FK8sAllowSqlAccess.cs` | Manages temporary external SQL Server access. Creates a per-user LoadBalancer service (IP-restricted via `loadBalancerSourceRanges`) and a NetworkPolicy allowing the user's IP through to the MSSQL pod. Auto-revokes expired grants via the timer-triggered AutoStop function. |
-| **FK8sServiceBase** | `fk8s-functions/Services/FK8sServiceBase.cs` | Shared base class with AKS/ACR/Storage config, Kubernetes client creation via managed identity, and k8s exec helpers (`FindMssqlPodAsync`, `ExecInMssqlPodAsync`). |
+| **FunctionBase** | `fkh-functions/FunctionBase.cs` | Base class for all HTTP functions. Extracts Bearer token, validates it against GitHub API, checks team membership, parses and validates parameters against the function catalog, and injects the GitHub username. |
+| **GitHubAuthService** | `fkh-functions/Services/GitHubAuthService.cs` | Calls `GET /user` and `GET /orgs/{org}/teams/{team}/memberships/{username}` to authenticate and authorize requests. Allowed org/team pairs loaded from `ALLOWED_ORG_TEAMS` env var. |
+| **GitHubAppTokenService** | `fkh-functions/Services/GitHubAppTokenService.cs` | Creates JWTs signed with the GitHub App private key, exchanges for installation access tokens, and dispatches the `createImages` workflow when an image is missing from ACR. |
+| **FKHCreateNode** | `fkh-functions/Services/FKHCreateNode.cs` | Orchestrates node creation: ACR image check → database backup SAS URL → k8s exec to download and restore database → create K8s deployment, service, and secret. |
+| **FKHRemoveNode** | `fkh-functions/Services/FKHRemoveNode.cs` | Removes Kubernetes resources (deployment, service, secret) and drops the database for a given node. |
+| **FKHScaleNode** | `fkh-functions/Services/FKHScaleNode.cs` | Scales a node's deployment: StopNode sets replicas to 0, StartNode sets replicas to 1. Database is preserved across stop/start. |
+| **FKHListNodes** | `fkh-functions/Services/FKHListNodes.cs` | Lists nodes filtered by user (or all). Shows status, image, web client URL, and CPU/memory usage via the metrics API. |
+| **FKHAllowSqlAccess** | `fkh-functions/Services/FKHAllowSqlAccess.cs` | Manages temporary external SQL Server access. Creates a per-user LoadBalancer service (IP-restricted via `loadBalancerSourceRanges`) and a NetworkPolicy allowing the user's IP through to the MSSQL pod. Auto-revokes expired grants via the timer-triggered AutoStop function. |
+| **FKHServiceBase** | `fkh-functions/Services/FKHServiceBase.cs` | Shared base class with AKS/ACR/Storage config, Kubernetes client creation via managed identity, and k8s exec helpers (`FindMssqlPodAsync`, `ExecInMssqlPodAsync`). |
 
 ### Infrastructure (Terraform)
 
@@ -137,8 +137,8 @@ graph TB
 | **SQL Server** | `kubernetes.tf` | `mssql/server:2022-latest` on Linux pod with 128 Gi Premium SSD PVC. ClusterIP service on port 1433. Network policy restricts ingress to `app-type: windows-servicetier` pods. External access can be temporarily granted per-user via `AllowSqlAccess`. |
 | **ACR** | `acr.tf` | Basic SKU. AKS kubelet identity gets `AcrPull`; GitHub Actions federated identity gets `AcrPush`. |
 | **Managed Identity** | `identity.tf` | User-assigned identity with AKS Contributor + Storage Blob Data Contributor roles. Federated credential for GitHub Actions OIDC. |
-| **Storage (DBS)** | `function.tf` | `fk8s{customer}dbs` — holds database backup blobs in a `cronus` container, keyed by image tag. |
-| **Storage (Func)** | `function.tf` | `fk8s{customer}func` — Azure Functions runtime state (queues, tables). |
+| **Storage (DBS)** | `function.tf` | `fkh{customer}dbs` — holds database backup blobs in a `cronus` container, keyed by image tag. |
+| **Storage (Func)** | `function.tf` | `fkh{customer}func` — Azure Functions runtime state (queues, tables). |
 | **GitHub Team** | `github.tf` | Manages the authorized team within the GitHub organization. |
 | **Monitoring** | `monitoring.tf` | Log Analytics workspace (30-day retention) + Application Insights for function telemetry. |
 
@@ -199,7 +199,7 @@ sequenceDiagram
 4. **Return** — SQL endpoint (`{externalIp},1433`), allowed IP, and auto-revoke time.
 
 Access is auto-revoked by the `AutoStop` timer function (runs every 30 minutes),
-which checks for `fk8s/sql-access-revoke-at` annotations on the services and
+which checks for `fkh/sql-access-revoke-at` annotations on the services and
 deletes expired resources. Users can also revoke access immediately via `RevokeSqlAccess`.
 
 Each user can have only one active SQL access grant. Calling `AllowSqlAccess` again

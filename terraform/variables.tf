@@ -17,7 +17,7 @@ variable "location" {
 }
 
 variable "customer_name" {
-  description = "Short identifier for the customer. Combined with the FK8s prefix in resource names."
+  description = "Short identifier for the customer. Combined with the FKH prefix in resource names."
   type        = string
 }
 
@@ -87,7 +87,7 @@ variable "github_token" {
 variable "github_team_name" {
   description = "Name of the GitHub team that controls access to the provisioner. Created if it does not exist."
   type        = string
-  default     = "FK8s-members"
+  default     = "FKH-members"
 }
 
 variable "github_repo" {

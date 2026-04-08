@@ -95,7 +95,7 @@ function Show-KubernetesDiagnostics {
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $checkScript = Join-Path $scriptDir "checkGitHubTeam.ps1"
 
-$FunctionProjectPath = Join-Path $scriptDir ".." "fk8s-functions"
+$FunctionProjectPath = Join-Path $scriptDir ".." "fkh-functions"
 $FunctionProjectPath = Resolve-Path $FunctionProjectPath
 
 if (-not (Test-Path $FunctionProjectPath)) {
@@ -139,8 +139,8 @@ $tfSubscriptionId = Get-TfVar "subscription_id" $VarFile
 $tfLocation       = Get-TfVar "location"        $VarFile
 $tfCustomerName   = Get-TfVar "customer_name"   $VarFile
 
-$stateRg      = "fk8s-$tfCustomerName-state"
-$stateAccount = "fk8s$($tfCustomerName.Replace('-','').Substring(0, [Math]::Min($tfCustomerName.Replace('-','').Length, 14)))state"
+$stateRg      = "fkh-$tfCustomerName-state"
+$stateAccount = "fkh$($tfCustomerName.Replace('-','').Substring(0, [Math]::Min($tfCustomerName.Replace('-','').Length, 14)))state"
 $stateContainer = "tfstate"
 $stateKey       = "$tfCustomerName.tfstate"
 
@@ -291,8 +291,8 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # ── Refresh kubeconfig after bootstrap (AKS now exists) ──────────────────────
-$aksRg   = "fk8s-$tfCustomerName"
-$aksName = "fk8s-$tfCustomerName-aks"
+$aksRg   = "fkh-$tfCustomerName"
+$aksName = "fkh-$tfCustomerName-aks"
 Write-Host "Fetching AKS credentials for $aksName..." -ForegroundColor Cyan
 az aks get-credentials --resource-group $aksRg --name $aksName --overwrite-existing
 if ($LASTEXITCODE -ne 0) { Write-Host "Warning: could not fetch AKS credentials." -ForegroundColor Yellow }

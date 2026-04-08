@@ -1,6 +1,6 @@
-# FK8s — Freddys Kubernetes Helper
+# FKH — Freddys Kubernetes Helper
 
-FK8s lets authorised GitHub users provision AKS Windows nodes on demand directly
+FKH lets authorised GitHub users provision AKS Windows nodes on demand directly
 from VS Code. A GitHub-authenticated Azure Function acts as the provisioning gate;
 Terraform manages all Azure and GitHub infrastructure.
 
@@ -12,7 +12,7 @@ Requirements depend on what you are doing.
 
 ### End users — provisioning nodes via VS Code
 
-Just [VS Code](https://code.visualstudio.com) with the FK8s extension installed.
+Just [VS Code](https://code.visualstudio.com) with the FKH extension installed.
 Authentication is handled automatically via VS Code's built-in GitHub sign-in.
 No Azure CLI, no Terraform, nothing else.
 
@@ -117,12 +117,12 @@ cd terraform
 
 ---
 
-## Using the FK8s CLI
+## Using the FKH CLI
 
 Publish the executable from the repository root:
 
 ```powershell
-cd fk8s-cli
+cd fkh-cli
 dotnet publish -c Release -o .\dist
 ```
 
@@ -130,13 +130,13 @@ Run from the publish folder (or add it to PATH):
 
 ```powershell
 cd .\dist
-.\fk8s.exe createnode
+.\fkh.exe createnode
 ```
 
 Set the function base URL:
 
 ```powershell
-# Edit fk8s.settings.json next to fk8s.exe
+# Edit fkh.settings.json next to fkh.exe
 {
    "baseUrl": "https://<your-function-app>.azurewebsites.net/api"
 }
@@ -145,26 +145,26 @@ Set the function base URL:
 Run commands:
 
 ```powershell
-fk8s.exe listnodes
-fk8s.exe createnode
-fk8s.exe removenode
-fk8s.exe stopnode
-fk8s.exe startnode
-fk8s.exe allowsqlaccess
-fk8s.exe revokesqlaccess
+fkh.exe listnodes
+fkh.exe createnode
+fkh.exe removenode
+fkh.exe stopnode
+fkh.exe startnode
+fkh.exe allowsqlaccess
+fkh.exe revokesqlaccess
 ```
 
 Pass optional payload parameters:
 
 ```powershell
-fk8s.exe listnodes --all
-fk8s.exe createnode --name bcserver --artifactUrl "https://example/artifact.zip" --adminUsername "admin" --adminPassword "P@ssword1"
-fk8s.exe removenode --name bcserver
-fk8s.exe stopnode --name bcserver
-fk8s.exe startnode --name bcserver
-fk8s.exe allowsqlaccess                          # auto-detects your public IP
-fk8s.exe allowsqlaccess --ip 203.0.113.10 --hours 4
-fk8s.exe revokesqlaccess
+fkh.exe listnodes --all
+fkh.exe createnode --name bcserver --artifactUrl "https://example/artifact.zip" --adminUsername "admin" --adminPassword "P@ssword1"
+fkh.exe removenode --name bcserver
+fkh.exe stopnode --name bcserver
+fkh.exe startnode --name bcserver
+fkh.exe allowsqlaccess                          # auto-detects your public IP
+fkh.exe allowsqlaccess --ip 203.0.113.10 --hours 4
+fkh.exe revokesqlaccess
 ```
 
 ### Direct SQL Server access
@@ -179,7 +179,7 @@ number of hours (default 2). Revoke manually anytime with `revokesqlaccess`.
 ## VS Code extension settings
 
 The extension reads parameter defaults from VS Code settings using the pattern
-`fk8s.<FunctionName>.<parameterName>`. If a value is set, that parameter is
+`fkh.<FunctionName>.<parameterName>`. If a value is set, that parameter is
 skipped during prompting. These settings are fully dynamic — any parameter from
 the function catalog can be defaulted without rebuilding the extension.
 
@@ -187,10 +187,10 @@ Examples (add to `settings.json`):
 
 ```json
 {
-  "fk8s.baseUrl": "https://fk8smyapp.azurewebsites.net/api",
-  "fk8s.CreateNode.adminUsername": "admin",
-  "fk8s.StartNode.autostop": "4",
-  "fk8s.AllowSqlAccess.hours": "4"
+  "fkh.baseUrl": "https://fkhmyapp.azurewebsites.net/api",
+  "fkh.CreateNode.adminUsername": "admin",
+  "fkh.StartNode.autostop": "4",
+  "fkh.AllowSqlAccess.hours": "4"
 }
 ```
 
@@ -207,7 +207,7 @@ terraform/               Terraform configuration
    deploy.ps1             Full environment deploy (GitHub check + terraform apply + function publish)
    deploy-functionupdate.ps1 Function code publish only
   checkGitHubTeam.ps1    Imports existing GitHub team into Terraform state
-fk8s-functions/          Azure Function source (C#, .NET 8, isolated worker)
-fk8s-vsix/              VS Code extension source (TypeScript)
-fk8s-cli/               C#/.NET command line interface (builds as fk8s.exe)
+fkh-functions/          Azure Function source (C#, .NET 8, isolated worker)
+fkh-vsix/              VS Code extension source (TypeScript)
+fkh-cli/               C#/.NET command line interface (builds as fkh.exe)
 ```

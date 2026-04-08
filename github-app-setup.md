@@ -1,6 +1,6 @@
-# Setting up a GitHub App for FK8s
+# Setting up a GitHub App for FKH
 
-FK8s uses a **per-customer GitHub App** to trigger the `createImages` workflow
+FKH uses a **per-customer GitHub App** to trigger the `createImages` workflow
 automatically when a requested container image does not yet exist in ACR.
 
 Each customer gets their own GitHub App so that private keys are isolated —
@@ -15,7 +15,7 @@ repository.
 2. Fill in:
    | Field | Value |
    |---|---|
-   | **GitHub App name** | `FK8s-<customer-name>` (must be globally unique) |
+   | **GitHub App name** | `FKH-<customer-name>` (must be globally unique) |
    | **Homepage URL** | `https://github.com/<org>/<repo>` |
    | **Webhook → Active** | **Unchecked** (no webhook needed) |
 3. Under **Permissions → Repository permissions** set:
@@ -37,7 +37,7 @@ repository.
 
 1. On the App settings page click **Install App** in the left sidebar.
 2. Select your organisation / account.
-3. Choose **Only select repositories** and pick the FK8s repository.
+3. Choose **Only select repositories** and pick the FKH repository.
 4. Click **Install**.
 5. Note the **Installation ID** from the URL:
    `https://github.com/settings/installations/<INSTALLATION_ID>`.

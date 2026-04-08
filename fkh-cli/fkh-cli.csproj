@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>fkh</ToolCommandName>
+    <AssemblyName>fkh</AssemblyName>
+    <PackageId>fkh</PackageId>
+    <Version>0.1.0</Version>
+    <Authors>Freddy DK</Authors>
+    <Description>FKH command line client</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="fkh.settings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+</Project>
