@@ -144,11 +144,11 @@ async function getGitHubVariable(token: string, owner: string, repo: string, var
   return '';
 }
 
-export async function createReadSettingsOptions(githubToken: string): Promise<ReadSettingsOptions | undefined> {
+export async function createReadSettingsOptions(githubToken: string, preselectedProject?: string): Promise<ReadSettingsOptions | undefined> {
   const repoFullName = getRepoName();
   const [owner, repo] = repoFullName.includes('/') ? repoFullName.split('/') : ['', repoFullName];
 
-  const project = await getProject();
+  const project = preselectedProject ?? await getProject();
   if (project === undefined) { return undefined; }
 
   const [orgSettings, repoSettings] = await Promise.all([

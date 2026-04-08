@@ -18,9 +18,11 @@ export class ProjectsTreeProvider implements vscode.TreeDataProvider<ProjectTree
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   private projects: string[] = [];
+  private initialized = false;
 
   async refresh(): Promise<void> {
     this.projects = await getProjects();
+    this.initialized = true;
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -30,6 +32,7 @@ export class ProjectsTreeProvider implements vscode.TreeDataProvider<ProjectTree
 
   getChildren(element?: ProjectTreeItem): ProjectTreeItem[] {
     if (element) { return []; }
+    if (!this.initialized) { return []; }
 
     if (this.projects.length === 0) {
       const empty = new ProjectTreeItem('No AL-Go projects found', vscode.TreeItemCollapsibleState.None);
@@ -70,6 +73,7 @@ export class ContainersTreeProvider implements vscode.TreeDataProvider<Container
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
 
   private nodes: NodeInfo[] = [];
+  private initialized = false;
   private _getBaseUrl: () => string | undefined;
   private _getGitHubSession: () => Promise<vscode.AuthenticationSession | undefined>;
 
@@ -83,6 +87,7 @@ export class ContainersTreeProvider implements vscode.TreeDataProvider<Container
 
   async refresh(): Promise<void> {
     this.nodes = await this.fetchNodes();
+    this.initialized = true;
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -92,6 +97,7 @@ export class ContainersTreeProvider implements vscode.TreeDataProvider<Container
 
   getChildren(element?: ContainerTreeItem): ContainerTreeItem[] {
     if (!element) {
+      if (!this.initialized) { return []; }
       if (this.nodes.length === 0) {
         const empty = new ContainerTreeItem('No containers', vscode.TreeItemCollapsibleState.None);
         empty.iconPath = new vscode.ThemeIcon('info');

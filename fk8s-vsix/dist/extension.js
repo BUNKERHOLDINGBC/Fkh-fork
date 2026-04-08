@@ -149,10 +149,10 @@ async function getGitHubVariable(token, owner, repo, variableName) {
   }
   return "";
 }
-async function createReadSettingsOptions(githubToken) {
+async function createReadSettingsOptions(githubToken, preselectedProject) {
   const repoFullName = getRepoName();
   const [owner, repo] = repoFullName.includes("/") ? repoFullName.split("/") : ["", repoFullName];
-  const project = await getProject();
+  const project = preselectedProject ?? await getProject();
   if (project === void 0) {
     return void 0;
   }
@@ -960,8 +960,10 @@ var ProjectsTreeProvider = class {
   _onDidChangeTreeData = new vscode2.EventEmitter();
   onDidChangeTreeData = this._onDidChangeTreeData.event;
   projects = [];
+  initialized = false;
   async refresh() {
     this.projects = await getProjects();
+    this.initialized = true;
     this._onDidChangeTreeData.fire(void 0);
   }
   getTreeItem(element) {
@@ -969,6 +971,9 @@ var ProjectsTreeProvider = class {
   }
   getChildren(element) {
     if (element) {
+      return [];
+    }
+    if (!this.initialized) {
       return [];
     }
     if (this.projects.length === 0) {
@@ -999,6 +1004,7 @@ var ContainersTreeProvider = class {
   _onDidChangeTreeData = new vscode2.EventEmitter();
   onDidChangeTreeData = this._onDidChangeTreeData.event;
   nodes = [];
+  initialized = false;
   _getBaseUrl;
   _getGitHubSession;
   constructor(getBaseUrl2, getGitHubSession2) {
@@ -1007,6 +1013,7 @@ var ContainersTreeProvider = class {
   }
   async refresh() {
     this.nodes = await this.fetchNodes();
+    this.initialized = true;
     this._onDidChangeTreeData.fire(void 0);
   }
   getTreeItem(element) {
@@ -1014,6 +1021,9 @@ var ContainersTreeProvider = class {
   }
   getChildren(element) {
     if (!element) {
+      if (!this.initialized) {
+        return [];
+      }
       if (this.nodes.length === 0) {
         const empty = new ContainerTreeItem("No containers", vscode2.TreeItemCollapsibleState.None);
         empty.iconPath = new vscode2.ThemeIcon("info");
@@ -1165,6 +1175,10 @@ function activate(context) {
     treeDataProvider: containersProvider,
     showCollapseAll: true
   });
+  setTimeout(() => {
+    projectsProvider.refresh();
+    containersProvider.refresh();
+  }, 5e3);
   context.subscriptions.push(
     outputChannel,
     projectsView,
@@ -1215,59 +1229,12 @@ function activate(context) {
       }
       await invokeFunctionByName(picked.functionName);
     }),
-    vscode3.commands.registerCommand("fk8s.createContainer", async () => {
-      const session = await getGitHubSession();
-      if (!session) {
+    vscode3.commands.registerCommand("fk8s.createContainer", () => createContainer()),
+    vscode3.commands.registerCommand("fk8s.createContainerForProject", async (item) => {
+      if (!item.projectName) {
         return;
       }
-      const options = await createReadSettingsOptions(session.accessToken);
-      if (!options) {
-        return;
-      }
-      if (!options.baseFolder) {
-        vscode3.window.showErrorMessage("FK8s: No Git repository found in the current workspace.");
-        return;
-      }
-      let settings;
-      try {
-        settings = await readSettings(options);
-      } catch (err) {
-        vscode3.window.showErrorMessage(`FK8s: Failed to read AL-Go settings: ${err instanceof Error ? err.message : String(err)}`);
-        return;
-      }
-      const artifact = String(settings["artifact"] ?? "");
-      const country = String(settings["country"] ?? "us");
-      outputChannel.appendLine("--- ReadSettings Options ---");
-      outputChannel.appendLine(`  baseFolder: ${options.baseFolder.toString()}`);
-      outputChannel.appendLine(`  repoName: ${options.repoName}`);
-      outputChannel.appendLine(`  project: ${options.project || "(empty)"}`);
-      outputChannel.appendLine(`  buildMode: ${options.buildMode}`);
-      outputChannel.appendLine(`  workflowName: ${options.workflowName || "(empty)"}`);
-      outputChannel.appendLine(`  userName: ${options.userName}`);
-      outputChannel.appendLine(`  branchName: ${options.branchName}`);
-      outputChannel.appendLine(`  orgSettingsVariableValue: ${options.orgSettingsVariableValue || "(empty)"}`);
-      outputChannel.appendLine(`  repoSettingsVariableValue: ${options.repoSettingsVariableValue || "(empty)"}`);
-      outputChannel.appendLine(`  environmentSettingsVariableValue: ${options.environmentSettingsVariableValue || "(empty)"}`);
-      outputChannel.appendLine(`  environmentName: ${options.environmentName || "(empty)"}`);
-      outputChannel.appendLine(`  customSettings: ${options.customSettings || "(empty)"}`);
-      outputChannel.appendLine("--- Resolved Settings ---");
-      outputChannel.appendLine(`  Country: ${country}`);
-      outputChannel.appendLine(`  Artifact: ${artifact || "(not set)"}`);
-      outputChannel.show(true);
-      if (!artifact) {
-        vscode3.window.showWarningMessage("FK8s: No artifact setting found in AL-Go settings.");
-        return;
-      }
-      let artifactUrl;
-      try {
-        artifactUrl = await determineArtifactUrl(settings);
-        outputChannel.appendLine(`  ArtifactUrl: ${artifactUrl}`);
-        outputChannel.show(true);
-      } catch (err) {
-        vscode3.window.showErrorMessage(`FK8s: Failed to resolve artifact URL: ${err instanceof Error ? err.message : String(err)}`);
-        return;
-      }
-      await invokeFunctionByName("CreateNode", { artifactUrl });
+      await createContainer(item.projectName);
     })
   );
 }
@@ -1459,6 +1426,60 @@ async function invokeNodeAction(functionName, nodeName) {
       await containersProvider.refresh();
     }
   );
+}
+async function createContainer(project) {
+  const session = await getGitHubSession();
+  if (!session) {
+    return;
+  }
+  const options = await createReadSettingsOptions(session.accessToken, project);
+  if (!options) {
+    return;
+  }
+  if (!options.baseFolder) {
+    vscode3.window.showErrorMessage("FK8s: No Git repository found in the current workspace.");
+    return;
+  }
+  let settings;
+  try {
+    settings = await readSettings(options);
+  } catch (err) {
+    vscode3.window.showErrorMessage(`FK8s: Failed to read AL-Go settings: ${err instanceof Error ? err.message : String(err)}`);
+    return;
+  }
+  const artifact = String(settings["artifact"] ?? "");
+  const country = String(settings["country"] ?? "us");
+  outputChannel.appendLine("--- ReadSettings Options ---");
+  outputChannel.appendLine(`  baseFolder: ${options.baseFolder.toString()}`);
+  outputChannel.appendLine(`  repoName: ${options.repoName}`);
+  outputChannel.appendLine(`  project: ${options.project || "(empty)"}`);
+  outputChannel.appendLine(`  buildMode: ${options.buildMode}`);
+  outputChannel.appendLine(`  workflowName: ${options.workflowName || "(empty)"}`);
+  outputChannel.appendLine(`  userName: ${options.userName}`);
+  outputChannel.appendLine(`  branchName: ${options.branchName}`);
+  outputChannel.appendLine(`  orgSettingsVariableValue: ${options.orgSettingsVariableValue || "(empty)"}`);
+  outputChannel.appendLine(`  repoSettingsVariableValue: ${options.repoSettingsVariableValue || "(empty)"}`);
+  outputChannel.appendLine(`  environmentSettingsVariableValue: ${options.environmentSettingsVariableValue || "(empty)"}`);
+  outputChannel.appendLine(`  environmentName: ${options.environmentName || "(empty)"}`);
+  outputChannel.appendLine(`  customSettings: ${options.customSettings || "(empty)"}`);
+  outputChannel.appendLine("--- Resolved Settings ---");
+  outputChannel.appendLine(`  Country: ${country}`);
+  outputChannel.appendLine(`  Artifact: ${artifact || "(not set)"}`);
+  outputChannel.show(true);
+  if (!artifact) {
+    vscode3.window.showWarningMessage("FK8s: No artifact setting found in AL-Go settings.");
+    return;
+  }
+  let artifactUrl;
+  try {
+    artifactUrl = await determineArtifactUrl(settings);
+    outputChannel.appendLine(`  ArtifactUrl: ${artifactUrl}`);
+    outputChannel.show(true);
+  } catch (err) {
+    vscode3.window.showErrorMessage(`FK8s: Failed to resolve artifact URL: ${err instanceof Error ? err.message : String(err)}`);
+    return;
+  }
+  await invokeFunctionByName("CreateNode", { artifactUrl });
 }
 function deactivate() {
 }

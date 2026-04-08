@@ -1,9 +1,9 @@
 {
   "name": "fk8s",
-  "displayName": "Freddy's Kubernetes Provisioner",
+  "displayName": "Freddy's Kubernetes Helper",
   "description": "Provision AKS nodes via authenticated Azure Function",
   "version": "0.0.1",
-  "publisher": "Freddy-DK",
+  "publisher": "Freddy.DK ApS",
   "icon": "images/icon.png",
   "repository": {
     "type": "git",
@@ -56,6 +56,11 @@
         "command": "fk8s.removeNode",
         "title": "Remove",
         "icon": "$(trash)"
+      },
+      {
+        "command": "fk8s.createContainerForProject",
+        "title": "Create Container",
+        "icon": "$(vm)"
       }
     ],
     "viewsContainers": {
@@ -63,7 +68,7 @@
         {
           "id": "fk8s-explorer",
           "title": "FK8s",
-          "icon": "$(server)"
+          "icon": "images/icon.png"
         }
       ]
     },
@@ -71,11 +76,13 @@
       "fk8s-explorer": [
         {
           "id": "fk8sProjects",
-          "name": "AL-Go"
+          "name": "AL-Go Projects",
+          "icon": "$(project)"
         },
         {
           "id": "fk8sContainers",
-          "name": "Containers"
+          "name": "Containers",
+          "icon": "$(server)"
         }
       ]
     },
@@ -93,6 +100,16 @@
         }
       ],
       "view/item/context": [
+        {
+          "command": "fk8s.createContainerForProject",
+          "when": "view == fk8sProjects && viewItem == algoProject",
+          "group": "inline"
+        },
+        {
+          "command": "fk8s.createContainerForProject",
+          "when": "view == fk8sProjects && viewItem == algoProject",
+          "group": "1_actions"
+        },
         {
           "command": "fk8s.startNode",
           "when": "view == fk8sContainers && viewItem == node-stopped",

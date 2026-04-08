@@ -1,4 +1,4 @@
-# FK8s — Freddys Kubernetes Provisioner
+# FK8s — Freddys Kubernetes Helper
 
 FK8s lets authorised GitHub users provision AKS Windows nodes on demand directly
 from VS Code. A GitHub-authenticated Azure Function acts as the provisioning gate;

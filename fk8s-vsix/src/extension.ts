@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { createReadSettingsOptions, readSettings } from './readALGoSettings';
 import { determineArtifactUrl } from './bcArtifactHelper';
-import { ProjectsTreeProvider, ContainersTreeProvider, ContainerTreeItem } from './nodesTreeProvider';
+import { ProjectsTreeProvider, ProjectTreeItem, ContainersTreeProvider, ContainerTreeItem } from './nodesTreeProvider';
 
 let functionCatalog: FunctionCatalogResponse | undefined;
 let outputChannel: vscode.OutputChannel;
@@ -37,6 +37,12 @@ export function activate(context: vscode.ExtensionContext) {
     treeDataProvider: containersProvider,
     showCollapseAll: true,
   });
+
+  // Delay initial population to let the extension host settle
+  setTimeout(() => {
+    projectsProvider.refresh();
+    containersProvider.refresh();
+  }, 5000);
 
   context.subscriptions.push(
     outputChannel,
@@ -79,62 +85,10 @@ export function activate(context: vscode.ExtensionContext) {
 
       await invokeFunctionByName(picked.functionName);
     }),
-    vscode.commands.registerCommand('fk8s.createContainer', async () => {
-      const session = await getGitHubSession();
-      if (!session) { return; }
-
-      const options = await createReadSettingsOptions(session.accessToken);
-      if (!options) { return; }
-      if (!options.baseFolder) {
-        vscode.window.showErrorMessage('FK8s: No Git repository found in the current workspace.');
-        return;
-      }
-
-      let settings: Record<string, unknown>;
-      try {
-        settings = await readSettings(options);
-      } catch (err) {
-        vscode.window.showErrorMessage(`FK8s: Failed to read AL-Go settings: ${err instanceof Error ? err.message : String(err)}`);
-        return;
-      }
-
-      const artifact = String(settings['artifact'] ?? '');
-      const country = String(settings['country'] ?? 'us');
-
-      outputChannel.appendLine('--- ReadSettings Options ---');
-      outputChannel.appendLine(`  baseFolder: ${options.baseFolder.toString()}`);
-      outputChannel.appendLine(`  repoName: ${options.repoName}`);
-      outputChannel.appendLine(`  project: ${options.project || '(empty)'}`);
-      outputChannel.appendLine(`  buildMode: ${options.buildMode}`);
-      outputChannel.appendLine(`  workflowName: ${options.workflowName || '(empty)'}`);
-      outputChannel.appendLine(`  userName: ${options.userName}`);
-      outputChannel.appendLine(`  branchName: ${options.branchName}`);
-      outputChannel.appendLine(`  orgSettingsVariableValue: ${options.orgSettingsVariableValue || '(empty)'}`);
-      outputChannel.appendLine(`  repoSettingsVariableValue: ${options.repoSettingsVariableValue || '(empty)'}`);
-      outputChannel.appendLine(`  environmentSettingsVariableValue: ${options.environmentSettingsVariableValue || '(empty)'}`);
-      outputChannel.appendLine(`  environmentName: ${options.environmentName || '(empty)'}`);
-      outputChannel.appendLine(`  customSettings: ${options.customSettings || '(empty)'}`);
-      outputChannel.appendLine('--- Resolved Settings ---');
-      outputChannel.appendLine(`  Country: ${country}`);
-      outputChannel.appendLine(`  Artifact: ${artifact || '(not set)'}`);
-      outputChannel.show(true);
-
-      if (!artifact) {
-        vscode.window.showWarningMessage('FK8s: No artifact setting found in AL-Go settings.');
-        return;
-      }
-
-      let artifactUrl: string;
-      try {
-        artifactUrl = await determineArtifactUrl(settings);
-        outputChannel.appendLine(`  ArtifactUrl: ${artifactUrl}`);
-        outputChannel.show(true);
-      } catch (err) {
-        vscode.window.showErrorMessage(`FK8s: Failed to resolve artifact URL: ${err instanceof Error ? err.message : String(err)}`);
-        return;
-      }
-
-      await invokeFunctionByName('CreateNode', { artifactUrl });
+    vscode.commands.registerCommand('fk8s.createContainer', () => createContainer()),
+    vscode.commands.registerCommand('fk8s.createContainerForProject', async (item: ProjectTreeItem) => {
+      if (!item.projectName) { return; }
+      await createContainer(item.projectName);
     })
   );
 }
@@ -378,6 +332,64 @@ async function invokeNodeAction(
       await containersProvider.refresh();
     }
   );
+}
+
+async function createContainer(project?: string): Promise<void> {
+  const session = await getGitHubSession();
+  if (!session) { return; }
+
+  const options = await createReadSettingsOptions(session.accessToken, project);
+  if (!options) { return; }
+  if (!options.baseFolder) {
+    vscode.window.showErrorMessage('FK8s: No Git repository found in the current workspace.');
+    return;
+  }
+
+  let settings: Record<string, unknown>;
+  try {
+    settings = await readSettings(options);
+  } catch (err) {
+    vscode.window.showErrorMessage(`FK8s: Failed to read AL-Go settings: ${err instanceof Error ? err.message : String(err)}`);
+    return;
+  }
+
+  const artifact = String(settings['artifact'] ?? '');
+  const country = String(settings['country'] ?? 'us');
+
+  outputChannel.appendLine('--- ReadSettings Options ---');
+  outputChannel.appendLine(`  baseFolder: ${options.baseFolder.toString()}`);
+  outputChannel.appendLine(`  repoName: ${options.repoName}`);
+  outputChannel.appendLine(`  project: ${options.project || '(empty)'}`);
+  outputChannel.appendLine(`  buildMode: ${options.buildMode}`);
+  outputChannel.appendLine(`  workflowName: ${options.workflowName || '(empty)'}`);
+  outputChannel.appendLine(`  userName: ${options.userName}`);
+  outputChannel.appendLine(`  branchName: ${options.branchName}`);
+  outputChannel.appendLine(`  orgSettingsVariableValue: ${options.orgSettingsVariableValue || '(empty)'}`);
+  outputChannel.appendLine(`  repoSettingsVariableValue: ${options.repoSettingsVariableValue || '(empty)'}`);
+  outputChannel.appendLine(`  environmentSettingsVariableValue: ${options.environmentSettingsVariableValue || '(empty)'}`);
+  outputChannel.appendLine(`  environmentName: ${options.environmentName || '(empty)'}`);
+  outputChannel.appendLine(`  customSettings: ${options.customSettings || '(empty)'}`);
+  outputChannel.appendLine('--- Resolved Settings ---');
+  outputChannel.appendLine(`  Country: ${country}`);
+  outputChannel.appendLine(`  Artifact: ${artifact || '(not set)'}`);
+  outputChannel.show(true);
+
+  if (!artifact) {
+    vscode.window.showWarningMessage('FK8s: No artifact setting found in AL-Go settings.');
+    return;
+  }
+
+  let artifactUrl: string;
+  try {
+    artifactUrl = await determineArtifactUrl(settings);
+    outputChannel.appendLine(`  ArtifactUrl: ${artifactUrl}`);
+    outputChannel.show(true);
+  } catch (err) {
+    vscode.window.showErrorMessage(`FK8s: Failed to resolve artifact URL: ${err instanceof Error ? err.message : String(err)}`);
+    return;
+  }
+
+  await invokeFunctionByName('CreateNode', { artifactUrl });
 }
 
 export function deactivate() {}
