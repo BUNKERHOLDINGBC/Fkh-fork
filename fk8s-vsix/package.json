@@ -4,6 +4,7 @@
   "description": "Provision AKS nodes via authenticated Azure Function",
   "version": "0.0.1",
   "publisher": "Freddy-DK",
+  "icon": "images/icon.png",
   "repository": {
     "type": "git",
     "url": "https://github.com/Freddy-DK/FK8s"
@@ -11,9 +12,16 @@
   "engines": {
     "vscode": "^1.85.0"
   },
-  "categories": ["Other"],
+  "extensionKind": [
+    "workspace",
+    "web"
+  ],
+  "categories": [
+    "Other"
+  ],
   "activationEvents": [],
-  "main": "./out/extension.js",
+  "main": "./dist/extension.js",
+  "browser": "./dist/web/extension.js",
   "contributes": {
     "commands": [
       {
@@ -23,8 +31,100 @@
       {
         "command": "fk8s.createContainer",
         "title": "FK8s: Create Container"
+      },
+      {
+        "command": "fk8s.refreshProjects",
+        "title": "FK8s: Refresh Projects",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "fk8s.refreshContainers",
+        "title": "FK8s: Refresh Containers",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "fk8s.startNode",
+        "title": "Start",
+        "icon": "$(debug-start)"
+      },
+      {
+        "command": "fk8s.stopNode",
+        "title": "Stop",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "fk8s.removeNode",
+        "title": "Remove",
+        "icon": "$(trash)"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "fk8s-explorer",
+          "title": "FK8s",
+          "icon": "$(server)"
+        }
+      ]
+    },
+    "views": {
+      "fk8s-explorer": [
+        {
+          "id": "fk8sProjects",
+          "name": "AL-Go"
+        },
+        {
+          "id": "fk8sContainers",
+          "name": "Containers"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "fk8s.refreshProjects",
+          "when": "view == fk8sProjects",
+          "group": "navigation"
+        },
+        {
+          "command": "fk8s.refreshContainers",
+          "when": "view == fk8sContainers",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "fk8s.startNode",
+          "when": "view == fk8sContainers && viewItem == node-stopped",
+          "group": "inline"
+        },
+        {
+          "command": "fk8s.stopNode",
+          "when": "view == fk8sContainers && viewItem =~ /node-(running|starting)/",
+          "group": "inline"
+        },
+        {
+          "command": "fk8s.removeNode",
+          "when": "view == fk8sContainers && viewItem =~ /^node-/",
+          "group": "inline"
+        },
+        {
+          "command": "fk8s.startNode",
+          "when": "view == fk8sContainers && viewItem == node-stopped",
+          "group": "1_actions"
+        },
+        {
+          "command": "fk8s.stopNode",
+          "when": "view == fk8sContainers && viewItem =~ /node-(running|starting)/",
+          "group": "1_actions"
+        },
+        {
+          "command": "fk8s.removeNode",
+          "when": "view == fk8sContainers && viewItem =~ /^node-/",
+          "group": "2_destructive"
+        }
+      ]
+    },
     "configuration": {
       "title": "FK8s",
       "properties": {
@@ -37,13 +137,17 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "npm run build",
     "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./"
+    "build": "npm run build:node && npm run build:web",
+    "build:node": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
+    "build:web": "esbuild ./src/extension.ts --bundle --outfile=dist/web/extension.js --external:vscode --format=cjs --platform=browser",
+    "watch": "npm run build:node -- --watch"
   },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "@types/vscode": "^1.85.0",
+    "esbuild": "^0.28.0",
     "typescript": "^5.3.0"
   }
 }

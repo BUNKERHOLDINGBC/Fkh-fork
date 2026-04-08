@@ -1,9 +1,12 @@
 import * as vscode from 'vscode';
 import { createReadSettingsOptions, readSettings } from './readALGoSettings';
 import { determineArtifactUrl } from './bcArtifactHelper';
+import { ProjectsTreeProvider, ContainersTreeProvider, ContainerTreeItem } from './nodesTreeProvider';
 
 let functionCatalog: FunctionCatalogResponse | undefined;
 let outputChannel: vscode.OutputChannel;
+let projectsProvider: ProjectsTreeProvider;
+let containersProvider: ContainersTreeProvider;
 
 function getBaseUrl(): string | undefined {
   const url = vscode.workspace.getConfiguration('fk8s').get<string>('baseUrl', '').trim();
@@ -23,8 +26,42 @@ function getBaseUrl(): string | undefined {
 
 export function activate(context: vscode.ExtensionContext) {
   outputChannel = vscode.window.createOutputChannel('FK8s');
+
+  projectsProvider = new ProjectsTreeProvider();
+  const projectsView = vscode.window.createTreeView('fk8sProjects', {
+    treeDataProvider: projectsProvider,
+  });
+
+  containersProvider = new ContainersTreeProvider(getBaseUrl, getGitHubSession);
+  const containersView = vscode.window.createTreeView('fk8sContainers', {
+    treeDataProvider: containersProvider,
+    showCollapseAll: true,
+  });
+
   context.subscriptions.push(
     outputChannel,
+    projectsView,
+    containersView,
+    vscode.commands.registerCommand('fk8s.refreshProjects', () => projectsProvider.refresh()),
+    vscode.commands.registerCommand('fk8s.refreshContainers', () => containersProvider.refresh()),
+    vscode.commands.registerCommand('fk8s.startNode', async (item: ContainerTreeItem) => {
+      if (!item.nodeInfo) { return; }
+      await invokeNodeAction('StartNode', item.nodeInfo.name);
+    }),
+    vscode.commands.registerCommand('fk8s.stopNode', async (item: ContainerTreeItem) => {
+      if (!item.nodeInfo) { return; }
+      await invokeNodeAction('StopNode', item.nodeInfo.name);
+    }),
+    vscode.commands.registerCommand('fk8s.removeNode', async (item: ContainerTreeItem) => {
+      if (!item.nodeInfo) { return; }
+      const confirm = await vscode.window.showWarningMessage(
+        `Are you sure you want to remove '${item.nodeInfo.name}'? This will delete the node and its database.`,
+        { modal: true },
+        'Remove'
+      );
+      if (confirm !== 'Remove') { return; }
+      await invokeNodeAction('RemoveNode', item.nodeInfo.name);
+    }),
     vscode.commands.registerCommand('fk8s.run', async () => {
       const catalog = await getFunctionCatalog();
       if (!catalog) { return; }
@@ -55,7 +92,7 @@ export function activate(context: vscode.ExtensionContext) {
 
       let settings: Record<string, unknown>;
       try {
-        settings = readSettings(options);
+        settings = await readSettings(options);
       } catch (err) {
         vscode.window.showErrorMessage(`FK8s: Failed to read AL-Go settings: ${err instanceof Error ? err.message : String(err)}`);
         return;
@@ -65,7 +102,7 @@ export function activate(context: vscode.ExtensionContext) {
       const country = String(settings['country'] ?? 'us');
 
       outputChannel.appendLine('--- ReadSettings Options ---');
-      outputChannel.appendLine(`  baseFolder: ${options.baseFolder}`);
+      outputChannel.appendLine(`  baseFolder: ${options.baseFolder.toString()}`);
       outputChannel.appendLine(`  repoName: ${options.repoName}`);
       outputChannel.appendLine(`  project: ${options.project || '(empty)'}`);
       outputChannel.appendLine(`  buildMode: ${options.buildMode}`);
@@ -290,6 +327,55 @@ async function invokeFunctionByName(functionName: string, prefilled: Record<stri
       } catch (err) {
         logOutput(`[${definition.name}] Could not reach the provisioning service: ${err instanceof Error ? err.message : String(err)}`, true);
       }
+
+      await containersProvider.refresh();
+    }
+  );
+}
+
+async function invokeNodeAction(
+  functionName: string,
+  nodeName: string,
+): Promise<void> {
+  const baseUrl = getBaseUrl();
+  if (!baseUrl) { return; }
+
+  const session = await getGitHubSession();
+  if (!session) { return; }
+
+  await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: `${functionName}: ${nodeName}`,
+      cancellable: false,
+    },
+    async () => {
+      try {
+        const body: FunctionInvokeRequest = { parameters: { name: nodeName } };
+
+        const response = await fetch(`${baseUrl}/${functionName}`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${session.accessToken}`,
+          },
+          body: JSON.stringify(body),
+        });
+
+        if (response.ok) {
+          const result = await response.json() as { message: string };
+          logOutput(`[${functionName}] ${result.message}`);
+        } else {
+          const error = response.status === 401 || response.status === 403
+            ? `Access denied (${response.status}).`
+            : `Failed (${response.status}): ${await response.text()}`;
+          logOutput(`[${functionName}] ${error}`, true);
+        }
+      } catch (err) {
+        logOutput(`[${functionName}] Could not reach the provisioning service: ${err instanceof Error ? err.message : String(err)}`, true);
+      }
+
+      await containersProvider.refresh();
     }
   );
 }

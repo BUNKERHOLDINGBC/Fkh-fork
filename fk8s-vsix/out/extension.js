@@ -1,45 +1,11 @@
-"use strict";
-var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    var desc = Object.getOwnPropertyDescriptor(m, k);
-    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
-      desc = { enumerable: true, get: function() { return m[k]; } };
-    }
-    Object.defineProperty(o, k2, desc);
-}) : (function(o, m, k, k2) {
-    if (k2 === undefined) k2 = k;
-    o[k2] = m[k];
-}));
-var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
-    Object.defineProperty(o, "default", { enumerable: true, value: v });
-}) : function(o, v) {
-    o["default"] = v;
-});
-var __importStar = (this && this.__importStar) || (function () {
-    var ownKeys = function(o) {
-        ownKeys = Object.getOwnPropertyNames || function (o) {
-            var ar = [];
-            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
-            return ar;
-        };
-        return ownKeys(o);
-    };
-    return function (mod) {
-        if (mod && mod.__esModule) return mod;
-        var result = {};
-        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
-        __setModuleDefault(result, mod);
-        return result;
-    };
-})();
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.activate = activate;
-exports.deactivate = deactivate;
-const vscode = __importStar(require("vscode"));
-const readALGoSettings_1 = require("./readALGoSettings");
-const bcArtifactHelper_1 = require("./bcArtifactHelper");
+import * as vscode from 'vscode';
+import { createReadSettingsOptions, readSettings } from './readALGoSettings';
+import { determineArtifactUrl } from './bcArtifactHelper';
+import { ProjectsTreeProvider, ContainersTreeProvider } from './nodesTreeProvider';
 let functionCatalog;
 let outputChannel;
+let projectsProvider;
+let containersProvider;
 function getBaseUrl() {
     const url = vscode.workspace.getConfiguration('fk8s').get('baseUrl', '').trim();
     if (!url) {
@@ -52,9 +18,37 @@ function getBaseUrl() {
     }
     return url;
 }
-function activate(context) {
+export function activate(context) {
     outputChannel = vscode.window.createOutputChannel('FK8s');
-    context.subscriptions.push(outputChannel, vscode.commands.registerCommand('fk8s.run', async () => {
+    projectsProvider = new ProjectsTreeProvider();
+    const projectsView = vscode.window.createTreeView('fk8sProjects', {
+        treeDataProvider: projectsProvider,
+    });
+    containersProvider = new ContainersTreeProvider(getBaseUrl, getGitHubSession);
+    const containersView = vscode.window.createTreeView('fk8sContainers', {
+        treeDataProvider: containersProvider,
+        showCollapseAll: true,
+    });
+    context.subscriptions.push(outputChannel, projectsView, containersView, vscode.commands.registerCommand('fk8s.refreshProjects', () => projectsProvider.refresh()), vscode.commands.registerCommand('fk8s.refreshContainers', () => containersProvider.refresh()), vscode.commands.registerCommand('fk8s.startNode', async (item) => {
+        if (!item.nodeInfo) {
+            return;
+        }
+        await invokeNodeAction('StartNode', item.nodeInfo.name);
+    }), vscode.commands.registerCommand('fk8s.stopNode', async (item) => {
+        if (!item.nodeInfo) {
+            return;
+        }
+        await invokeNodeAction('StopNode', item.nodeInfo.name);
+    }), vscode.commands.registerCommand('fk8s.removeNode', async (item) => {
+        if (!item.nodeInfo) {
+            return;
+        }
+        const confirm = await vscode.window.showWarningMessage(`Are you sure you want to remove '${item.nodeInfo.name}'? This will delete the node and its database.`, { modal: true }, 'Remove');
+        if (confirm !== 'Remove') {
+            return;
+        }
+        await invokeNodeAction('RemoveNode', item.nodeInfo.name);
+    }), vscode.commands.registerCommand('fk8s.run', async () => {
         const catalog = await getFunctionCatalog();
         if (!catalog) {
             return;
@@ -76,7 +70,7 @@ function activate(context) {
         if (!session) {
             return;
         }
-        const options = await (0, readALGoSettings_1.createReadSettingsOptions)(session.accessToken);
+        const options = await createReadSettingsOptions(session.accessToken);
         if (!options) {
             return;
         }
@@ -86,7 +80,7 @@ function activate(context) {
         }
         let settings;
         try {
-            settings = (0, readALGoSettings_1.readSettings)(options);
+            settings = await readSettings(options);
         }
         catch (err) {
             vscode.window.showErrorMessage(`FK8s: Failed to read AL-Go settings: ${err instanceof Error ? err.message : String(err)}`);
@@ -95,7 +89,7 @@ function activate(context) {
         const artifact = String(settings['artifact'] ?? '');
         const country = String(settings['country'] ?? 'us');
         outputChannel.appendLine('--- ReadSettings Options ---');
-        outputChannel.appendLine(`  baseFolder: ${options.baseFolder}`);
+        outputChannel.appendLine(`  baseFolder: ${options.baseFolder.toString()}`);
         outputChannel.appendLine(`  repoName: ${options.repoName}`);
         outputChannel.appendLine(`  project: ${options.project || '(empty)'}`);
         outputChannel.appendLine(`  buildMode: ${options.buildMode}`);
@@ -117,7 +111,7 @@ function activate(context) {
         }
         let artifactUrl;
         try {
-            artifactUrl = await (0, bcArtifactHelper_1.determineArtifactUrl)(settings);
+            artifactUrl = await determineArtifactUrl(settings);
             outputChannel.appendLine(`  ArtifactUrl: ${artifactUrl}`);
             outputChannel.show(true);
         }
@@ -271,6 +265,48 @@ async function invokeFunctionByName(functionName, prefilled = {}) {
         catch (err) {
             logOutput(`[${definition.name}] Could not reach the provisioning service: ${err instanceof Error ? err.message : String(err)}`, true);
         }
+        await containersProvider.refresh();
     });
 }
-function deactivate() { }
+async function invokeNodeAction(functionName, nodeName) {
+    const baseUrl = getBaseUrl();
+    if (!baseUrl) {
+        return;
+    }
+    const session = await getGitHubSession();
+    if (!session) {
+        return;
+    }
+    await vscode.window.withProgress({
+        location: vscode.ProgressLocation.Notification,
+        title: `${functionName}: ${nodeName}`,
+        cancellable: false,
+    }, async () => {
+        try {
+            const body = { parameters: { name: nodeName } };
+            const response = await fetch(`${baseUrl}/${functionName}`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Authorization: `Bearer ${session.accessToken}`,
+                },
+                body: JSON.stringify(body),
+            });
+            if (response.ok) {
+                const result = await response.json();
+                logOutput(`[${functionName}] ${result.message}`);
+            }
+            else {
+                const error = response.status === 401 || response.status === 403
+                    ? `Access denied (${response.status}).`
+                    : `Failed (${response.status}): ${await response.text()}`;
+                logOutput(`[${functionName}] ${error}`, true);
+            }
+        }
+        catch (err) {
+            logOutput(`[${functionName}] Could not reach the provisioning service: ${err instanceof Error ? err.message : String(err)}`, true);
+        }
+        await containersProvider.refresh();
+    });
+}
+export function deactivate() { }

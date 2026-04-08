@@ -1,8 +1,5 @@
-"use strict";
 // bcArtifactHelper.ts
 // TypeScript port of BcArtifactHelper.cs — resolves BC artifact URLs from Azure CDN indexes.
-Object.defineProperty(exports, "__esModule", { value: true });
-exports.determineArtifactUrl = determineArtifactUrl;
 // ---------------------------------------------------------------------------
 // CDN / blob-URL mapping
 // ---------------------------------------------------------------------------
@@ -247,7 +244,7 @@ function startOfWeek(d) {
 // ---------------------------------------------------------------------------
 // Public API: determineArtifactUrl
 // ---------------------------------------------------------------------------
-async function determineArtifactUrl(projectSettings) {
+export async function determineArtifactUrl(projectSettings) {
     let artifact = getString(projectSettings, 'artifact');
     const projectCountry = getString(projectSettings, 'country');
     const applicationDependencyText = getString(projectSettings, 'applicationDependency');

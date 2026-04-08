@@ -1,6 +1,4 @@
 import * as vscode from 'vscode';
-import * as path from 'path';
-import * as fs from 'fs';
 
 const ALGoFolderName = '.AL-Go';
 const ALGoSettingsFileName = 'settings.json';
@@ -8,13 +6,14 @@ const RepoSettingsFileName = 'AL-Go-Settings.json';
 const CustomTemplateRepoSettingsFileName = 'AL-Go-TemplateRepoSettings.doNotEdit.json';
 const CustomTemplateProjectSettingsFileName = 'AL-Go-TemplateProjectSettings.doNotEdit.json';
 
-const ALGoSettingsFile = path.join(ALGoFolderName, ALGoSettingsFileName);
-const RepoSettingsFile = path.join('.github', RepoSettingsFileName);
-const CustomTemplateRepoSettingsFile = path.join('.github', CustomTemplateRepoSettingsFileName);
-const CustomTemplateProjectSettingsFile = path.join('.github', CustomTemplateProjectSettingsFileName);
+// Relative path segments (joined via Uri at point of use)
+const ALGoSettingsPath = [ALGoFolderName, ALGoSettingsFileName];
+const RepoSettingsPath = ['.github', RepoSettingsFileName];
+const CustomTemplateRepoSettingsPath = ['.github', CustomTemplateRepoSettingsFileName];
+const CustomTemplateProjectSettingsPath = ['.github', CustomTemplateProjectSettingsFileName];
 
 export interface ReadSettingsOptions {
-  baseFolder: string;
+  baseFolder: vscode.Uri;
   repoName: string;
   project: string;
   buildMode: string;
@@ -52,9 +51,12 @@ function getGitRepository(): GitRepository | undefined {
   return git.repositories[0];
 }
 
-function getGitRootPath(): string {
+function getGitRootUri(): vscode.Uri | undefined {
   const repo = getGitRepository();
-  return repo?.rootUri.fsPath ?? '';
+  if (repo) { return repo.rootUri; }
+  // Fallback for web environments where vscode.git may not be available
+  const folders = vscode.workspace.workspaceFolders;
+  return folders?.[0]?.uri;
 }
 
 function getRepoName(): string {
@@ -81,15 +83,23 @@ function getGitUserName(): string {
   return match?.[1] ?? '';
 }
 
-export async function getProject(): Promise<string | undefined> {
-  const gitRoot = getGitRootPath();
-  if (!gitRoot) { return undefined; }
+export async function getProjects(): Promise<string[]> {
+  const gitRoot = getGitRootUri();
+  if (!gitRoot) { return []; }
 
-  // Find all subdirectories that contain .AL-Go/settings.json (i.e., AL-Go projects)
-  const entries = fs.readdirSync(gitRoot, { withFileTypes: true });
-  const projects = entries
-    .filter(e => e.isDirectory() && fs.existsSync(path.join(gitRoot, e.name, ALGoFolderName, ALGoSettingsFileName)))
-    .map(e => e.name)
+  const entries = await vscode.workspace.fs.readDirectory(gitRoot);
+  const projects: string[] = [];
+  for (const [name, type] of entries) {
+    if (type !== vscode.FileType.Directory) { continue; }
+    if (await uriExists(vscode.Uri.joinPath(gitRoot, name, ...ALGoSettingsPath))) {
+      projects.push(name);
+    }
+  }
+  return projects;
+}
+
+export async function getProject(): Promise<string | undefined> {
+  const projects = await getProjects();
 
   if (projects.length === 0) {
     return undefined;
@@ -146,8 +156,11 @@ export async function createReadSettingsOptions(githubToken: string): Promise<Re
     getGitHubVariable(githubToken, owner, repo, 'ALGoRepoSettings'),
   ]);
 
+  const baseFolder = getGitRootUri();
+  if (!baseFolder) { return undefined; }
+
   return {
-    baseFolder: getGitRootPath(),
+    baseFolder,
     repoName: repoFullName,
     project: project,
     buildMode: 'Default',
@@ -164,7 +177,7 @@ export async function createReadSettingsOptions(githubToken: string): Promise<Re
 
 // ── Settings reading logic (port of C# ReadALGoSettings) ──────────────────────
 
-export function readSettings(options: ReadSettingsOptions): Record<string, unknown> {
+export async function readSettings(options: ReadSettingsOptions): Promise<Record<string, unknown>> {
   if (!options.baseFolder) {
     throw new Error('baseFolder is required');
   }
@@ -173,7 +186,7 @@ export function readSettings(options: ReadSettingsOptions): Record<string, unkno
   const workflowName = sanitizeWorkflowName(options.workflowName);
   const settings = getDefaultSettings(repoName);
 
-  const sources = buildSettingsSources(options, workflowName);
+  const sources = await buildSettingsSources(options, workflowName);
 
   for (const [, sourceSettings] of sources) {
     if (!sourceSettings) { continue; }
@@ -221,14 +234,24 @@ function getExistingKeyIgnoreCase(obj: Record<string, unknown>, key: string): st
   return Object.keys(obj).find(k => k.toLowerCase() === key.toLowerCase());
 }
 
-function readSettingsFile(filePath: string): Record<string, unknown> | undefined {
-  if (!fs.existsSync(filePath)) { return undefined; }
+async function uriExists(uri: vscode.Uri): Promise<boolean> {
   try {
-    const text = fs.readFileSync(filePath, 'utf-8');
+    await vscode.workspace.fs.stat(uri);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function readSettingsFile(uri: vscode.Uri): Promise<Record<string, unknown> | undefined> {
+  if (!await uriExists(uri)) { return undefined; }
+  try {
+    const bytes = await vscode.workspace.fs.readFile(uri);
+    const text = new TextDecoder('utf-8').decode(bytes);
     if (!text.trim()) { return undefined; }
     return JSON.parse(text);
   } catch (err) {
-    throw new Error(`Error reading ${filePath}: ${err instanceof Error ? err.message : String(err)}`);
+    throw new Error(`Error reading ${uri.toString()}: ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
@@ -244,38 +267,38 @@ function parseJsonObject(json: string, sourceName: string): Record<string, unkno
   }
 }
 
-function buildSettingsSources(options: ReadSettingsOptions, workflowName: string): [string, Record<string, unknown> | undefined][] {
+async function buildSettingsSources(options: ReadSettingsOptions, workflowName: string): Promise<[string, Record<string, unknown> | undefined][]> {
   const result: [string, Record<string, unknown> | undefined][] = [];
-  const githubFolder = path.join(options.baseFolder, '.github');
+  const githubFolder = vscode.Uri.joinPath(options.baseFolder, '.github');
 
   if (options.orgSettingsVariableValue) {
     result.push(['ALGoOrgSettings', parseJsonObject(options.orgSettingsVariableValue, 'ALGoOrgSettings')]);
   }
 
-  result.push([CustomTemplateRepoSettingsFile, readSettingsFile(path.join(options.baseFolder, CustomTemplateRepoSettingsFile))]);
-  result.push([RepoSettingsFile, readSettingsFile(path.join(options.baseFolder, RepoSettingsFile))]);
+  result.push([CustomTemplateRepoSettingsPath.join('/'), await readSettingsFile(vscode.Uri.joinPath(options.baseFolder, ...CustomTemplateRepoSettingsPath))]);
+  result.push([RepoSettingsPath.join('/'), await readSettingsFile(vscode.Uri.joinPath(options.baseFolder, ...RepoSettingsPath))]);
 
   if (options.repoSettingsVariableValue) {
     result.push(['ALGoRepoSettings', parseJsonObject(options.repoSettingsVariableValue, 'ALGoRepoSettings')]);
   }
 
-  let projectFolder: string | undefined;
+  let projectFolder: vscode.Uri | undefined;
   if (options.project) {
-    projectFolder = path.resolve(options.baseFolder, options.project);
-    result.push([CustomTemplateProjectSettingsFile, readSettingsFile(path.join(options.baseFolder, CustomTemplateProjectSettingsFile))]);
-    result.push([`${options.project}/${ALGoSettingsFile}`.replace(/\\/g, '/'), readSettingsFile(path.join(projectFolder, ALGoSettingsFile))]);
+    projectFolder = vscode.Uri.joinPath(options.baseFolder, options.project);
+    result.push([CustomTemplateProjectSettingsPath.join('/'), await readSettingsFile(vscode.Uri.joinPath(options.baseFolder, ...CustomTemplateProjectSettingsPath))]);
+    result.push([`${options.project}/${ALGoSettingsPath.join('/')}`, await readSettingsFile(vscode.Uri.joinPath(projectFolder, ...ALGoSettingsPath))]);
   }
 
   if (workflowName) {
-    result.push([`.github/${workflowName}.settings.json`, readSettingsFile(path.join(githubFolder, `${workflowName}.settings.json`))]);
+    result.push([`.github/${workflowName}.settings.json`, await readSettingsFile(vscode.Uri.joinPath(githubFolder, `${workflowName}.settings.json`))]);
 
     if (projectFolder) {
-      result.push([`${options.project}/${ALGoFolderName}/${workflowName}.settings.json`.replace(/\\/g, '/'),
-        readSettingsFile(path.join(projectFolder, ALGoFolderName, `${workflowName}.settings.json`))]);
+      result.push([`${options.project}/${ALGoFolderName}/${workflowName}.settings.json`,
+        await readSettingsFile(vscode.Uri.joinPath(projectFolder, ALGoFolderName, `${workflowName}.settings.json`))]);
 
       if (options.userName) {
-        result.push([`${options.project}/${ALGoFolderName}/${options.userName}.settings.json`.replace(/\\/g, '/'),
-          readSettingsFile(path.join(projectFolder, ALGoFolderName, `${options.userName}.settings.json`))]);
+        result.push([`${options.project}/${ALGoFolderName}/${options.userName}.settings.json`,
+          await readSettingsFile(vscode.Uri.joinPath(projectFolder, ALGoFolderName, `${options.userName}.settings.json`))]);
       }
     }
   }
