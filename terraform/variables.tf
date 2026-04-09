@@ -52,6 +52,12 @@ variable "windows_min_node_count" {
   default     = 0
 }
 
+variable "windows_overprovision" {
+  description = "Keep a low-priority placeholder pod on Windows nodes to reserve room for one BC container (1 CPU + 4Gi). When a real pod is created it preempts the placeholder instantly, and the autoscaler provisions a new node in the background."
+  type        = bool
+  default     = false
+}
+
 variable "windows_prepull_images" {
   description = "List of container images to pre-pull on Windows nodes (e.g. ACR images). Empty list disables pre-pulling."
   type        = list(string)

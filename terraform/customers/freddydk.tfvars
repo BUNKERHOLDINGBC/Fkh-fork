@@ -18,6 +18,7 @@ linux_vm_size   = "Standard_D2s_v3"
 windows_vm_size = "Standard_D8s_v3"
 aks_sku_tier    = "Free"    # Free (dev/test, no SLA) | Standard (99.95% SLA) | Premium (99.99% SLA)
 windows_min_node_count = 1  # Set to 1 to keep a warm Windows node
+windows_overprovision  = true  # Keep spare capacity (1 CPU + 4Gi) for instant pod scheduling
 windows_prepull_images = [  # Images to pre-pull on Windows nodes (speeds up container creation)
   "mcr.microsoft.com/businesscentral:ltsc2022"
 ]

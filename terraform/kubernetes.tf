@@ -374,3 +374,78 @@ resource "kubernetes_daemonset" "image_prepull" {
     }
   }
 }
+
+# ============================================================================
+# Overprovisioning: keep spare capacity for instant BC pod scheduling
+# ============================================================================
+# A low-priority placeholder pod reserves 1 CPU + 4Gi on a Windows node.
+# When a real BC pod is created, it preempts (evicts) the placeholder and
+# starts immediately. The displaced placeholder triggers the autoscaler
+# to provision a new node in the background, restoring spare capacity.
+
+resource "kubernetes_priority_class" "overprovision" {
+  count = var.windows_overprovision ? 1 : 0
+
+  metadata {
+    name = "fkh-overprovision"
+  }
+
+  value          = -1
+  global_default = false
+  description    = "Low-priority class for overprovisioning placeholder pods. Preempted by any normal workload."
+}
+
+resource "kubernetes_deployment" "overprovision" {
+  count = var.windows_overprovision ? 1 : 0
+
+  metadata {
+    name      = "fkh-overprovision"
+    namespace = kubernetes_namespace.workload.metadata[0].name
+    labels = {
+      "fkh/purpose" = "overprovision"
+    }
+  }
+
+  spec {
+    replicas = 1
+
+    selector {
+      match_labels = {
+        "fkh/purpose" = "overprovision"
+      }
+    }
+
+    template {
+      metadata {
+        labels = {
+          "fkh/purpose" = "overprovision"
+        }
+      }
+
+      spec {
+        priority_class_name = kubernetes_priority_class.overprovision[0].metadata[0].name
+
+        node_selector = {
+          "kubernetes.io/os" = "windows"
+        }
+
+        container {
+          name    = "pause"
+          image   = "mcr.microsoft.com/oss/kubernetes/pause:3.9"
+          command = ["cmd", "/c", "ping -n 2147483647 127.0.0.1 > nul"]
+
+          resources {
+            requests = {
+              cpu    = "1"
+              memory = "4Gi"
+            }
+            limits = {
+              cpu    = "1"
+              memory = "4Gi"
+            }
+          }
+        }
+      }
+    }
+  }
+}

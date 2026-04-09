@@ -18,6 +18,7 @@ linux_vm_size   = "Standard_D2s_v3"
 windows_vm_size = "Standard_D2s_v3"
 aks_sku_tier    = "Free"    # Free (dev/test, no SLA) | Standard (99.95% SLA) | Premium (99.99% SLA)
 windows_min_node_count = 0  # Set to 1 to keep a warm Windows node (~$70-100/mo)
+windows_overprovision  = false  # Set to true to keep spare capacity for instant pod scheduling
 windows_prepull_images = [  # Images to pre-pull on Windows nodes (speeds up container creation)
   # "<acr-name>.azurecr.io/businesscentral:<tag>"
 ]
