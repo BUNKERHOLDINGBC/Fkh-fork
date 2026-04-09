@@ -2,8 +2,10 @@ using Azure.Identity;
 using Azure.ResourceManager;
 using Azure.ResourceManager.ContainerService;
 using k8s;
+using k8s.KubeConfigModels;
 using k8s.Models;
 using Microsoft.Extensions.Logging;
+using System.Security.Cryptography.X509Certificates;
 
 namespace FKH.Services;
 
@@ -64,6 +66,38 @@ public abstract class FKHServiceBase
 
         using var stream = new MemoryStream(kubeconfig);
         var config = KubernetesClientConfiguration.BuildConfigFromConfigFile(stream);
+
+        // Azure Functions sandbox blocks writes to the Windows certificate store.
+        // Use EphemeralKeySet so the PFX stays in memory.
+        if (config.SslCaCerts != null)
+        {
+            var updated = new X509Certificate2Collection();
+            foreach (var cert in config.SslCaCerts)
+            {
+                updated.Add(new X509Certificate2(cert.RawData, (string?)null, X509KeyStorageFlags.EphemeralKeySet));
+            }
+            config.SslCaCerts = updated;
+        }
+        if (config.ClientCertificateData != null)
+        {
+            var certBytes = Convert.FromBase64String(config.ClientCertificateData);
+            var keyBytes = config.ClientCertificateKeyData != null
+                ? Convert.FromBase64String(config.ClientCertificateKeyData)
+                : null;
+
+            if (keyBytes != null)
+            {
+                var certPem = System.Text.Encoding.UTF8.GetString(certBytes);
+                var keyPem = System.Text.Encoding.UTF8.GetString(keyBytes);
+                config.ClientCertificateData = null;
+                config.ClientCertificateKeyData = null;
+                var clientCert = X509Certificate2.CreateFromPem(certPem, keyPem);
+                // Export/reimport with EphemeralKeySet to avoid certificate store writes
+                config.ClientCertificateData = Convert.ToBase64String(
+                    clientCert.Export(X509ContentType.Pfx));
+            }
+        }
+
         return new Kubernetes(config);
     }
 
