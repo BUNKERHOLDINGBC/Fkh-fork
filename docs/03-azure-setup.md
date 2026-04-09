@@ -19,23 +19,6 @@ az account list --output table
 az account set --subscription "<your-subscription-id>"
 ```
 
-## Terraform State Storage
-
-Terraform needs a backend storage account for its state file. Create one (once per org, not per organization):
-
-```powershell
-$rgName     = "terraform-state"
-$saName     = "tfstatefkh"          # must be globally unique
-$container  = "tfstate"
-$location   = "westeurope"
-
-az group create --name $rgName --location $location
-az storage account create --name $saName --resource-group $rgName --location $location --sku Standard_LRS
-az storage container create --name $container --account-name $saName
-```
-
-You'll reference this in `terraform init` (see [Step 6](06-deploy.md)).
-
 ## Collect These Values
 
 You'll need these for the tfvars file:

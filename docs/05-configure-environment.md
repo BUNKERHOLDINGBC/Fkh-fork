@@ -2,16 +2,20 @@
 
 ## GitHub Token
 
-Create a GitHub **Personal Access Token (classic)** with these scopes:
+The deploy script automatically reads your GitHub token from the GitHub CLI (`gh auth token`). Just make sure you're logged in:
+
+```powershell
+gh auth login
+```
+
+When prompted, select scopes that include `admin:org` and `read:user`:
 
 | Scope | Why |
 |-------|-----|
 | `admin:org` | Terraform creates and manages GitHub teams |
 | `read:user` | Validate user identity |
 
-Go to: **GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic) → Generate new token**
-
-> Fine-grained tokens won't work — Terraform's GitHub provider requires a classic PAT with `admin:org`.
+> Alternatively, you can set `TF_VAR_github_token` to a classic PAT with these scopes. Fine-grained tokens won't work — Terraform's GitHub provider requires classic token scopes.
 
 ## Create Your Organization tfvars File
 
@@ -79,9 +83,6 @@ github_app_installation_id = "<installation-id>"
 **Never put these in tfvars files.**
 
 ```powershell
-# GitHub token
-$env:TF_VAR_github_token = "<your-github-pat>"
-
 # SQL Server SA password (8+ chars, mix of upper/lower/numbers/symbols)
 $env:TF_VAR_sql_sa_password = "<strong-password>"
 
@@ -89,7 +90,7 @@ $env:TF_VAR_sql_sa_password = "<strong-password>"
 $env:TF_VAR_github_app_private_key = Get-Content "<path-to>.pem" -Raw
 ```
 
-> For persistent storage, add these to your PowerShell profile or use a secrets manager.
+> The deploy script will prompt for these if not set, and will recover them from Terraform state on redeployments.
 
 ## Values Checklist
 
@@ -102,6 +103,6 @@ $env:TF_VAR_github_app_private_key = Get-Content "<path-to>.pem" -Raw
 | GitHub team members | Usernames | ✅ |
 | GitHub App ID | Step 4 | ✅ |
 | GitHub App Installation ID | Step 4 | ✅ |
-| GitHub PAT | GitHub settings | ❌ env var |
+| GitHub PAT | `gh auth login` | ❌ automatic |
 | SQL SA password | You choose | ❌ env var |
 | GitHub App private key | Step 4 (.pem) | ❌ env var |

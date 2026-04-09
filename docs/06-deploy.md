@@ -32,10 +32,10 @@ Use the deploy script (it checks GitHub team state first):
 .\deploy.ps1 -VarFile organizations/<your-name>.tfvars
 ```
 
-Or run Terraform directly:
+To skip the interactive confirmation prompt:
 
 ```powershell
-terraform apply -var-file=organizations/<your-name>.tfvars
+.\deploy.ps1 -VarFile organizations/<your-name>.tfvars -AutoApprove
 ```
 
 Deployment takes ~15–20 minutes (AKS cluster creation is the slowest part).
