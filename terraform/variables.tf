@@ -120,6 +120,12 @@ variable "admin_org_teams" {
   default = []
 }
 
+variable "allowed_oidc_repos" {
+  description = "List of GitHub repositories (org/repo) allowed to authenticate via OIDC from GitHub Actions workflows."
+  type    = list(string)
+  default = []
+}
+
 variable "github_admin_team_name" {
   description = "Name of the GitHub admin team. Created if it does not exist."
   type        = string

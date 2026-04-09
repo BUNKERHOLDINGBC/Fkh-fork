@@ -48,10 +48,16 @@ admin_org_teams = [
   { org = "Freddy-DK",     team = "Fkh-admins" }
 ]
 
+# Repositories — GitHub repos allowed to call via OIDC from GitHub Actions
+# Please note that the AUTH token provided must be the ID token
+allowed_oidc_repos = [
+  # "Freddy-DK/MyBCApp"
+]
+
 # Contact email for Let's Encrypt
 contact_email_for_letsencrypt = "fk@freddy.dk"
 
-# GitHub App — triggers image-build workflows
+# GitHub App installed in local fork of Fkh — triggers image-build workflows
 github_app_id              = "3279814"  # paste your App ID here
 # github_app_private_key   = ""  # set via TF_VAR_github_app_private_key environment variable
 github_app_installation_id = "121515383"  # paste your Installation ID here

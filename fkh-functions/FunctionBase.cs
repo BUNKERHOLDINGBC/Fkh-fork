@@ -16,6 +16,7 @@ public abstract class FunctionBase
 {
     private static readonly List<OrgTeamConfig> AllowedOrgTeams = LoadOrgTeamConfig("ALLOWED_ORG_TEAMS");
     private static readonly List<OrgTeamConfig> AdminOrgTeams = LoadOrgTeamConfig("ADMIN_ORG_TEAMS", required: false);
+    private static readonly GitHubOidcService OidcService = new();
 
     /// <summary>
     /// Authenticates the caller, authorises via GitHub team membership, then
@@ -40,54 +41,73 @@ public abstract class FunctionBase
 
         var token = authHeader["Bearer ".Length..].Trim();
 
-        // ── Step 2: Validate GitHub identity ─────────────────────────────────────────
-        var username = await gitHub.GetAuthenticatedUsernameAsync(token);
-        if (username is null)
-        {
-            logger.LogWarning("Invalid or expired GitHub token received.");
-            return Respond(req, HttpStatusCode.Unauthorized, "Invalid or expired GitHub token.");
-        }
-
-        logger.LogInformation("Received {Operation} request from GitHub user: {Username}", operationName, username);
-
-        // ── Step 3: Check team membership ────────────────────────────────────────────
-        var authorized = false;
+        // ── Step 2 & 3: Authenticate and authorize ───────────────────────────────────
+        string username;
         var isAdmin = false;
 
-        // Check admin teams first
-        foreach (var orgTeam in AdminOrgTeams)
+        if (GitHubOidcService.IsOidcToken(token))
         {
-            if (await gitHub.IsTeamMemberAsync(token, orgTeam.Org, orgTeam.Team, username))
+            // OIDC path: GitHub Actions workflow token
+            var repository = await OidcService.ValidateTokenAsync(token);
+            if (repository is null)
             {
-                logger.LogInformation(
-                    "User {Username} authorized as admin via org={Org} team={Team}",
-                    username, orgTeam.Org, orgTeam.Team);
-                authorized = true;
-                isAdmin = true;
-                break;
+                logger.LogWarning("OIDC token validation failed or repository not in allow-list.");
+                return Respond(req, HttpStatusCode.Forbidden,
+                    "OIDC token invalid or repository not authorized. Check ALLOWED_OIDC_REPOS configuration.");
             }
-        }
 
-        // If not admin, check regular member teams
-        if (!authorized)
+            username = $"oidc:{repository}";
+            logger.LogInformation("Received {Operation} request from OIDC caller: {Repository}", operationName, repository);
+        }
+        else
         {
-            foreach (var orgTeam in AllowedOrgTeams)
+            // User token path: GitHub PAT / user token
+            var ghUsername = await gitHub.GetAuthenticatedUsernameAsync(token);
+            if (ghUsername is null)
+            {
+                logger.LogWarning("Invalid or expired GitHub token received.");
+                return Respond(req, HttpStatusCode.Unauthorized, "Invalid or expired GitHub token.");
+            }
+
+            username = ghUsername;
+            logger.LogInformation("Received {Operation} request from GitHub user: {Username}", operationName, username);
+
+            // Check admin teams first
+            var authorized = false;
+            foreach (var orgTeam in AdminOrgTeams)
             {
                 if (await gitHub.IsTeamMemberAsync(token, orgTeam.Org, orgTeam.Team, username))
                 {
                     logger.LogInformation(
-                        "User {Username} authorized via org={Org} team={Team}",
+                        "User {Username} authorized as admin via org={Org} team={Team}",
                         username, orgTeam.Org, orgTeam.Team);
                     authorized = true;
+                    isAdmin = true;
                     break;
                 }
             }
-        }
 
-        if (!authorized)
-        {
-            logger.LogWarning("User {Username} is not a member of any authorized team.", username);
-            return Respond(req, HttpStatusCode.Forbidden, "You are not a member of an authorized team.");
+            // If not admin, check regular member teams
+            if (!authorized)
+            {
+                foreach (var orgTeam in AllowedOrgTeams)
+                {
+                    if (await gitHub.IsTeamMemberAsync(token, orgTeam.Org, orgTeam.Team, username))
+                    {
+                        logger.LogInformation(
+                            "User {Username} authorized via org={Org} team={Team}",
+                            username, orgTeam.Org, orgTeam.Team);
+                        authorized = true;
+                        break;
+                    }
+                }
+            }
+
+            if (!authorized)
+            {
+                logger.LogWarning("User {Username} is not a member of any authorized team.", username);
+                return Respond(req, HttpStatusCode.Forbidden, "You are not a member of an authorized team.");
+            }
         }
 
         // ── Step 4: Parse and validate request parameters ───────────────────────────
