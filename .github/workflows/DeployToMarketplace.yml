@@ -1,0 +1,50 @@
+name: Deploy to Marketplace
+
+on:
+  workflow_dispatch:
+
+defaults:
+  run:
+    working-directory: fkh-vsix
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install vsce
+        run: npm install -g @vscode/vsce
+
+      - name: Set version
+        run: |
+          BASE=$(node -p "require('./package.json').version.split('.').slice(0,2).join('.')")
+          npm version "${BASE}.${{ github.run_number }}" --no-git-tag-version
+
+      - name: Build
+        run: |
+          npm run build:node
+          npm run build:web
+
+      - name: Package VSIX
+        run: vsce package
+
+      - name: Upload VSIX artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vsix
+          path: fkh-vsix/*.vsix
+
+      - name: Publish to Marketplace
+        run: vsce publish
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
