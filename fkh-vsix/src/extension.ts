@@ -422,7 +422,7 @@ async function createContainer(project?: string): Promise<void> {
     return;
   }
 
-  await invokeFunctionByName('CreateNode', { artifactUrl });
+  await invokeFunctionByName('CreateNode', { artifactUrl, repo: options.repoName, project: options.project || '' });
 }
 
 export function deactivate() {}

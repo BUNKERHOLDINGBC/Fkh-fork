@@ -52,6 +52,38 @@ public static class FunctionCatalog
                     Description = "Hours after which the node automatically stops (e.g. '2' for 2 hours). Leave empty for no auto-stop.",
                     Required = false,
                     DefaultValue = null
+                },
+                new()
+                {
+                    Name = "cpu",
+                    Type = "string",
+                    Description = "CPU cores to request for the container (e.g. '1', '0.5', '2').",
+                    Required = false,
+                    DefaultValue = "1"
+                },
+                new()
+                {
+                    Name = "memory",
+                    Type = "string",
+                    Description = "Memory to request for the container (e.g. '4Gi', '8Gi').",
+                    Required = false,
+                    DefaultValue = "4Gi"
+                },
+                new()
+                {
+                    Name = "repo",
+                    Type = "string",
+                    Description = "Source repository (e.g. 'org/repo'). Stored as metadata on the container.",
+                    Required = false,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "project",
+                    Type = "string",
+                    Description = "AL-Go project name. Stored as metadata on the container.",
+                    Required = false,
+                    DefaultValue = null
                 }
             }
         },

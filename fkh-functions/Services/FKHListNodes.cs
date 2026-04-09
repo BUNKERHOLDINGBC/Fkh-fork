@@ -103,6 +103,12 @@ public class FKHListNodes : FKHServiceBase
                 sb.Append($"\n    AutoStop: {stopAt:yyyy-MM-dd HH:mm} UTC ({timeLeft})");
             }
 
+            // Repo and project metadata
+            if (deployment.Metadata.Annotations?.TryGetValue("fkh/repo", out var repo) == true && !string.IsNullOrEmpty(repo))
+                sb.Append($"\n    Repo:    {repo}");
+            if (deployment.Metadata.Annotations?.TryGetValue("fkh/project", out var proj) == true && !string.IsNullOrEmpty(proj))
+                sb.Append($"\n    Project: {proj}");
+
             // Web client URL from service FQDN
             if (serviceMap.TryGetValue(appLabel, out var svc))
             {

@@ -146,6 +146,10 @@ export class ContainersTreeProvider implements vscode.TreeDataProvider<Container
           child.iconPath = new vscode.ThemeIcon('server-process');
         } else if (prop.label === 'AutoStop') {
           child.iconPath = new vscode.ThemeIcon('watch');
+        } else if (prop.label === 'Repo') {
+          child.iconPath = new vscode.ThemeIcon('repo');
+        } else if (prop.label === 'Project') {
+          child.iconPath = new vscode.ThemeIcon('symbol-folder');
         } else if (prop.label === 'Status') {
           child.iconPath = new vscode.ThemeIcon('info');
         }

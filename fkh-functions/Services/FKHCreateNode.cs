@@ -27,6 +27,8 @@ public class FKHCreateNode : FKHServiceBase
         var githubUsername = parameters["_githubUsername"];
         var cpuRequest = parameters.TryGetValue("cpu", out var cpu) ? cpu : "1";
         var memoryRequest = parameters.TryGetValue("memory", out var mem) ? mem : "4Gi";
+        var repo = parameters.TryGetValue("repo", out var r) ? r : null;
+        var project = parameters.TryGetValue("project", out var p) ? p : null;
 
         var imageTag = GetImageTag(artifactUrl);
         var fullImage = $"{AcrLoginServer}/{AcrRepository}:{imageTag}";
@@ -67,7 +69,7 @@ public class FKHCreateNode : FKHServiceBase
         var dnsLabel = appName;
         var publicDnsName = $"{dnsLabel}.{AksLocation}.cloudapp.azure.com";
 
-        await CreateDeploymentAsync(client, deploymentName, appName, fullImage, adminUsername, secretName, publicDnsName, databaseName, cpuRequest, memoryRequest);
+        await CreateDeploymentAsync(client, deploymentName, appName, fullImage, adminUsername, secretName, publicDnsName, databaseName, cpuRequest, memoryRequest, repo, project);
         await CreateLoadBalancerServiceAsync(client, serviceName, appName, dnsLabel);
 
         // Set auto-stop annotation if requested
@@ -253,11 +255,22 @@ public class FKHCreateNode : FKHServiceBase
     private async Task CreateDeploymentAsync(
         Kubernetes client, string deploymentName, string appName, string fullImage,
         string adminUsername, string secretName, string publicDnsName, string databaseName,
-        string cpuRequest, string memoryRequest)
+        string cpuRequest, string memoryRequest, string? repo, string? project)
     {
+        var annotations = new Dictionary<string, string>();
+        if (!string.IsNullOrWhiteSpace(repo))
+            annotations["fkh/repo"] = repo;
+        if (!string.IsNullOrWhiteSpace(project))
+            annotations["fkh/project"] = project;
+
         var deployment = new V1Deployment
         {
-            Metadata = new V1ObjectMeta { Name = deploymentName, NamespaceProperty = Namespace },
+            Metadata = new V1ObjectMeta
+            {
+                Name = deploymentName,
+                NamespaceProperty = Namespace,
+                Annotations = annotations.Count > 0 ? annotations : null
+            },
             Spec = new V1DeploymentSpec
             {
                 Replicas = 1,
