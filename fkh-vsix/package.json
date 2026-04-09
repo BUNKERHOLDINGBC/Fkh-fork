@@ -48,6 +48,11 @@
         "icon": "$(refresh)"
       },
       {
+        "command": "fkh.refreshNodes",
+        "title": "FKH: Refresh Nodes",
+        "icon": "$(refresh)"
+      },
+      {
         "command": "fkh.startPod",
         "title": "Start",
         "icon": "$(debug-start)"
@@ -93,6 +98,12 @@
           "id": "fkhImages",
           "name": "Images",
           "icon": "$(package)"
+        },
+        {
+          "id": "fkhNodes",
+          "name": "Nodes",
+          "icon": "$(server-environment)",
+          "when": "fkh.isAdmin"
         }
       ]
     },
@@ -112,6 +123,11 @@
           "command": "fkh.refreshImages",
           "when": "view == fkhImages",
           "group": "navigation"
+        },
+        {
+          "command": "fkh.refreshNodes",
+          "when": "view == fkhNodes",
+          "group": "navigation"
         }
       ],
       "view/item/context": [
@@ -127,32 +143,32 @@
         },
         {
           "command": "fkh.startPod",
-          "when": "view == fkhPods && viewItem == pod-stopped",
+          "when": "(view == fkhPods || view == fkhProjects) && viewItem == pod-stopped",
           "group": "inline"
         },
         {
           "command": "fkh.stopPod",
-          "when": "view == fkhPods && viewItem =~ /pod-(running|starting)/",
+          "when": "(view == fkhPods || view == fkhProjects) && viewItem =~ /pod-(running|starting)/",
           "group": "inline"
         },
         {
           "command": "fkh.removePod",
-          "when": "view == fkhPods && viewItem =~ /^pod-/",
+          "when": "(view == fkhPods || view == fkhProjects) && viewItem =~ /^pod-/",
           "group": "inline"
         },
         {
           "command": "fkh.startPod",
-          "when": "view == fkhPods && viewItem == pod-stopped",
+          "when": "(view == fkhPods || view == fkhProjects) && viewItem == pod-stopped",
           "group": "1_actions"
         },
         {
           "command": "fkh.stopPod",
-          "when": "view == fkhPods && viewItem =~ /pod-(running|starting)/",
+          "when": "(view == fkhPods || view == fkhProjects) && viewItem =~ /pod-(running|starting)/",
           "group": "1_actions"
         },
         {
           "command": "fkh.removePod",
-          "when": "view == fkhPods && viewItem =~ /^pod-/",
+          "when": "(view == fkhPods || view == fkhProjects) && viewItem =~ /^pod-/",
           "group": "2_destructive"
         }
       ]

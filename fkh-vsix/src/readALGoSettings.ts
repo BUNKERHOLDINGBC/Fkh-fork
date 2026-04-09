@@ -59,7 +59,7 @@ function getGitRootUri(): vscode.Uri | undefined {
   return folders?.[0]?.uri;
 }
 
-function getRepoName(): string {
+export function getRepoName(): string {
   const repo = getGitRepository();
   if (!repo) { return ''; }
   const remote = repo.state.remotes.find(r => r.name === 'origin');

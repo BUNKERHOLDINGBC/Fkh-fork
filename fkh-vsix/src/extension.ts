@@ -1,13 +1,14 @@
 import * as vscode from 'vscode';
-import { createReadSettingsOptions, readSettings } from './readALGoSettings';
+import { createReadSettingsOptions, readSettings, getRepoName } from './readALGoSettings';
 import { determineArtifactUrl } from './bcArtifactHelper';
-import { ProjectsTreeProvider, ProjectTreeItem, PodsTreeProvider, PodTreeItem, ImagesTreeProvider } from './podsTreeProvider';
+import { ProjectsTreeProvider, ProjectTreeItem, PodsTreeProvider, PodTreeItem, ImagesTreeProvider, NodesTreeProvider } from './podsTreeProvider';
 
 let functionCatalog: FunctionCatalogResponse | undefined;
 let outputChannel: vscode.OutputChannel;
 let projectsProvider: ProjectsTreeProvider;
 let podsProvider: PodsTreeProvider;
 let imagesProvider: ImagesTreeProvider;
+let nodesProvider: NodesTreeProvider;
 
 function getBaseUrl(): string | undefined {
   const url = vscode.workspace.getConfiguration('fkh').get<string>('baseUrl', '').trim();
@@ -28,7 +29,7 @@ function getBaseUrl(): string | undefined {
 export function activate(context: vscode.ExtensionContext) {
   outputChannel = vscode.window.createOutputChannel('FKH');
 
-  projectsProvider = new ProjectsTreeProvider();
+  projectsProvider = new ProjectsTreeProvider(getRepoName, () => podsProvider.getPods());
   const projectsView = vscode.window.createTreeView('fkhProjects', {
     treeDataProvider: projectsProvider,
   });
@@ -45,11 +46,19 @@ export function activate(context: vscode.ExtensionContext) {
     showCollapseAll: true,
   });
 
+  nodesProvider = new NodesTreeProvider(getBaseUrl, getGitHubSession);
+  const nodesView = vscode.window.createTreeView('fkhNodes', {
+    treeDataProvider: nodesProvider,
+    showCollapseAll: true,
+  });
+
   // Delay initial population to let the extension host settle
-  setTimeout(() => {
+  setTimeout(async () => {
+    await podsProvider.refresh();
     projectsProvider.refresh();
-    podsProvider.refresh();
     imagesProvider.refresh();
+    await nodesProvider.refresh();
+    vscode.commands.executeCommand('setContext', 'fkh.isAdmin', nodesProvider.visible);
   }, 5000);
 
   context.subscriptions.push(
@@ -57,18 +66,26 @@ export function activate(context: vscode.ExtensionContext) {
     projectsView,
     podsView,
     imagesView,
+    nodesView,
     vscode.commands.registerCommand('fkh.refreshProjects', () => projectsProvider.refresh()),
-    vscode.commands.registerCommand('fkh.refreshPods', () => podsProvider.refresh()),
+    vscode.commands.registerCommand('fkh.refreshPods', async () => {
+      await podsProvider.refresh();
+      projectsProvider.refresh();
+    }),
     vscode.commands.registerCommand('fkh.refreshImages', () => imagesProvider.refresh()),
-    vscode.commands.registerCommand('fkh.startPod', async (item: PodTreeItem) => {
+    vscode.commands.registerCommand('fkh.refreshNodes', async () => {
+      await nodesProvider.refresh();
+      vscode.commands.executeCommand('setContext', 'fkh.isAdmin', nodesProvider.visible);
+    }),
+    vscode.commands.registerCommand('fkh.startPod', async (item: PodTreeItem | ProjectTreeItem) => {
       if (!item.podInfo) { return; }
       await invokePodAction('StartPod', item.podInfo.name);
     }),
-    vscode.commands.registerCommand('fkh.stopPod', async (item: PodTreeItem) => {
+    vscode.commands.registerCommand('fkh.stopPod', async (item: PodTreeItem | ProjectTreeItem) => {
       if (!item.podInfo) { return; }
       await invokePodAction('StopPod', item.podInfo.name);
     }),
-    vscode.commands.registerCommand('fkh.removePod', async (item: PodTreeItem) => {
+    vscode.commands.registerCommand('fkh.removePod', async (item: PodTreeItem | ProjectTreeItem) => {
       if (!item.podInfo) { return; }
       const confirm = await vscode.window.showWarningMessage(
         `Are you sure you want to remove '${item.podInfo.name}'? This will delete the pod and its database.`,
@@ -316,6 +333,7 @@ async function invokeFunctionByName(functionName: string, prefilled: Record<stri
       }
 
       await podsProvider.refresh();
+      projectsProvider.refresh();
     }
   );
 }
@@ -363,6 +381,7 @@ async function invokePodAction(
       }
 
       await podsProvider.refresh();
+      projectsProvider.refresh();
     }
   );
 }

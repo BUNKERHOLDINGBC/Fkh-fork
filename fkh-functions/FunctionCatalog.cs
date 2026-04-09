@@ -209,6 +209,13 @@ public static class FunctionCatalog
             Description = "Lists available images in the Azure Container Registry.",
             Route = "ListImages",
             Parameters = new List<FunctionParameterDefinition>()
+        },
+        new FunctionDefinition
+        {
+            Name = "ListNodes",
+            Description = "Lists Windows nodes in the Kubernetes cluster. Admin only.",
+            Route = "ListNodes",
+            Parameters = new List<FunctionParameterDefinition>()
         }
     };
 
