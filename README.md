@@ -33,9 +33,9 @@ gh auth login
 
 The CLI uses `gh auth token` automatically for authentication.
 
-### Ops / infrastructure — deploying or updating a customer cluster
+### Ops / infrastructure — deploying or updating an organization cluster
 
-The person who sets up and manages customer environments needs:
+The person who sets up and manages organization environments needs:
 
 | Tool | Minimum version | Install |
 |---|---|---|
@@ -52,7 +52,7 @@ And the following accounts / permissions:
 | Azure subscription | Target for all infrastructure (AKS, Function App, storage, identity) |
 | Azure account with **Contributor** role on the subscription | Terraform creates resource groups, AKS clusters, Function Apps |
 | GitHub **Personal Access Token** with `admin:org` scope | Terraform creates and manages the GitHub team |
-| **GitHub App** per customer ([setup guide](docs/github-app-setup.md)) | Function App triggers image-build workflows automatically |
+| **GitHub App** per organization ([setup guide](docs/github-app-setup.md)) | Function App triggers image-build workflows automatically |
 
 ### Developers — working on the VS Code extension
 
@@ -82,12 +82,12 @@ az account set --subscription "<your-subscription-id>"
 
 ---
 
-## Deploying a customer environment
+## Deploying an organization environment
 
 1. Copy the example var file and fill in your values:
    ```powershell
-   Copy-Item terraform/customers/example.tfvars terraform/customers/customer-a.tfvars
-   # Edit customer-a.tfvars
+   Copy-Item terraform/organizations/example.tfvars terraform/organizations/my-org.tfvars
+   # Edit my-org.tfvars
    ```
 
 2. Initialise Terraform (first time only):
@@ -98,7 +98,7 @@ az account set --subscription "<your-subscription-id>"
 
 3. Deploy:
    ```powershell
-   .\deploy.ps1 -VarFile customers/customer-a.tfvars
+   .\deploy.ps1 -VarFile organizations/my-org.tfvars
    ```
    `deploy.ps1` runs `checkGitHubTeam.ps1` first (imports an existing GitHub team
    into Terraform state if needed), runs `terraform apply`, and then publishes
@@ -203,7 +203,7 @@ in both the VS Code extension and the CLI.
 
 ```
 terraform/               Terraform configuration
-  customers/             Per-customer .tfvars files (copy example.tfvars)
+  organizations/             Per-organization .tfvars files (copy example.tfvars)
    deploy.ps1             Full environment deploy (GitHub check + terraform apply + function publish)
    deploy-functionupdate.ps1 Function code publish only
   checkGitHubTeam.ps1    Imports existing GitHub team into Terraform state

@@ -12,14 +12,14 @@
       - Team already in Terraform state → does nothing; apply will diff/update.
 
 .PARAMETER VarFile
-    Path to the customer .tfvars file, e.g. customers/customer-a.tfvars
+    Path to the organization .tfvars file, e.g. organizations/my-org.tfvars
 
 .PARAMETER GithubToken
     GitHub personal access token with read:org scope.
     Defaults to the TF_VAR_github_token environment variable.
 
 .EXAMPLE
-    .\checkGitHubTeam.ps1 -VarFile customers/customer-a.tfvars
+    .\checkGitHubTeam.ps1 -VarFile organizations/my-org.tfvars
 #>
 param(
     [Parameter(Mandatory = $true)]

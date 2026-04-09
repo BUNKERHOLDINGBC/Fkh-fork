@@ -84,6 +84,14 @@ public static class FunctionCatalog
                     Description = "AL-Go project name. Stored as metadata on the pod.",
                     Required = false,
                     DefaultValue = null
+                },
+                new()
+                {
+                    Name = "spot",
+                    Type = "boolean",
+                    Description = "Place the pod on a Spot (preemptible) node for lower cost. The pod may be evicted if Azure reclaims capacity.",
+                    Required = false,
+                    DefaultValue = "false"
                 }
             }
         },

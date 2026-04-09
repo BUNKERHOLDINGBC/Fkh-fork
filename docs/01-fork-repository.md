@@ -2,9 +2,9 @@
 
 ## Why Fork?
 
-Each customer gets their own fork. This keeps:
-- Customer-specific tfvars files private
-- GitHub Actions workflows running under the customer's org
+Each organization gets their own fork. This keeps:
+- Organization-specific tfvars files private
+- GitHub Actions workflows running under the organization's org
 - GitHub App installations scoped to the fork
 
 ## Steps
@@ -32,7 +32,7 @@ Fkh/
 ├── fkh-vsix/        # VS Code extension
 ├── fkh-cli/         # CLI tool (.NET 8)
 ├── terraform/       # All infrastructure
-│   ├── customers/   # Per-customer .tfvars files
+│   ├── organizations/   # Per-organization .tfvars files
 │   ├── deploy.ps1   # Deployment script
 │   └── *.tf         # Terraform modules
 └── docs/            # This guide

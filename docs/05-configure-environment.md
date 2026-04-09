@@ -13,10 +13,10 @@ Go to: **GitHub → Settings → Developer settings → Personal access tokens �
 
 > Fine-grained tokens won't work — Terraform's GitHub provider requires a classic PAT with `admin:org`.
 
-## Create Your Customer tfvars File
+## Create Your Organization tfvars File
 
 ```powershell
-Copy-Item terraform/customers/example.tfvars terraform/customers/<your-name>.tfvars
+Copy-Item terraform/organizations/example.tfvars terraform/organizations/<your-name>.tfvars
 ```
 
 Edit the file and fill in all values:
@@ -26,7 +26,7 @@ Edit the file and fill in all values:
 subscription_id = "<from az account show>"
 tenant_id       = "<from az account show>"
 location        = "westeurope"
-customer_name   = "mycompany"         # lowercase, no spaces
+org_name   = "mycompany"         # lowercase, no spaces
 
 # AKS
 linux_vm_size   = "Standard_D2s_v3"   # system pool, always on
@@ -97,7 +97,7 @@ $env:TF_VAR_github_app_private_key = Get-Content "<path-to>.pem" -Raw
 |-------|--------|-----------|
 | Subscription ID | `az account show` | ✅ |
 | Tenant ID | `az account show` | ✅ |
-| Customer name | You choose | ✅ |
+| Organization name | You choose | ✅ |
 | GitHub org | Your GitHub org | ✅ |
 | GitHub team members | Usernames | ✅ |
 | GitHub App ID | Step 4 | ✅ |

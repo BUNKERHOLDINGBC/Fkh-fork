@@ -5,6 +5,6 @@
     }
   ],
   "settings": {
-    "fkh.baseUrl": "https://fkh-freddydk-functions.azurewebsites.net/api"
+    "fkh.backendUrl": "https://fkh-freddydk-backend.azurewebsites.net/api"
   }
 }

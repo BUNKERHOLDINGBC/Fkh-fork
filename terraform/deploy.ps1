@@ -1,9 +1,9 @@
 <#
 .SYNOPSIS
-    Deploys a customer environment: checks GitHub team state, then runs terraform apply.
+    Deploys an organization environment: checks GitHub team state, then runs terraform apply.
 
 .PARAMETER VarFile
-    Path to the customer .tfvars file, e.g. customers/customer-a.tfvars
+    Path to the organization .tfvars file, e.g. organizations/my-org.tfvars
 
 .PARAMETER GithubToken
     GitHub personal access token with read:org scope.
@@ -13,8 +13,8 @@
     If specified, passes -auto-approve to terraform apply (no interactive prompt).
 
 .EXAMPLE
-    .\deploy.ps1 -VarFile customers/customer-a.tfvars
-    .\deploy.ps1 -VarFile customers/customer-a.tfvars -AutoApprove
+    .\deploy.ps1 -VarFile organizations/my-org.tfvars
+    .\deploy.ps1 -VarFile organizations/my-org.tfvars -AutoApprove
 #>
 param(
     [Parameter(Mandatory = $true)]
@@ -137,12 +137,12 @@ function Get-TfVar([string]$Name, [string]$File) {
 
 $tfSubscriptionId = Get-TfVar "subscription_id" $VarFile
 $tfLocation       = Get-TfVar "location"        $VarFile
-$tfCustomerName   = Get-TfVar "customer_name"   $VarFile
+$tfOrgName   = Get-TfVar "org_name"   $VarFile
 
-$stateRg      = "fkh-$tfCustomerName-state"
-$stateAccount = "fkh$($tfCustomerName.Replace('-','').Substring(0, [Math]::Min($tfCustomerName.Replace('-','').Length, 14)))state"
+$stateRg      = "fkh-$tfOrgName-state"
+$stateAccount = "fkh$($tfOrgName.Replace('-','').Substring(0, [Math]::Min($tfOrgName.Replace('-','').Length, 14)))state"
 $stateContainer = "tfstate"
-$stateKey       = "$tfCustomerName.tfstate"
+$stateKey       = "$tfOrgName.tfstate"
 
 Write-Host "Ensuring state storage: RG=$stateRg Account=$stateAccount Container=$stateContainer" -ForegroundColor Cyan
 
@@ -291,8 +291,8 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 # ── Refresh kubeconfig after bootstrap (AKS now exists) ──────────────────────
-$aksRg   = "fkh-$tfCustomerName"
-$aksName = "fkh-$tfCustomerName-aks"
+$aksRg   = "fkh-$tfOrgName"
+$aksName = "fkh-$tfOrgName-aks"
 Write-Host "Fetching AKS credentials for $aksName..." -ForegroundColor Cyan
 az aks get-credentials --resource-group $aksRg --name $aksName --overwrite-existing
 if ($LASTEXITCODE -ne 0) { Write-Host "Warning: could not fetch AKS credentials." -ForegroundColor Yellow }

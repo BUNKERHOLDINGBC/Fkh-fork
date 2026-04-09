@@ -331,6 +331,14 @@ resource "kubernetes_daemonset" "image_prepull" {
           "kubernetes.io/os" = "windows"
         }
 
+        # Tolerate spot taint so pre-pull also runs on spot nodes
+        toleration {
+          key      = "kubernetes.azure.com/scalesetpriority"
+          operator = "Equal"
+          value    = "spot"
+          effect   = "NoSchedule"
+        }
+
         # Low priority so these don't block real workloads
         priority_class_name = "system-node-critical"
 

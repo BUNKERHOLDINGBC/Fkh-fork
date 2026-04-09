@@ -35,7 +35,7 @@ The Fkh backend validates GitHub team membership, then provisions Kubernetes res
 
 Terraform provisions:
 
-- **Resource Group** — `fkh-<customer>`
+- **Resource Group** — `fkh-<org>`
 - **AKS Cluster** — Linux system pool + Windows autoscale pool
 - **Azure Function App** — Consumption plan, .NET 8 isolated worker
 - **Container Registry** — Stores BC container images

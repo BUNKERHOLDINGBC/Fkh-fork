@@ -108,7 +108,7 @@ kubectl exec -n app -l app=mssql -- /opt/mssql-tools18/bin/sqlcmd -S localhost -
 
 ```powershell
 # Deploy infrastructure (from terraform/ directory)
-.\deploy.ps1 -CustomerFile customers\freddydk.tfvars
+.\deploy.ps1 -VarFile organizations\freddydk.tfvars
 
 # Publish function code only
 cd ..\fkh-backend

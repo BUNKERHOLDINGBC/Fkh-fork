@@ -39,16 +39,16 @@ provider "github" {
 
 locals {
   product_prefix              = "fkh"
-  storage_account_customer_id = substr(replace(var.customer_name, "-", ""), 0, 14)
+  storage_account_org_id = substr(replace(var.org_name, "-", ""), 0, 14)
 
-  resource_group_name    = "${local.product_prefix}-${var.customer_name}"
-  aks_cluster_name       = "${local.product_prefix}-${var.customer_name}-aks"
+  resource_group_name    = "${local.product_prefix}-${var.org_name}"
+  aks_cluster_name       = "${local.product_prefix}-${var.org_name}-aks"
   aks_dns_prefix         = local.aks_cluster_name
-  function_plan_name     = "${local.product_prefix}-${var.customer_name}-plan"
-  function_app_name      = "${local.product_prefix}-${var.customer_name}-functions"
-  function_identity_name = "${local.product_prefix}-${var.customer_name}-identity"
-  function_storage_name  = "${local.product_prefix}${local.storage_account_customer_id}func"
-  dbs_storage_name       = "${local.product_prefix}${local.storage_account_customer_id}dbs"
+  function_plan_name     = "${local.product_prefix}-${var.org_name}-plan"
+  function_app_name      = "${local.product_prefix}-${var.org_name}-backend"
+  function_identity_name = "${local.product_prefix}-${var.org_name}-identity"
+  function_storage_name  = "${local.product_prefix}${local.storage_account_org_id}func"
+  dbs_storage_name       = "${local.product_prefix}${local.storage_account_org_id}dbs"
 }
 
 # ============================================================================
@@ -60,7 +60,7 @@ resource "azurerm_resource_group" "this" {
   location = var.location
 
   tags = {
-    customer    = var.customer_name
+    organization = var.org_name
     environment = "prod"
     managed_by  = "terraform"
   }
@@ -111,8 +111,35 @@ resource "azurerm_kubernetes_cluster_node_pool" "win" {
   os_type               = "Windows"
   node_count            = var.windows_min_node_count
   min_count             = var.windows_min_node_count
-  max_count             = 10
+  max_count             = var.windows_max_node_count
   auto_scaling_enabled  = true
+}
+
+# ============================================================================
+# Windows Spot node pool with autoscaler (cheaper, can be evicted)
+# ============================================================================
+
+resource "azurerm_kubernetes_cluster_node_pool" "winspot" {
+  count                 = var.windows_spot_enabled ? 1 : 0
+  name                  = "spot"
+  kubernetes_cluster_id = azurerm_kubernetes_cluster.this.id
+  vm_size               = var.windows_spot_vm_size
+  os_type               = "Windows"
+  node_count            = var.windows_spot_min_node_count
+  min_count             = var.windows_spot_min_node_count
+  max_count             = var.windows_spot_max_node_count
+  auto_scaling_enabled  = true
+  priority              = "Spot"
+  eviction_policy       = "Delete"
+  spot_max_price        = -1  # pay up to on-demand price
+
+  node_labels = {
+    "kubernetes.azure.com/scalesetpriority" = "spot"
+  }
+
+  node_taints = [
+    "kubernetes.azure.com/scalesetpriority=spot:NoSchedule"
+  ]
 }
 
 # ============================================================================

@@ -29,6 +29,8 @@ public class FkhCreatePod : FkhServiceBase
         var memoryRequest = parameters.TryGetValue("memory", out var mem) ? mem : "4Gi";
         var repo = parameters.TryGetValue("repo", out var r) ? r : null;
         var project = parameters.TryGetValue("project", out var p) ? p : null;
+        var useSpot = parameters.TryGetValue("spot", out var spotValue)
+            && string.Equals(spotValue, "true", StringComparison.OrdinalIgnoreCase);
 
         var imageTag = GetImageTag(artifactUrl);
         var fullImage = $"{AcrLoginServer}/{AcrRepository}:{imageTag}";
@@ -69,7 +71,7 @@ public class FkhCreatePod : FkhServiceBase
         var dnsLabel = appName;
         var publicDnsName = $"{dnsLabel}.{AksLocation}.cloudapp.azure.com";
 
-        await CreateDeploymentAsync(client, deploymentName, appName, fullImage, adminUsername, secretName, publicDnsName, databaseName, cpuRequest, memoryRequest, repo, project);
+        await CreateDeploymentAsync(client, deploymentName, appName, fullImage, adminUsername, secretName, publicDnsName, databaseName, cpuRequest, memoryRequest, repo, project, useSpot);
         await CreateLoadBalancerServiceAsync(client, serviceName, appName, dnsLabel);
 
         // Set auto-stop annotation if requested
@@ -255,13 +257,34 @@ public class FkhCreatePod : FkhServiceBase
     private async Task CreateDeploymentAsync(
         Kubernetes client, string deploymentName, string appName, string fullImage,
         string adminUsername, string secretName, string publicDnsName, string databaseName,
-        string cpuRequest, string memoryRequest, string? repo, string? project)
+        string cpuRequest, string memoryRequest, string? repo, string? project, bool useSpot)
     {
         var annotations = new Dictionary<string, string>();
         if (!string.IsNullOrWhiteSpace(repo))
             annotations["fkh/repo"] = repo;
         if (!string.IsNullOrWhiteSpace(project))
             annotations["fkh/project"] = project;
+
+        var nodeSelector = new Dictionary<string, string>
+        {
+            ["kubernetes.io/os"] = "windows"
+        };
+        if (useSpot)
+        {
+            nodeSelector["kubernetes.azure.com/scalesetpriority"] = "spot";
+        }
+
+        var tolerations = new List<V1Toleration>();
+        if (useSpot)
+        {
+            tolerations.Add(new V1Toleration
+            {
+                Key = "kubernetes.azure.com/scalesetpriority",
+                OperatorProperty = "Equal",
+                Value = "spot",
+                Effect = "NoSchedule"
+            });
+        }
 
         var deployment = new V1Deployment
         {
@@ -290,10 +313,8 @@ public class FkhCreatePod : FkhServiceBase
                     },
                     Spec = new V1PodSpec
                     {
-                        NodeSelector = new Dictionary<string, string>
-                        {
-                            ["kubernetes.io/os"] = "windows"
-                        },
+                        NodeSelector = nodeSelector,
+                        Tolerations = tolerations.Count > 0 ? tolerations : null,
                         Affinity = new V1Affinity
                         {
                             PodAntiAffinity = new V1PodAntiAffinity

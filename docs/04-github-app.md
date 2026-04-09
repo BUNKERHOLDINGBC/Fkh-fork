@@ -13,7 +13,7 @@ The person creating the app needs **Owner** access on the GitHub organization (o
 
 | Field | Value |
 |-------|-------|
-| **App name** | `Fkh-<your-customer-name>` (must be globally unique) |
+| **App name** | `Fkh-<your-org-name>` (must be globally unique) |
 | **Homepage URL** | `https://github.com/<your-org>/Fkh` |
 | **Webhook → Active** | **Uncheck** this |
 

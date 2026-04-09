@@ -13,7 +13,7 @@
 
 .EXAMPLE
     .\deploy-functionupdate.ps1
-    .\deploy-functionupdate.ps1 -FunctionAppName fkh-customer-functions
+    .\deploy-functionupdate.ps1 -FunctionAppName fkh-myorg-backend
 #>
 param(
     [Parameter(Mandatory = $false)]

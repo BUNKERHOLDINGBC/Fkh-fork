@@ -195,10 +195,10 @@
     "configuration": {
       "title": "Fkh",
       "properties": {
-        "fkh.baseUrl": {
+        "fkh.backendUrl": {
           "type": "string",
           "default": "",
-          "description": "Base URL of the Fkh backend, e.g. https://<app>.azurewebsites.net/api"
+          "description": "URL of the Fkh backend, e.g. https://fkh-<org_name>-backend.azurewebsites.net/api"
         }
       }
     }

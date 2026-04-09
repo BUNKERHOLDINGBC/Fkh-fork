@@ -7,14 +7,14 @@ End users only need VS Code. No Azure CLI, no Terraform, no Kubernetes knowledge
 1. Get the `.vsix` file from your ops team (or build it: `cd fkh-vsix && npm install && npm run build`)
 2. In VS Code: **Ctrl+Shift+P** → **Extensions: Install from VSIX...** → select the file
 
-## Configure the Base URL
+## Configure the Backend URL
 
 1. **Ctrl+Shift+P** → **Preferences: Open Settings (JSON)**
 2. Add:
 
 ```json
 {
-  "fkh.baseUrl": "https://fkh-<customer>-functions.azurewebsites.net/api"
+  "fkh.backendUrl": "https://fkh-<org>-backend.azurewebsites.net/api"
 }
 ```
 

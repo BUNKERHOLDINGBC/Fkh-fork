@@ -17,15 +17,15 @@ const podLogProvider: vscode.TextDocumentContentProvider = {
   }
 };
 
-function getBaseUrl(): string | undefined {
-  const url = vscode.workspace.getConfiguration('fkh').get<string>('baseUrl', '').trim();
+function getBackendUrl(): string | undefined {
+  const url = vscode.workspace.getConfiguration('fkh').get<string>('backendUrl', '').trim();
   if (!url) {
     vscode.window.showErrorMessage(
-      'Fkh: Base URL is not configured. Set "fkh.baseUrl" in your settings.',
+      'Fkh: Backend URL is not configured. Set "fkh.backendUrl" in your settings.',
       'Open Settings'
     ).then((action: string | undefined) => {
       if (action === 'Open Settings') {
-        vscode.commands.executeCommand('workbench.action.openSettings', 'fkh.baseUrl');
+        vscode.commands.executeCommand('workbench.action.openSettings', 'fkh.backendUrl');
       }
     });
     return undefined;
@@ -41,19 +41,19 @@ export function activate(context: vscode.ExtensionContext) {
     treeDataProvider: projectsProvider,
   });
 
-  podsProvider = new PodsTreeProvider(getBaseUrl, getGitHubSession);
+  podsProvider = new PodsTreeProvider(getBackendUrl, getGitHubSession);
   const podsView = vscode.window.createTreeView('fkhPods', {
     treeDataProvider: podsProvider,
     showCollapseAll: true,
   });
 
-  imagesProvider = new ImagesTreeProvider(getBaseUrl, getGitHubSession);
+  imagesProvider = new ImagesTreeProvider(getBackendUrl, getGitHubSession);
   const imagesView = vscode.window.createTreeView('fkhImages', {
     treeDataProvider: imagesProvider,
     showCollapseAll: true,
   });
 
-  nodesProvider = new NodesTreeProvider(getBaseUrl, getGitHubSession, () => podsProvider.getPods());
+  nodesProvider = new NodesTreeProvider(getBackendUrl, getGitHubSession, () => podsProvider.getPods());
   const nodesView = vscode.window.createTreeView('fkhNodes', {
     treeDataProvider: nodesProvider,
     showCollapseAll: true,
@@ -202,7 +202,7 @@ async function getFunctionCatalog(): Promise<FunctionCatalogResponse | undefined
     return functionCatalog;
   }
 
-  const baseUrl = getBaseUrl();
+  const baseUrl = getBackendUrl();
   if (!baseUrl) { return undefined; }
 
   try {
@@ -317,7 +317,7 @@ async function invokeFunctionByName(functionName: string, prefilled: Record<stri
     async (progress, cancelToken) => {
       try {
         const body: FunctionInvokeRequest = { parameters };
-        const url = `${getBaseUrl()}/${definition.route}`;
+        const url = `${getBackendUrl()}/${definition.route}`;
 
         while (true) {
           if (cancelToken.isCancellationRequested) {
@@ -373,7 +373,7 @@ async function invokePodAction(
   functionName: string,
   podName: string,
 ): Promise<void> {
-  const baseUrl = getBaseUrl();
+  const baseUrl = getBackendUrl();
   if (!baseUrl) { return; }
 
   const session = await getGitHubSession();
@@ -418,7 +418,7 @@ async function invokePodAction(
 }
 
 async function showPodLogs(appLabel: string, podName: string): Promise<void> {
-  const baseUrl = getBaseUrl();
+  const baseUrl = getBackendUrl();
   if (!baseUrl) { return; }
 
   const session = await getGitHubSession();

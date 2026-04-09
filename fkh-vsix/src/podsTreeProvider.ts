@@ -166,14 +166,14 @@ export class PodsTreeProvider implements vscode.TreeDataProvider<PodTreeItem> {
 
   private pods: PodInfo[] = [];
   private initialized = false;
-  private _getBaseUrl: () => string | undefined;
+  private _getBackendUrl: () => string | undefined;
   private _getGitHubSession: () => Promise<vscode.AuthenticationSession | undefined>;
 
   constructor(
-    getBaseUrl: () => string | undefined,
+    getBackendUrl: () => string | undefined,
     getGitHubSession: () => Promise<vscode.AuthenticationSession | undefined>
   ) {
-    this._getBaseUrl = getBaseUrl;
+    this._getBackendUrl = getBackendUrl;
     this._getGitHubSession = getGitHubSession;
   }
 
@@ -256,7 +256,7 @@ export class PodsTreeProvider implements vscode.TreeDataProvider<PodTreeItem> {
   }
 
   private async fetchPods(): Promise<PodInfo[]> {
-    const baseUrl = this._getBaseUrl();
+    const baseUrl = this._getBackendUrl();
     if (!baseUrl) { return []; }
 
     const session = await this._getGitHubSession();
@@ -347,14 +347,14 @@ export class ImagesTreeProvider implements vscode.TreeDataProvider<ImageTreeItem
 
   private images: ImageInfo[] = [];
   private initialized = false;
-  private _getBaseUrl: () => string | undefined;
+  private _getBackendUrl: () => string | undefined;
   private _getGitHubSession: () => Promise<vscode.AuthenticationSession | undefined>;
 
   constructor(
-    getBaseUrl: () => string | undefined,
+    getBackendUrl: () => string | undefined,
     getGitHubSession: () => Promise<vscode.AuthenticationSession | undefined>
   ) {
-    this._getBaseUrl = getBaseUrl;
+    this._getBackendUrl = getBackendUrl;
     this._getGitHubSession = getGitHubSession;
   }
 
@@ -407,7 +407,7 @@ export class ImagesTreeProvider implements vscode.TreeDataProvider<ImageTreeItem
   }
 
   private async fetchImages(): Promise<ImageInfo[]> {
-    const baseUrl = this._getBaseUrl();
+    const baseUrl = this._getBackendUrl();
     if (!baseUrl) { return []; }
 
     const session = await this._getGitHubSession();
@@ -495,16 +495,16 @@ export class NodesTreeProvider implements vscode.TreeDataProvider<NodeTreeItem> 
   private nodes: NodeInfo[] = [];
   private initialized = false;
   private _visible = false;
-  private _getBaseUrl: () => string | undefined;
+  private _getBackendUrl: () => string | undefined;
   private _getGitHubSession: () => Promise<vscode.AuthenticationSession | undefined>;
   private _getPods: () => PodInfo[];
 
   constructor(
-    getBaseUrl: () => string | undefined,
+    getBackendUrl: () => string | undefined,
     getGitHubSession: () => Promise<vscode.AuthenticationSession | undefined>,
     getPods: () => PodInfo[]
   ) {
-    this._getBaseUrl = getBaseUrl;
+    this._getBackendUrl = getBackendUrl;
     this._getGitHubSession = getGitHubSession;
     this._getPods = getPods;
   }
@@ -665,7 +665,7 @@ export class NodesTreeProvider implements vscode.TreeDataProvider<NodeTreeItem> 
   }
 
   private async fetchNodes(): Promise<{ nodes: NodeInfo[]; visible: boolean }> {
-    const baseUrl = this._getBaseUrl();
+    const baseUrl = this._getBackendUrl();
     if (!baseUrl) { return { nodes: [], visible: false }; }
 
     const session = await this._getGitHubSession();

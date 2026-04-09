@@ -1,10 +1,10 @@
 # Setting up a GitHub App for Fkh
 
-Fkh uses a **per-customer GitHub App** to trigger the `createImages` workflow
+Fkh uses a **per-organization GitHub App** to trigger the `createImages` workflow
 automatically when a requested container image does not yet exist in ACR.
 
-Each customer gets their own GitHub App so that private keys are isolated —
-one customer's credentials can never trigger builds in another customer's
+Each organization gets their own GitHub App so that private keys are isolated —
+one organization's credentials can never trigger builds in another organization's
 repository.
 
 ---
@@ -15,7 +15,7 @@ repository.
 2. Fill in:
    | Field | Value |
    |---|---|
-   | **GitHub App name** | `Fkh-<customer-name>` (must be globally unique) |
+   | **GitHub App name** | `Fkh-<org-name>` (must be globally unique) |
    | **Homepage URL** | `https://github.com/<org>/<repo>` |
    | **Webhook → Active** | **Unchecked** (no webhook needed) |
 3. Under **Permissions → Repository permissions** set:
@@ -44,7 +44,7 @@ repository.
 
 ## 4. Configure Terraform variables
 
-Add these to your customer's `.tfvars` file:
+Add these to your organization's `.tfvars` file:
 
 ```hcl
 github_app_id              = "<app-id>"
@@ -63,7 +63,7 @@ Run the normal deploy:
 
 ```powershell
 cd terraform
-.\deploy.ps1 -VarFile customers/<customer-name>.tfvars
+.\deploy.ps1 -VarFile organizations/<org-name>.tfvars
 ```
 
 The Function App will receive the three new settings
@@ -74,7 +74,7 @@ and will automatically trigger the workflow when an image is not found in ACR.
 
 ## Security notes
 
-- Each customer must have a **separate** GitHub App with its own private key.
+- Each organization must have a **separate** GitHub App with its own private key.
 - Private keys are stored in the Function App's configuration (encrypted at rest
   by Azure) and are never exposed to end users.
 - The App only needs **Actions: Read & Write** and **Contents: Read-only** —

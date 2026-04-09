@@ -137,8 +137,8 @@ graph TB
 | **SQL Server** | `kubernetes.tf` | `mssql/server:2022-latest` on Linux pod with 128 Gi Premium SSD PVC. ClusterIP service on port 1433. Network policy restricts ingress to `app-type: windows-servicetier` pods. External access can be temporarily granted per-user via `AllowSqlAccess`. |
 | **ACR** | `acr.tf` | Basic SKU. AKS kubelet identity gets `AcrPull`; GitHub Actions federated identity gets `AcrPush`. |
 | **Managed Identity** | `identity.tf` | User-assigned identity with AKS Contributor + Storage Blob Data Contributor roles. Federated credential for GitHub Actions OIDC. |
-| **Storage (DBS)** | `function.tf` | `fkh{customer}dbs` — holds database backup blobs in a `cronus` container, keyed by image tag. |
-| **Storage (Func)** | `function.tf` | `fkh{customer}func` — Azure Functions runtime state (queues, tables). |
+| **Storage (DBS)** | `function.tf` | `fkh{org}dbs` — holds database backup blobs in a `cronus` container, keyed by image tag. |
+| **Storage (Func)** | `function.tf` | `fkh{org}func` — Azure Functions runtime state (queues, tables). |
 | **GitHub Team** | `github.tf` | Manages the authorized team within the GitHub organization. |
 | **Monitoring** | `monitoring.tf` | Log Analytics workspace (30-day retention) + Application Insights for function telemetry. |
 

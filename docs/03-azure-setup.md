@@ -21,7 +21,7 @@ az account set --subscription "<your-subscription-id>"
 
 ## Terraform State Storage
 
-Terraform needs a backend storage account for its state file. Create one (once per org, not per customer):
+Terraform needs a backend storage account for its state file. Create one (once per org, not per organization):
 
 ```powershell
 $rgName     = "terraform-state"

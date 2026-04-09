@@ -1,7 +1,7 @@
 # ── Log Analytics Workspace (shared by App Insights + Container Insights) ─────
 
 resource "azurerm_log_analytics_workspace" "this" {
-  name                = "${local.product_prefix}-${var.customer_name}-logs"
+  name                = "${local.product_prefix}-${var.org_name}-logs"
   resource_group_name = azurerm_resource_group.this.name
   location            = azurerm_resource_group.this.location
   sku                 = "PerGB2018"
@@ -13,7 +13,7 @@ resource "azurerm_log_analytics_workspace" "this" {
 # ── Application Insights (for Azure Function logging) ────────────────────────
 
 resource "azurerm_application_insights" "this" {
-  name                = "${local.product_prefix}-${var.customer_name}-insights"
+  name                = "${local.product_prefix}-${var.org_name}-insights"
   resource_group_name = azurerm_resource_group.this.name
   location            = azurerm_resource_group.this.location
   workspace_id        = azurerm_log_analytics_workspace.this.id
@@ -29,7 +29,7 @@ resource "azurerm_application_insights" "this" {
 # ── ACR Diagnostic Logging (for image pull tracking) ────────────────────────
 
 resource "azurerm_monitor_diagnostic_setting" "acr" {
-  name                       = "${local.product_prefix}-${var.customer_name}-acr-diag"
+  name                       = "${local.product_prefix}-${var.org_name}-acr-diag"
   target_resource_id         = azurerm_container_registry.this.id
   log_analytics_workspace_id = azurerm_log_analytics_workspace.this.id
 

@@ -17,7 +17,7 @@ Options:
 Settings file (next to executable):
     fkh.settings.json
     {
-        "baseUrl": "https://<app>.azurewebsites.net/api"
+        "backendUrl": "https://fkh-<org>-backend.azurewebsites.net/api"
     }
 
 Authentication:
@@ -32,7 +32,7 @@ try
 
     try
     {
-        catalog = await GetFunctionCatalogAsync(settings.BaseUrl);
+        catalog = await GetFunctionCatalogAsync(settings.BackendUrl);
     }
     catch
     {
@@ -174,27 +174,27 @@ static ParsedArgs ParseArgs(string[] args, FunctionCatalogResponse catalog)
 
 static string ResolveEndpoint(string route, CliSettings settings)
 {
-    var baseUrl = settings.BaseUrl;
-    if (string.IsNullOrWhiteSpace(baseUrl))
+    var backendUrl = settings.BackendUrl;
+    if (string.IsNullOrWhiteSpace(backendUrl))
     {
         throw new InvalidOperationException(
-            "No function endpoint configured. Define baseUrl in fkh.settings.json next to the executable.");
+            "No function endpoint configured. Define backendUrl in fkh.settings.json next to the executable.");
     }
 
-    baseUrl = baseUrl.TrimEnd('/');
-    return $"{baseUrl}/{route}";
+    backendUrl = backendUrl.TrimEnd('/');
+    return $"{backendUrl}/{route}";
 }
 
-static async Task<FunctionCatalogResponse> GetFunctionCatalogAsync(string? baseUrl)
+static async Task<FunctionCatalogResponse> GetFunctionCatalogAsync(string? backendUrl)
 {
-    if (string.IsNullOrWhiteSpace(baseUrl))
+    if (string.IsNullOrWhiteSpace(backendUrl))
     {
         throw new InvalidOperationException(
-            "No function endpoint configured. Define baseUrl in fkh.settings.json next to the executable.");
+            "No function endpoint configured. Define backendUrl in fkh.settings.json next to the executable.");
     }
 
     using var client = new HttpClient();
-    var functionsUrl = $"{baseUrl.TrimEnd('/')}/functions";
+    var functionsUrl = $"{backendUrl.TrimEnd('/')}/functions";
     var response = await client.GetAsync(functionsUrl);
     var body = await response.Content.ReadAsStringAsync();
 
@@ -464,7 +464,7 @@ sealed class ParsedArgs
 
 sealed class CliSettings
 {
-    public string? BaseUrl { get; init; }
+    public string? BackendUrl { get; init; }
 }
 
 sealed class FunctionCatalogResponse

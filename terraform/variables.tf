@@ -16,8 +16,8 @@ variable "location" {
   default     = "westeurope"
 }
 
-variable "customer_name" {
-  description = "Short identifier for the customer. Combined with the FKH prefix in resource names."
+variable "org_name" {
+  description = "Short identifier for the organization. Combined with the FKH prefix in resource names."
   type        = string
 }
 
@@ -50,6 +50,36 @@ variable "windows_min_node_count" {
   description = "Minimum number of Windows nodes to keep running (0 = scale to zero, 1 = always keep a warm node)."
   type        = number
   default     = 0
+}
+
+variable "windows_max_node_count" {
+  description = "Maximum number of Windows nodes the autoscaler can scale to."
+  type        = number
+  default     = 10
+}
+
+variable "windows_spot_enabled" {
+  description = "Whether to create a Windows Spot node pool for cheaper, interruptible workloads."
+  type        = bool
+  default     = false
+}
+
+variable "windows_spot_vm_size" {
+  description = "VM size for the Windows Spot node pool."
+  type        = string
+  default     = "Standard_D8s_v3"
+}
+
+variable "windows_spot_min_node_count" {
+  description = "Minimum number of Windows Spot nodes (0 = scale to zero)."
+  type        = number
+  default     = 0
+}
+
+variable "windows_spot_max_node_count" {
+  description = "Maximum number of Windows Spot nodes the autoscaler can scale to."
+  type        = number
+  default     = 10
 }
 
 variable "windows_overprovision" {
@@ -164,7 +194,7 @@ variable "base_image" {
   default     = "mcr.microsoft.com/businesscentral:ltsc2022"
 }
 
-# ── GitHub App (per-customer, triggers image builds) ─────────────────────────
+# ── GitHub App (per-organization, triggers image builds) ─────────────────────────
 
 variable "github_app_id" {
   description = "GitHub App ID for triggering image-build workflows."
