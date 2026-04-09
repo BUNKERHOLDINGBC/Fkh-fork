@@ -332,7 +332,7 @@ export class PodsTreeProvider implements vscode.TreeDataProvider<PodTreeItem> {
 
 export interface ImageInfo {
   repository: string;
-  tags: { name: string; size: string; updated: string; lastPull: string }[];
+  tags: { name: string; size: string; updated: string; lastUsed: string }[];
 }
 
 export class ImageTreeItem extends vscode.TreeItem {
@@ -400,8 +400,8 @@ export class ImagesTreeProvider implements vscode.TreeDataProvider<ImageTreeItem
           vscode.TreeItemCollapsibleState.None
         );
         child.iconPath = new vscode.ThemeIcon('tag');
-        child.tooltip = `${tag.name}\nSize: ${tag.size}\nUpdated: ${tag.updated}\nLast pulled: ${tag.lastPull}`;
-        child.description = tag.lastPull !== 'never' ? `pulled: ${tag.lastPull}` : undefined;
+        child.tooltip = `${tag.name}\nSize: ${tag.size}\nUpdated: ${tag.updated}\nLast used: ${tag.lastUsed}`;
+        child.description = tag.lastUsed !== 'never' ? `last used: ${tag.lastUsed}` : undefined;
         child.contextValue = 'acrTag';
         return child;
       });
@@ -454,14 +454,14 @@ export class ImagesTreeProvider implements vscode.TreeDataProvider<ImageTreeItem
       // Skip the "Tags:" line
       if (line.match(/^\s*Tags:/)) { continue; }
 
-      // Parse tag lines: "    tagname  (size, date, pulled: date)"
-      const tagMatch = line.match(/^\s{4}(\S+)\s+\(([^,]+),\s*([^,]+),\s*pulled:\s*(.+)\)$/);
+      // Parse tag lines: "    tagname  (size, date, last used: date)"
+      const tagMatch = line.match(/^\s{4}(\S+)\s+\(([^,]+),\s*([^,]+),\s*last used:\s*(.+)\)$/);
       if (tagMatch) {
         current.tags.push({
           name: tagMatch[1],
           size: tagMatch[2].trim(),
           updated: tagMatch[3].trim(),
-          lastPull: tagMatch[4].trim(),
+          lastUsed: tagMatch[4].trim(),
         });
       }
     }

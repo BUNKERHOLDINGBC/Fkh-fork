@@ -87,23 +87,27 @@
         {
           "id": "fkhProjects",
           "name": "AL-Go Projects",
-          "icon": "$(project)"
+          "icon": "$(project)",
+          "visibility": "visible"
         },
         {
           "id": "fkhPods",
           "name": "Pods",
-          "icon": "$(server)"
+          "icon": "$(server)",
+          "visibility": "collapsed"
         },
         {
           "id": "fkhImages",
           "name": "Images",
-          "icon": "$(package)"
+          "icon": "$(package)",
+          "visibility": "collapsed"
         },
         {
           "id": "fkhNodes",
           "name": "Nodes",
           "icon": "$(server-environment)",
-          "when": "fkh.isAdmin"
+          "when": "fkh.isAdmin",
+          "visibility": "collapsed"
         }
       ]
     },
