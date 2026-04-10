@@ -1,8 +1,10 @@
 # Step 6: Deploy with Terraform
 
+> This page covers **Path B** (local deployment). If you're using **Path A** (GitHub Actions), just run the **Deploy** workflow from your repo's Actions tab — it handles all of the below automatically.
+
 ## Initialize Terraform
 
-First-time only. Point to your state backend storage (created in [Step 3](03-azure-setup.md)):
+First-time only. Point to your state backend storage (created in [Step 3](AzureSetup.md)):
 
 ```powershell
 cd terraform
@@ -64,7 +66,7 @@ terraform output
 ```
 
 Key outputs:
-- `function_app_name` — you'll need this for [Step 7](07-publish-function.md)
+- `function_app_name` — you'll need this for [Step 7](PublishFunction.md)
 - `function_app_url` — the base URL for the VSIX / CLI configuration
 
 ## Subsequent Deployments

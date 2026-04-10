@@ -46,7 +46,7 @@ No other permissions needed. No org permissions, no user permissions.
 
 ## Values to Save
 
-You'll need these three values for [Step 5](05-configure-environment.md):
+You'll need these three values for [Step 5](ConfigureEnvironment.md):
 
 | Value | Where |
 |-------|-------|

@@ -1,6 +1,8 @@
 # Step 5: Configure Your Environment
 
-## GitHub Token
+## GitHub Token (Path B only)
+
+> Skip this section if you're using **Path A** (GitHub Actions). The `GH_PAT` secret handles this.
 
 The deploy script automatically reads your GitHub token from the GitHub CLI (`gh auth token`). Just make sure you're logged in:
 
@@ -78,7 +80,9 @@ github_app_id              = "<app-id>"
 github_app_installation_id = "<installation-id>"
 ```
 
-## Set Secrets as Environment Variables
+## Set Secrets as Environment Variables (Path B only)
+
+> Skip this section if you're using **Path A** (GitHub Actions). These values are configured as GitHub secrets instead — see [Prerequisites: Method 2](Prerequisites.md#method-2-deploy-from-github-actions-recommended).
 
 **Never put these in tfvars files.**
 
@@ -94,15 +98,16 @@ $env:TF_VAR_github_app_private_key = Get-Content "<path-to>.pem" -Raw
 
 ## Values Checklist
 
-| Value | Source | In tfvars? |
-|-------|--------|-----------|
-| Subscription ID | `az account show` | ✅ |
-| Tenant ID | `az account show` | ✅ |
-| Organization name | You choose | ✅ |
-| GitHub org | Your GitHub org | ✅ |
-| GitHub team members | Usernames | ✅ |
-| GitHub App ID | Step 4 | ✅ |
-| GitHub App Installation ID | Step 4 | ✅ |
-| GitHub PAT | `gh auth login` | ❌ automatic |
-| SQL SA password | You choose | ❌ env var |
-| GitHub App private key | Step 4 (.pem) | ❌ env var |
+| Value | Source | In tfvars? | Path A (Actions) | Path B (Local) |
+|-------|--------|-----------|-----------------|----------------|
+| Subscription ID | Azure Portal / `az account show` | ✅ | ✅ | ✅ |
+| Tenant ID | Azure Portal / `az account show` | ✅ | ✅ | ✅ |
+| Organization name | You choose | ✅ | ✅ | ✅ |
+| GitHub org | Your GitHub org | ✅ | ✅ | ✅ |
+| GitHub team members | Usernames | ✅ | ✅ | ✅ |
+| GitHub App ID | Step 4 | ✅ | ✅ | ✅ |
+| GitHub App Installation ID | Step 4 | ✅ | ✅ | ✅ |
+| GitHub PAT | `gh auth login` or classic PAT | ❌ | `GH_PAT` secret | automatic via `gh` |
+| SQL SA password | You choose | ❌ | `SQL_SA_PASSWORD` secret | env var |
+| GitHub App private key | Step 4 (.pem) | ❌ | `GITHUB_APP_PRIVATE_KEY` secret | env var |
+| Azure App Registration | Azure Portal (OIDC) | ❌ | `AZURE_CLIENT_ID` secret | not needed |

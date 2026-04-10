@@ -1,0 +1,230 @@
+# ============================================================================
+# Deploy – Full Terraform deploy + function publish
+# ============================================================================
+# Mirrors terraform/deploy.ps1 for CI/CD use.
+#
+# ── Azure AD App Registration (OIDC, passwordless) ─────────────────────────
+#   Create an App Registration in Azure AD and configure:
+#     1. A federated credential for this repo:
+#        - Issuer:   https://token.actions.githubusercontent.com
+#        - Subject:  repo:<org>/<repo>:ref:refs/heads/main
+#        - Audience: api://AzureADTokenExchange
+#     2. Role assignments on the target Azure subscription:
+#        • Contributor                (create/manage all resources)
+#        • User Access Administrator  (create role assignments for managed identities)
+#
+# ── Required GitHub Secrets ─────────────────────────────────────────────────
+#   AZURE_CLIENT_ID        - App Registration's Application (client) ID
+#   AZURE_TENANT_ID        - Azure AD tenant ID
+#   AZURE_SUBSCRIPTION_ID  - Azure subscription ID
+#   SQL_SA_PASSWORD         - SA password for the SQL Server deployed in AKS
+#   GITHUB_APP_PRIVATE_KEY - PEM-encoded private key of the GitHub App
+#   GH_PAT                 - GitHub PAT with these scopes:
+#                              • admin:org   (create/manage teams)
+#                              • repo        (secret sync via gh CLI)
+#                              • read:org    (team membership checks)
+#
+# ── Required GitHub Variables (non-secret) ──────────────────────────────────
+#   TFVARS_FILE            - Path to the .tfvars file, e.g. organizations/freddydk.tfvars
+# ============================================================================
+
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      auto_approve:
+        description: 'Skip Terraform interactive approval'
+        required: false
+        default: true
+        type: boolean
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  TF_VAR_github_token: ${{ secrets.GH_PAT }}
+  TF_VAR_sql_sa_password: ${{ secrets.SQL_SA_PASSWORD }}
+  TF_VAR_github_app_private_key: ${{ secrets.GITHUB_APP_PRIVATE_KEY }}
+  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  ARM_USE_OIDC: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
+
+    steps:
+      # ── Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Tool setup ────────────────────────────────────────────────────────
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_wrapper: false
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Install Azure Functions Core Tools
+        run: npm install -g azure-functions-core-tools@4 --unsafe-perm true
+
+      - name: Azure CLI login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      # ── Parse tfvars for state backend ────────────────────────────────────
+      - name: Parse tfvars for state storage
+        id: parse
+        shell: pwsh
+        run: |
+          $varFile = "${{ vars.TFVARS_FILE }}"
+          function Get-TfVar([string]$Name, [string]$File) {
+            $line = Get-Content $File | Where-Object { $_ -match "^\s*$Name\s*=" } | Select-Object -First 1
+            if ($line -match '=\s*"([^"]+)"') { return $Matches[1] }
+            throw "Could not find $Name in $File"
+          }
+
+          $subscriptionId = Get-TfVar "subscription_id" $varFile
+          $orgName        = Get-TfVar "org_name" $varFile
+
+          $stateRg        = "fkh-$orgName-state"
+          $stateAccount   = "fkh$($orgName.Replace('-','').Substring(0, [Math]::Min($orgName.Replace('-','').Length, 14)))state"
+          $stateContainer = "tfstate"
+          $stateKey       = "$orgName.tfstate"
+
+          "state_rg=$stateRg"             >> $env:GITHUB_OUTPUT
+          "state_account=$stateAccount"   >> $env:GITHUB_OUTPUT
+          "state_container=$stateContainer" >> $env:GITHUB_OUTPUT
+          "state_key=$stateKey"           >> $env:GITHUB_OUTPUT
+          "subscription_id=$subscriptionId" >> $env:GITHUB_OUTPUT
+          "org_name=$orgName"             >> $env:GITHUB_OUTPUT
+
+      # ── Ensure state storage exists ───────────────────────────────────────
+      - name: Ensure Terraform state storage
+        shell: bash
+        run: |
+          az account set --subscription "${{ steps.parse.outputs.subscription_id }}"
+          az group create --name "${{ steps.parse.outputs.state_rg }}" --location westeurope --output none 2>/dev/null || true
+          az storage account create \
+            --name "${{ steps.parse.outputs.state_account }}" \
+            --resource-group "${{ steps.parse.outputs.state_rg }}" \
+            --location westeurope \
+            --sku Standard_LRS \
+            --kind StorageV2 \
+            --allow-blob-public-access false \
+            --output none 2>/dev/null || true
+          az storage container create \
+            --name "${{ steps.parse.outputs.state_container }}" \
+            --account-name "${{ steps.parse.outputs.state_account }}" \
+            --auth-mode login \
+            --output none 2>/dev/null || true
+
+      # ── Terraform init ────────────────────────────────────────────────────
+      - name: Terraform init
+        run: |
+          terraform init -reconfigure \
+            -backend-config="resource_group_name=${{ steps.parse.outputs.state_rg }}" \
+            -backend-config="storage_account_name=${{ steps.parse.outputs.state_account }}" \
+            -backend-config="container_name=${{ steps.parse.outputs.state_container }}" \
+            -backend-config="key=${{ steps.parse.outputs.state_key }}" \
+            -backend-config="subscription_id=${{ steps.parse.outputs.subscription_id }}" \
+            -backend-config="use_azuread_auth=true"
+
+      # ── GitHub team check / import ────────────────────────────────────────
+      - name: Check / import GitHub teams
+        shell: pwsh
+        run: |
+          ./checkGitHubTeam.ps1 -VarFile "${{ vars.TFVARS_FILE }}" -GithubToken "${{ secrets.GH_PAT }}"
+
+      # ── Bootstrap (AKS + core infra) ──────────────────────────────────────
+      - name: Terraform bootstrap apply
+        run: |
+          terraform apply \
+            -var-file="${{ vars.TFVARS_FILE }}" \
+            -target=azurerm_resource_group.this \
+            -target=azurerm_kubernetes_cluster.this \
+            -target=azurerm_kubernetes_cluster_node_pool.win \
+            -target=azurerm_kubernetes_cluster_node_pool.winspot \
+            -target=azurerm_container_registry.this \
+            -target=azurerm_role_assignment.aks_acr_pull \
+            -target=azurerm_role_assignment.function_acr_push \
+            -target=azurerm_storage_account.function \
+            -target=azurerm_storage_account.dbs \
+            -target=azurerm_service_plan.function \
+            -target=azurerm_log_analytics_workspace.this \
+            -target=azurerm_application_insights.this \
+            -target=azurerm_windows_function_app.this \
+            -target=azurerm_user_assigned_identity.function \
+            -target=azurerm_federated_identity_credential.github_actions \
+            -target=azurerm_role_assignment.function_aks \
+            -target=azurerm_role_assignment.function_dbs_storage \
+            -target=azurerm_role_assignment.function_log_analytics_reader \
+            -auto-approve
+
+      # ── Fetch AKS credentials ────────────────────────────────────────────
+      - name: Fetch AKS credentials
+        run: |
+          AKS_RG="fkh-${{ steps.parse.outputs.org_name }}"
+          AKS_NAME="fkh-${{ steps.parse.outputs.org_name }}-aks"
+          az aks get-credentials --resource-group "$AKS_RG" --name "$AKS_NAME" --overwrite-existing
+
+      # ── Full Terraform apply ──────────────────────────────────────────────
+      - name: Terraform apply
+        run: |
+          terraform apply \
+            -var-file="${{ vars.TFVARS_FILE }}" \
+            -auto-approve
+
+      # ── Publish function code ─────────────────────────────────────────────
+      - name: Publish Azure Function
+        shell: pwsh
+        run: |
+          $functionAppName   = terraform output -raw function_app_name
+          $resourceGroupName = terraform output -raw resource_group_name
+          $projectPath       = Resolve-Path "../fkh-backend"
+
+          Push-Location $projectPath
+          try {
+            func azure functionapp publish $functionAppName --dotnet-isolated
+            if ($LASTEXITCODE -ne 0) {
+              Write-Host "func publish exited with code $LASTEXITCODE — restarting function app..." -ForegroundColor Yellow
+              az functionapp restart --name $functionAppName --resource-group $resourceGroupName
+              if ($LASTEXITCODE -ne 0) { throw "func publish and fallback restart both failed." }
+            }
+          }
+          finally {
+            Pop-Location
+          }
+
+      # ── Sync GitHub Actions secrets ───────────────────────────────────────
+      - name: Sync GitHub Actions secrets
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          REPO=$(terraform output -raw github_repo)
+          if [ -z "$REPO" ]; then
+            echo "::warning::Could not determine GitHub repo — skipping secret sync."
+            exit 0
+          fi
+
+          gh secret set AZURE_CLIENT_ID       --repo "$REPO" --body "$(terraform output -raw identity_client_id)"
+          gh secret set AZURE_TENANT_ID       --repo "$REPO" --body "$(terraform output -raw tenant_id)"
+          gh secret set AZURE_SUBSCRIPTION_ID --repo "$REPO" --body "$(terraform output -raw subscription_id)"
+          gh secret set ACR_LOGIN_SERVER      --repo "$REPO" --body "$(terraform output -raw acr_login_server)"
+          gh secret set DBS_STORAGE_ACCOUNT   --repo "$REPO" --body "$(terraform output -raw dbs_storage_account_name)"
+
+          echo "GitHub Actions secrets synced to $REPO"

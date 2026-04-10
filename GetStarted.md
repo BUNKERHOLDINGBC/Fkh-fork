@@ -2,18 +2,38 @@
 
 Fkh lets authorized GitHub users provision Business Central environments on AKS — directly from VS Code or CLI — without Azure credentials.
 
-## Steps
+## Choose Your Deployment Method
+
+### Path A: Deploy from GitHub Actions (recommended)
+
+No local tools needed. Everything runs in the cloud.
 
 | # | Step | Who | Time |
 |---|------|-----|------|
-| 1 | [Fork the Repository](docs/01-fork-repository.md) | Ops | 5 min |
-| 2 | [Install Prerequisites](docs/02-prerequisites.md) | Ops | 15 min |
-| 3 | [Azure Setup](docs/03-azure-setup.md) | Ops | 10 min |
-| 4 | [Create the GitHub App](docs/04-github-app.md) | Ops | 10 min |
-| 5 | [Configure Your Environment](docs/05-configure-environment.md) | Ops | 10 min |
-| 6 | [Deploy with Terraform](docs/06-deploy.md) | Ops | 20 min |
-| 7 | [Publish the Fkh Backend](docs/07-publish-function.md) | Ops | 5 min |
-| 8 | [Set Up End Users](docs/08-end-user-setup.md) | Users | 5 min |
+| A1 | [Fork the Repository](docs/ForkRepository.md) | Ops | 5 min |
+| A2 | [Collect Azure Info](docs/AzureSetup.md) | Ops | 5 min |
+| A3 | [Create the GitHub App](docs/GitHubApp.md) | Ops | 10 min |
+| A4 | [Create the tfvars File](docs/ConfigureEnvironment.md#create-your-organization-tfvars-file) | Ops | 10 min |
+| A5 | [Set Up Azure OIDC + GitHub Secrets](docs/Prerequisites.md#method-2-deploy-from-github-actions-recommended) | Ops | 10 min |
+| A6 | Run the **Deploy** workflow (Actions → Deploy → Run workflow) | Ops | 20 min |
+| A7 | [Set Up End Users](docs/EndUserSetup.md) | Users | 5 min |
+
+### Path B: Deploy from your own machine
+
+Full local control with CLI tools.
+
+| # | Step | Who | Time |
+|---|------|-----|------|
+| B1 | [Fork the Repository](docs/ForkRepository.md) | Ops | 5 min |
+| B2 | [Install Prerequisites](docs/Prerequisites.md#method-1-deploy-from-your-own-machine) | Ops | 15 min |
+| B3 | [Azure Setup & Login](docs/AzureSetup.md) | Ops | 10 min |
+| B4 | [Create the GitHub App](docs/GitHubApp.md) | Ops | 10 min |
+| B5 | [Configure Your Environment](docs/ConfigureEnvironment.md) | Ops | 10 min |
+| B6 | [Deploy with Terraform](docs/Deploy.md) | Ops | 20 min |
+| B7 | [Publish the Fkh Backend](docs/PublishFunction.md) | Ops | 5 min |
+| B8 | [Set Up End Users](docs/EndUserSetup.md) | Users | 5 min |
+
+> **Tip:** After the initial setup, use the **Deploy Function Update** workflow (or `deploy-functionupdate.ps1`) to quickly publish backend code changes without re-running the full infrastructure deploy.
 
 ## Architecture Overview
 

@@ -1,5 +1,7 @@
 # Step 7: Publish the FKH Backend
 
+> This page covers **Path B** (local deployment). If you're using **Path A** (GitHub Actions), the Deploy workflow publishes the function automatically. For code-only updates, run the **Deploy Function Update** workflow instead.
+
 Terraform creates the Function App infrastructure but doesn't deploy the code. You need to publish the .NET function code separately.
 
 ## Publish
