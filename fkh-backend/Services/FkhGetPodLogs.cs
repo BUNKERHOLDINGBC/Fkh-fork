@@ -32,6 +32,15 @@ public class FkhGetPodLogs : FkhServiceBase
         }
 
         var pod = pods.Items[0];
+
+        // Pending pods have no container to read logs from
+        if (pod.Status?.Phase == "Pending")
+        {
+            var condition = pod.Status.Conditions?.FirstOrDefault(c => c.Type == "PodScheduled" && c.Status == "False");
+            var reason = condition?.Message ?? "Waiting for a node to become available.";
+            return $"Pod '{name}' is Pending — no logs available yet.\nReason: {reason}";
+        }
+
         var tailLines = parameters.TryGetValue("tail", out var tailValue) && int.TryParse(tailValue, out var t) ? t : 500;
 
         var stream = await client.ReadNamespacedPodLogAsync(

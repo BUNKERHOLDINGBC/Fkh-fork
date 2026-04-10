@@ -25,7 +25,7 @@ public class FkhCreatePod : FkhServiceBase
         var adminUsername = parameters["adminUsername"];
         var adminPassword = parameters["adminPassword"];
         var githubUsername = parameters["_githubUsername"];
-        var cpuRequest = parameters.TryGetValue("cpu", out var cpu) ? cpu : "1";
+        var cpuRequest = parameters.TryGetValue("cpu", out var cpu) ? cpu : "500m";
         var memoryRequest = parameters.TryGetValue("memory", out var mem) ? mem : "4Gi";
         var repo = parameters.TryGetValue("repo", out var r) ? r : null;
         var project = parameters.TryGetValue("project", out var p) ? p : null;

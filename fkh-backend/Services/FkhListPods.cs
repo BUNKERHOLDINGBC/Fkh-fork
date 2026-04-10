@@ -90,6 +90,20 @@ public class FkhListPods : FkhServiceBase
 
             var status = replicas == 0 ? "Stopped" : readyReplicas >= replicas ? "Running" : "Starting";
 
+            // Detect Pending pods and extract scheduling failure reason
+            string? pendingReason = null;
+            if (status == "Starting" && podsByApp.TryGetValue(appLabel, out var pendingPod) && pendingPod.Status?.Phase == "Pending")
+            {
+                status = "Pending";
+                var condition = pendingPod.Status.Conditions?.FirstOrDefault(c => c.Type == "PodScheduled" && c.Status == "False");
+                pendingReason = condition?.Message;
+            }
+            else if (status == "Starting" && !podsByApp.ContainsKey(appLabel))
+            {
+                status = "Pending";
+                pendingReason = "No pod has been created yet. The scheduler may be waiting for a node.";
+            }
+
             // If pod is "Running", check container logs for readiness
             if (status == "Running" && podsByApp.TryGetValue(appLabel, out var pod))
             {
@@ -120,6 +134,8 @@ public class FkhListPods : FkhServiceBase
             sb.Append($"\n\n  {appLabel}");
             sb.Append($"\n    Name:   {podName}");
             sb.Append($"\n    Status: {status} ({readyReplicas}/{replicas} ready)");
+            if (pendingReason != null)
+                sb.Append($"\n    Reason: {pendingReason}");
             sb.Append($"\n    Image:  {shortImage}");
 
             // Auto-stop time

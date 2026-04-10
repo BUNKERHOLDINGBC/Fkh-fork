@@ -57,9 +57,9 @@ public static class FunctionCatalog
                 {
                     Name = "cpu",
                     Type = "string",
-                    Description = "CPU cores to request for the pod (e.g. '1', '0.5', '2').",
+                    Description = "CPU cores to request for the pod (e.g. '500m', '1', '2').",
                     Required = false,
-                    DefaultValue = "1"
+                    DefaultValue = "500m"
                 },
                 new()
                 {
