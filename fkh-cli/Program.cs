@@ -14,8 +14,11 @@ Options:
     --key "value"       Provide a parameter value (discovered from GetFunctionCatalog)
   -h, --help            Show help
 
-Settings file (next to executable):
-    fkh.settings.json
+Configuration (checked in order):
+  1. FKH_BACKEND_URL environment variable
+  2. ~/.fkh/settings.json   (recommended for dotnet tool install)
+  3. fkh.settings.json next to the executable
+
     {
         "backendUrl": "https://fkh-<org>-backend.azurewebsites.net/api"
     }
@@ -178,7 +181,7 @@ static string ResolveEndpoint(string route, CliSettings settings)
     if (string.IsNullOrWhiteSpace(backendUrl))
     {
         throw new InvalidOperationException(
-            "No function endpoint configured. Define backendUrl in fkh.settings.json next to the executable.");
+            "No function endpoint configured. Set FKH_BACKEND_URL or create ~/.fkh/settings.json with a backendUrl property.");
     }
 
     backendUrl = backendUrl.TrimEnd('/');
@@ -190,7 +193,7 @@ static async Task<FunctionCatalogResponse> GetFunctionCatalogAsync(string? backe
     if (string.IsNullOrWhiteSpace(backendUrl))
     {
         throw new InvalidOperationException(
-            "No function endpoint configured. Define backendUrl in fkh.settings.json next to the executable.");
+            "No function endpoint configured. Set FKH_BACKEND_URL or create ~/.fkh/settings.json with a backendUrl property.");
     }
 
     using var client = new HttpClient();
@@ -442,17 +445,33 @@ static string? TryGetMessage(string responseBody)
 
 static CliSettings LoadSettings()
 {
-    var settingsPath = Path.Combine(AppContext.BaseDirectory, "fkh.settings.json");
-    if (!File.Exists(settingsPath))
+    // 1. Environment variable takes priority
+    var envUrl = Environment.GetEnvironmentVariable("FKH_BACKEND_URL");
+    if (!string.IsNullOrWhiteSpace(envUrl))
     {
-        return new CliSettings();
+        return new CliSettings { BackendUrl = envUrl };
     }
 
-    var json = File.ReadAllText(settingsPath);
+    // 2. User profile settings (~/.fkh/settings.json) — works for dotnet tool installs
+    var userSettingsPath = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+        ".fkh", "settings.json");
+    var loaded = TryLoadSettingsFile(userSettingsPath);
+    if (loaded is not null) return loaded;
+
+    // 3. Settings file next to the executable
+    var localSettingsPath = Path.Combine(AppContext.BaseDirectory, "fkh.settings.json");
+    return TryLoadSettingsFile(localSettingsPath) ?? new CliSettings();
+}
+
+static CliSettings? TryLoadSettingsFile(string path)
+{
+    if (!File.Exists(path)) return null;
+    var json = File.ReadAllText(path);
     return JsonSerializer.Deserialize<CliSettings>(json, new JsonSerializerOptions
     {
         PropertyNameCaseInsensitive = true
-    }) ?? new CliSettings();
+    });
 }
 
 sealed class ParsedArgs

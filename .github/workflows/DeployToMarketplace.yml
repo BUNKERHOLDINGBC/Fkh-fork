@@ -1,15 +1,24 @@
 name: Deploy to Marketplace
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'fkh-vsix/**'
+      - 'fkh-cli/**'
   workflow_dispatch:
-
-defaults:
-  run:
-    working-directory: fkh-vsix
+    inputs:
+      pre-release:
+        description: 'Publish as pre-release'
+        type: boolean
+        default: false
 
 jobs:
-  publish:
+  publish-vsix:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: fkh-vsix
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -48,6 +57,46 @@ jobs:
           path: fkh-vsix/*.vsix
 
       - name: Publish to Marketplace
-        run: vsce publish
+        run: |
+          if [[ "${{ github.event_name }}" == "push" || "${{ inputs.pre-release }}" == "true" ]]; then
+            vsce publish --pre-release
+          else
+            vsce publish
+          fi
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+  publish-cli:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: fkh-cli
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Set version
+        run: |
+          BASE=$(grep -oP '(?<=<Version>)[^<]+' fkh-cli.csproj | cut -d. -f1,2)
+          VERSION="${BASE}.${{ github.run_number }}"
+          if [[ "${{ github.event_name }}" == "push" || "${{ inputs.pre-release }}" == "true" ]]; then
+            VERSION="${VERSION}-preview"
+          fi
+          sed -i "s|<Version>.*</Version>|<Version>${VERSION}</Version>|" fkh-cli.csproj
+
+      - name: Pack
+        run: dotnet pack -c Release -o ./nupkg
+
+      - name: Upload NuGet artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: nuget
+          path: fkh-cli/nupkg/*.nupkg
+
+      - name: Publish to NuGet
+        run: dotnet nuget push ./nupkg/*.nupkg --api-key ${{ secrets.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate

@@ -1,4 +1,4 @@
-# Step 5: Configure Your Environment
+# Configure Your Environment
 
 ## GitHub Token (Path B only)
 
@@ -29,8 +29,8 @@ Edit the file and fill in all values:
 
 ```hcl
 # Azure
-subscription_id = "<from az account show>"
-tenant_id       = "<from az account show>"
+subscription_id = "<from Azure Portal or az account show>"
+tenant_id       = "<from Azure Portal or az account show>"
 location        = "westeurope"
 org_name   = "mycompany"         # lowercase, no spaces
 
@@ -75,10 +75,14 @@ allowed_oidc_repos = [
 # Let's Encrypt
 contact_email_for_letsencrypt = "admin@example.com"
 
-# GitHub App (from Step 4)
+# GitHub App (from Create the GitHub App step)
 github_app_id              = "<app-id>"
 github_app_installation_id = "<installation-id>"
 ```
+
+For **Path A**: commit and push the tfvars file to your repository so the Deploy workflow can find it.
+
+For **Path B**: the file stays local — `deploy.ps1` reads it directly.
 
 ## Set Secrets as Environment Variables (Path B only)
 
@@ -105,9 +109,9 @@ $env:TF_VAR_github_app_private_key = Get-Content "<path-to>.pem" -Raw
 | Organization name | You choose | ✅ | ✅ | ✅ |
 | GitHub org | Your GitHub org | ✅ | ✅ | ✅ |
 | GitHub team members | Usernames | ✅ | ✅ | ✅ |
-| GitHub App ID | Step 4 | ✅ | ✅ | ✅ |
-| GitHub App Installation ID | Step 4 | ✅ | ✅ | ✅ |
+| GitHub App ID | Create the GitHub App | ✅ | ✅ | ✅ |
+| GitHub App Installation ID | Create the GitHub App | ✅ | ✅ | ✅ |
 | GitHub PAT | `gh auth login` or classic PAT | ❌ | `GH_PAT` secret | automatic via `gh` |
 | SQL SA password | You choose | ❌ | `SQL_SA_PASSWORD` secret | env var |
-| GitHub App private key | Step 4 (.pem) | ❌ | `GITHUB_APP_PRIVATE_KEY` secret | env var |
+| GitHub App private key | Create the GitHub App (.pem) | ❌ | `GITHUB_APP_PRIVATE_KEY` secret | env var |
 | Azure App Registration | Azure Portal (OIDC) | ❌ | `AZURE_CLIENT_ID` secret | not needed |

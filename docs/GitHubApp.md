@@ -1,4 +1,4 @@
-# Step 4: Create the GitHub App
+# Create the GitHub App
 
 The GitHub App lets the Fkh backend automatically trigger image-build workflows when a BC image is missing from ACR.
 
@@ -46,7 +46,7 @@ No other permissions needed. No org permissions, no user permissions.
 
 ## Values to Save
 
-You'll need these three values for [Step 5](ConfigureEnvironment.md):
+You'll need these three values for [Configure Your Environment](ConfigureEnvironment.md):
 
 | Value | Where |
 |-------|-------|

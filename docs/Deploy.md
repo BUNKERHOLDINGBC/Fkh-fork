@@ -1,36 +1,13 @@
-# Step 6: Deploy with Terraform
+# Deploy with Terraform
 
 > This page covers **Path B** (local deployment). If you're using **Path A** (GitHub Actions), just run the **Deploy** workflow from your repo's Actions tab — it handles all of the below automatically.
 
-## Initialize Terraform
+## Deploy
 
-First-time only. Point to your state backend storage (created in [Step 3](AzureSetup.md)):
+Use the deploy script — it handles Terraform init, state storage, GitHub team checks, and the full apply:
 
 ```powershell
 cd terraform
-
-terraform init `
-  -backend-config="resource_group_name=terraform-state" `
-  -backend-config="storage_account_name=tfstatefkh" `
-  -backend-config="container_name=tfstate" `
-  -backend-config="key=<org-name>.tfstate"
-```
-
-## Plan
-
-Preview what Terraform will create:
-
-```powershell
-terraform plan -var-file=organizations/<your-name>.tfvars
-```
-
-Review the output. First deployment creates ~30 resources.
-
-## Deploy
-
-Use the deploy script (it checks GitHub team state first):
-
-```powershell
 .\deploy.ps1 -VarFile organizations/<your-name>.tfvars
 ```
 
@@ -41,6 +18,15 @@ To skip the interactive confirmation prompt:
 ```
 
 Deployment takes ~15–20 minutes (AKS cluster creation is the slowest part).
+
+The script automatically:
+1. Creates Terraform state storage in Azure
+2. Runs `terraform init` with the correct backend config
+3. Checks and imports existing GitHub teams
+4. Bootstraps core infrastructure (AKS, ACR, Function App)
+5. Runs the full `terraform apply`
+6. Publishes the backend function code
+7. Syncs GitHub Actions secrets (if `gh` CLI is available)
 
 ## What Gets Created
 
@@ -66,8 +52,8 @@ terraform output
 ```
 
 Key outputs:
-- `function_app_name` — you'll need this for [Step 7](PublishFunction.md)
-- `function_app_url` — the base URL for the VSIX / CLI configuration
+- `function_app_name` — the Function App name
+- `function_url` — the base URL for the VSIX / CLI configuration
 
 ## Subsequent Deployments
 

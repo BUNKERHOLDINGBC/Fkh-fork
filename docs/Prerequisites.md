@@ -1,4 +1,4 @@
-# Step 2: Install Prerequisites
+# Prerequisites
 
 ## For Ops (deploying infrastructure)
 
@@ -40,24 +40,15 @@ kubectl version --client
 func --version
 ```
 
-Then follow the rest of the setup guide and run `deploy.ps1` from [Step 6](Deploy.md).
+Then follow the rest of the setup guide and run `deploy.ps1` from [Deploy with Terraform](Deploy.md).
 
 ### Method 2: Deploy from GitHub Actions (recommended)
 
 No local tools required. The GitHub workflows handle everything.
 
-**One-time Azure setup:**
+You'll need to set up Azure OIDC and configure GitHub secrets before running the workflows. See [Azure Setup](AzureSetup.md) for the OIDC steps, then come back here to configure the secrets.
 
-1. Create an **App Registration** in Azure AD (Azure Portal → Microsoft Entra ID → App registrations → New registration).
-2. Add a **federated credential** for GitHub Actions OIDC:
-   - Issuer: `https://token.actions.githubusercontent.com`
-   - Subject: `repo:<your-org>/<your-repo>:ref:refs/heads/main`
-   - Audience: `api://AzureADTokenExchange`
-3. Assign roles to the App Registration on the target Azure subscription:
-   - **Contributor** — create and manage all resources
-   - **User Access Administrator** — create role assignments for managed identities
-
-**GitHub secrets to configure** (Settings → Secrets and variables → Actions):
+**GitHub secrets** (Settings → Secrets and variables → Actions):
 
 | Secret | Value |
 |--------|-------|
@@ -65,19 +56,14 @@ No local tools required. The GitHub workflows handle everything.
 | `AZURE_TENANT_ID` | Azure AD tenant ID |
 | `AZURE_SUBSCRIPTION_ID` | Target Azure subscription ID |
 | `SQL_SA_PASSWORD` | SA password for the SQL Server in AKS (min 8 chars) |
-| `GITHUB_APP_PRIVATE_KEY` | PEM-encoded private key of the GitHub App (from [Step 4](GitHubApp.md)) |
+| `GITHUB_APP_PRIVATE_KEY` | PEM-encoded private key of the GitHub App (from [Create the GitHub App](GitHubApp.md)) |
 | `GH_PAT` | GitHub PAT with scopes: `admin:org`, `repo`, `read:org` |
 
-**GitHub variable to configure** (Settings → Secrets and variables → Actions → Variables):
+**GitHub variable** (Settings → Secrets and variables → Actions → Variables):
 
 | Variable | Value |
 |----------|-------|
 | `TFVARS_FILE` | Path to your `.tfvars` file, e.g. `organizations/my-org.tfvars` |
-
-**Deploy:**
-
-- **Full deploy** — run the **Deploy** workflow from Actions → Deploy → Run workflow
-- **Code-only update** — run the **Deploy Function Update** workflow (faster, skips infrastructure)
 
 ## For End Users (VS Code only)
 

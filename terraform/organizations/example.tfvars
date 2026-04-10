@@ -1,11 +1,12 @@
 # ── Example organization deployment ─────────────────────────────────────────────────────────
 # Copy this file to organizations/<org-name>.tfvars and fill in the values.
-# Deploy with: terraform apply -var-file=organizations/<org-name>.tfvars
+# Deploy with: .\deploy.ps1 -VarFile organizations/<org-name>.tfvars
 #
-# Never commit github_token or sql_sa_password to source control.
+# Never commit secrets (github_token, sql_sa_password, github_app_private_key) to source control.
 # Use environment variables instead:
-#   export TF_VAR_github_token=<token>
-#   export TF_VAR_sql_sa_password=<password>
+#   $env:TF_VAR_github_token = "<token>"
+#   $env:TF_VAR_sql_sa_password = "<password>"
+#   $env:TF_VAR_github_app_private_key = Get-Content "<path-to>.pem" -Raw
 
 # Azure
 subscription_id = "00000000-0000-0000-0000-000000000000"
@@ -39,6 +40,7 @@ sql_storage_size = "128Gi"
 # GitHub — primary org for team membership validation
 # Note that values here are case sensitive
 github_org        = "my-company"
+github_repo       = "Fkh"             # your fork name
 github_team_name  = "FKH-members"
 github_team_members = [
   "freddyk"
@@ -67,6 +69,10 @@ allowed_oidc_repos = [
 
 # Contact email for Let's Encrypt
 contact_email_for_letsencrypt = "admin@example.com"
+
+# GitHub App (see docs/GitHubApp.md)
+github_app_id              = ""   # App ID from the GitHub App settings page
+github_app_installation_id = ""   # Installation ID from the install URL
 
 # GitHub App installed in local fork of Fkh — triggers image-build workflows
 github_app_id              = ""  # paste your App ID here

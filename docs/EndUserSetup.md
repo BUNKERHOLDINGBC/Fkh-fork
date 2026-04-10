@@ -1,11 +1,17 @@
-# Step 8: End User Setup
+# End User Setup
 
 End users only need VS Code. No Azure CLI, no Terraform, no Kubernetes knowledge.
 
 ## Install the FKH Extension
 
-1. Get the `.vsix` file from your ops team (or build it: `cd fkh-vsix && npm install && npm run build`)
-2. In VS Code: **Ctrl+Shift+P** → **Extensions: Install from VSIX...** → select the file
+Install from the VS Code Marketplace:
+1. Open VS Code
+2. Go to **Extensions** (Ctrl+Shift+X)
+3. Search for **FKH**
+4. Click **Install**
+
+Alternatively, install from a `.vsix` file provided by your ops team:
+1. **Ctrl+Shift+P** → **Extensions: Install from VSIX...** → select the file
 
 ## Configure the Backend URL
 
@@ -45,13 +51,31 @@ In the **FKH** sidebar:
 
 ## CLI Alternative
 
+Install as a global .NET tool:
+
 ```powershell
-cd fkh-cli
-dotnet run -- createpod --name mybc --artifactUrl "https://..." --adminUsername admin --adminPassword "P@ssword1"
-dotnet run -- listpods
-dotnet run -- stoppod --name mybc
-dotnet run -- startpod --name mybc
-dotnet run -- removepod --name mybc
+dotnet tool install -g fkh
+```
+
+Configure the backend URL (one-time):
+
+```powershell
+# Option 1: Environment variable
+$env:FKH_BACKEND_URL = "https://fkh-<org>-backend.azurewebsites.net/api"
+
+# Option 2: Settings file (persistent)
+New-Item -ItemType Directory -Path ~/.fkh -Force
+@'{ "backendUrl": "https://fkh-<org>-backend.azurewebsites.net/api" }'@ | Set-Content ~/.fkh/settings.json
+```
+
+Usage:
+
+```powershell
+fkh createpod --name mybc --artifactUrl "https://..." --adminUsername admin --adminPassword "P@ssword1"
+fkh listpods
+fkh stoppod --name mybc
+fkh startpod --name mybc
+fkh removepod --name mybc
 ```
 
 The CLI uses `gh auth token` for authentication. Sign in with `gh auth login` first.

@@ -1,8 +1,10 @@
-# Step 7: Publish the FKH Backend
+# Publish the FKH Backend
 
 > This page covers **Path B** (local deployment). If you're using **Path A** (GitHub Actions), the Deploy workflow publishes the function automatically. For code-only updates, run the **Deploy Function Update** workflow instead.
 
-Terraform creates the Function App infrastructure but doesn't deploy the code. You need to publish the .NET function code separately.
+> **Note:** If you used `deploy.ps1`, it already published the function code. This page is only needed for subsequent code-only updates.
+
+To publish updated backend code without re-running the full infrastructure deploy:
 
 ## Publish
 
@@ -29,8 +31,8 @@ Check that the function is running:
 
 ```powershell
 # Get the function catalog (no auth required)
-$baseUrl = terraform output -raw function_app_url
-Invoke-RestMethod "$baseUrl/api/functions"
+$baseUrl = terraform output -raw function_url
+Invoke-RestMethod "$baseUrl"
 ```
 
 You should see a JSON response listing all available functions (CreatePod, ListPods, etc.).

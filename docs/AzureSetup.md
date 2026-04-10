@@ -1,4 +1,4 @@
-# Step 3: Azure Setup
+# Azure Setup
 
 ## Required Permissions
 
@@ -30,3 +30,17 @@ az login
 az account list --output table
 az account set --subscription "<your-subscription-id>"
 ```
+
+## Set Up OIDC for GitHub Actions (Path A only)
+
+> Skip this if you're using **Path B** (local deployment). `az login` handles authentication.
+
+1. Create an **App Registration** in Azure AD (Azure Portal → Microsoft Entra ID → App registrations → New registration).
+2. Add a **federated credential** for GitHub Actions OIDC:
+   - Issuer: `https://token.actions.githubusercontent.com`
+   - Subject: `repo:<your-org>/<your-repo>:ref:refs/heads/main`
+   - Audience: `api://AzureADTokenExchange`
+3. Assign roles to the App Registration on the target Azure subscription:
+   - **Contributor** — create and manage all resources
+   - **User Access Administrator** — create role assignments for managed identities
+4. Save the **Application (client) ID** — you'll need it as a GitHub secret (`AZURE_CLIENT_ID`).

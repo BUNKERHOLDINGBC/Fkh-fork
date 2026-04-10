@@ -1,4 +1,4 @@
-# Step 1: Fork the Repository
+# Fork the Repository
 
 ## Why Fork?
 
@@ -11,14 +11,14 @@ Each organization gets their own fork. This keeps:
 
 1. Go to the Fkh repository on GitHub
 2. Click **Fork** → Create fork under your organization
-3. Clone your fork locally:
+3. Clone your fork locally (Path B) or just work via GitHub's web UI (Path A):
 
 ```powershell
 git clone https://github.com/<your-org>/Fkh.git
 cd Fkh
 ```
 
-4. Open the workspace in VS Code:
+4. Open the workspace in VS Code (Path B):
 
 ```powershell
 code fkh.code-workspace
