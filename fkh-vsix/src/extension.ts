@@ -520,15 +520,14 @@ async function createContainer(project?: string): Promise<void> {
   outputChannel.appendLine(`  environmentSettingsVariableValue: ${options.environmentSettingsVariableValue || '(empty)'}`);
   outputChannel.appendLine(`  environmentName: ${options.environmentName || '(empty)'}`);
   outputChannel.appendLine(`  customSettings: ${options.customSettings || '(empty)'}`);
+  if (!artifact) {
+    settings['artifact'] = `///${country}/latest`;
+  }
+
   outputChannel.appendLine('--- Resolved Settings ---');
   outputChannel.appendLine(`  Country: ${country}`);
-  outputChannel.appendLine(`  Artifact: ${artifact || '(not set)'}`);
+  outputChannel.appendLine(`  Artifact: ${String(settings['artifact'])}${!artifact ? ' (defaulted)' : ''}`);
   outputChannel.show(true);
-
-  if (!artifact) {
-    vscode.window.showWarningMessage('Fkh: No artifact setting found in AL-Go settings.');
-    return;
-  }
 
   let artifactUrl: string;
   try {
