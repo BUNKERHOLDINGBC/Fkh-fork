@@ -213,6 +213,48 @@ public static class FunctionCatalog
         },
         new FunctionDefinition
         {
+            Name = "CreateImage",
+            Description = "Creates (builds) an image in the Azure Container Registry from a BC artifact URL. By default returns immediately after triggering the build workflow.",
+            Route = "CreateImage",
+            Parameters = new List<FunctionParameterDefinition>
+            {
+                new()
+                {
+                    Name = "artifactUrl",
+                    Type = "string",
+                    Description = "Artifact URL used to build the image.",
+                    Required = true,
+                    DefaultValue = null
+                }
+            }
+        },
+        new FunctionDefinition
+        {
+            Name = "RemoveImage",
+            Description = "Removes an image (tag or entire repository) from the Azure Container Registry and its associated database backup.",
+            Route = "RemoveImage",
+            Parameters = new List<FunctionParameterDefinition>
+            {
+                new()
+                {
+                    Name = "repository",
+                    Type = "string",
+                    Description = "Repository name in the container registry (e.g. 'businesscentral').",
+                    Required = true,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "tag",
+                    Type = "string",
+                    Description = "Specific tag to remove. If omitted, the entire repository is removed.",
+                    Required = false,
+                    DefaultValue = null
+                }
+            }
+        },
+        new FunctionDefinition
+        {
             Name = "ListImages",
             Description = "Lists available images in the Azure Container Registry.",
             Route = "ListImages",

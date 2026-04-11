@@ -76,6 +76,16 @@
         "command": "fkh.getContainerLogs",
         "title": "Get Logs",
         "icon": "$(output)"
+      },
+      {
+        "command": "fkh.createImage",
+        "title": "Fkh: Create Image",
+        "icon": "$(add)"
+      },
+      {
+        "command": "fkh.removeImage",
+        "title": "Remove",
+        "icon": "$(trash)"
       }
     ],
     "viewsContainers": {
@@ -126,6 +136,11 @@
         {
           "command": "fkh.refreshContainers",
           "when": "view == fkhContainers",
+          "group": "navigation"
+        },
+        {
+          "command": "fkh.createImage",
+          "when": "view == fkhImages",
           "group": "navigation"
         },
         {
@@ -189,6 +204,16 @@
           "command": "fkh.getContainerLogs",
           "when": "(view == fkhContainers || view == fkhProjects || view == fkhVMs) && viewItem =~ /^container-/",
           "group": "1_actions"
+        },
+        {
+          "command": "fkh.removeImage",
+          "when": "view == fkhImages && viewItem == acrTag",
+          "group": "inline"
+        },
+        {
+          "command": "fkh.removeImage",
+          "when": "view == fkhImages && viewItem == acrTag",
+          "group": "2_destructive"
         }
       ]
     },

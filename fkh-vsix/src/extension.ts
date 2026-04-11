@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { createReadSettingsOptions, readSettings, getRepoName } from './readALGoSettings';
 import { determineArtifactUrl } from './bcArtifactHelper';
-import { ProjectsTreeProvider, ProjectTreeItem, ContainersTreeProvider, ContainerTreeItem, ImagesTreeProvider, VMsTreeProvider, VMTreeItem } from './containersTreeProvider';
+import { ProjectsTreeProvider, ProjectTreeItem, ContainersTreeProvider, ContainerTreeItem, ImagesTreeProvider, ImageTreeItem, VMsTreeProvider, VMTreeItem } from './containersTreeProvider';
 
 let functionCatalog: FunctionCatalogResponse | undefined;
 let outputChannel: vscode.OutputChannel;
@@ -128,6 +128,28 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('fkh.createContainerForProject', async (item: ProjectTreeItem) => {
       if (!item.projectName) { return; }
       await createContainer(item.projectName);
+    }),
+    vscode.commands.registerCommand('fkh.createImage', () => createImage()),
+    vscode.commands.registerCommand('fkh.removeImage', async (item: ImageTreeItem) => {
+      if (item.tagName && item.repositoryName) {
+        // Tag-level item
+        const confirm = await vscode.window.showWarningMessage(
+          `Are you sure you want to remove tag '${item.tagName}' from '${item.repositoryName}'? This will delete the image tag and its associated database backup.`,
+          { modal: true },
+          'Remove'
+        );
+        if (confirm !== 'Remove') { return; }
+        await invokeFunctionByName('RemoveImage', { repository: item.repositoryName, tag: item.tagName });
+      } else if (item.imageInfo) {
+        // Repository-level item
+        const confirm = await vscode.window.showWarningMessage(
+          `Are you sure you want to remove repository '${item.imageInfo.repository}' and all its tags?`,
+          { modal: true },
+          'Remove'
+        );
+        if (confirm !== 'Remove') { return; }
+        await invokeFunctionByName('RemoveImage', { repository: item.imageInfo.repository });
+      }
     })
   );
 }
@@ -365,6 +387,7 @@ async function invokeFunctionByName(functionName: string, prefilled: Record<stri
 
       await containersProvider.refresh();
       projectsProvider.refresh();
+      imagesProvider.refresh();
     }
   );
 }
@@ -518,6 +541,44 @@ async function createContainer(project?: string): Promise<void> {
   }
 
   await invokeFunctionByName('CreateContainer', { artifactUrl, repo: options.repoName, project: options.project || '' });
+}
+
+async function createImage(): Promise<void> {
+  const session = await getGitHubSession();
+  if (!session) { return; }
+
+  const options = await createReadSettingsOptions(session.accessToken);
+  if (!options) { return; }
+  if (!options.baseFolder) {
+    vscode.window.showErrorMessage('Fkh: No Git repository found in the current workspace.');
+    return;
+  }
+
+  let settings: Record<string, unknown>;
+  try {
+    settings = await readSettings(options);
+  } catch (err) {
+    vscode.window.showErrorMessage(`Fkh: Failed to read AL-Go settings: ${err instanceof Error ? err.message : String(err)}`);
+    return;
+  }
+
+  const artifact = String(settings['artifact'] ?? '');
+  if (!artifact) {
+    vscode.window.showWarningMessage('Fkh: No artifact setting found in AL-Go settings.');
+    return;
+  }
+
+  let artifactUrl: string;
+  try {
+    artifactUrl = await determineArtifactUrl(settings);
+    outputChannel.appendLine(`[CreateImage] ArtifactUrl: ${artifactUrl}`);
+    outputChannel.show(true);
+  } catch (err) {
+    vscode.window.showErrorMessage(`Fkh: Failed to resolve artifact URL: ${err instanceof Error ? err.message : String(err)}`);
+    return;
+  }
+
+  await invokeFunctionByName('CreateImage', { artifactUrl });
 }
 
 export function deactivate() {}

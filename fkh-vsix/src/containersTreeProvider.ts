@@ -336,6 +336,8 @@ export class ImageTreeItem extends vscode.TreeItem {
     public readonly label: string,
     public readonly collapsibleState: vscode.TreeItemCollapsibleState,
     public readonly imageInfo?: ImageInfo,
+    public readonly repositoryName?: string,
+    public readonly tagName?: string,
   ) {
     super(label, collapsibleState);
   }
@@ -393,7 +395,10 @@ export class ImagesTreeProvider implements vscode.TreeDataProvider<ImageTreeItem
       return element.imageInfo.tags.map(tag => {
         const child = new ImageTreeItem(
           `${tag.name}  (${tag.size}, ${tag.updated})`,
-          vscode.TreeItemCollapsibleState.None
+          vscode.TreeItemCollapsibleState.None,
+          undefined,
+          element.imageInfo!.repository,
+          tag.name
         );
         child.iconPath = new vscode.ThemeIcon('tag');
         child.tooltip = `${tag.name}\nSize: ${tag.size}\nUpdated: ${tag.updated}\nLast used: ${tag.lastUsed}`;
