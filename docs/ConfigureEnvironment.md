@@ -86,7 +86,7 @@ For **Path B**: the file stays local — `deploy.ps1` reads it directly.
 
 ## Set Secrets as Environment Variables (Path B only)
 
-> Skip this section if you're using **Path A** (GitHub Actions). These values are configured as GitHub secrets instead — see [Prerequisites: Method 2](Prerequisites.md#method-2-deploy-from-github-actions-recommended).
+> Skip this section if you're using **Path A** (GitHub Actions). These values are configured as GitHub secrets instead — see [Prerequisites (Path A)](Prerequisites-PathA.md#github-secrets).
 
 **Never put these in tfvars files.**
 
@@ -114,4 +114,4 @@ $env:TF_VAR_github_app_private_key = Get-Content "<path-to>.pem" -Raw
 | GitHub PAT | `gh auth login` or classic PAT | ❌ | `GH_PAT` secret | automatic via `gh` |
 | SQL SA password | You choose | ❌ | `SQL_SA_PASSWORD` secret | env var |
 | GitHub App private key | Create the GitHub App (.pem) | ❌ | `GITHUB_APP_PRIVATE_KEY` secret | env var |
-| Azure App Registration | Azure Portal (OIDC) | ❌ | `AZURE_CLIENT_ID` secret | not needed |
+| Azure App Registration | Azure Portal (OIDC) | ❌ | `AZURE_DEPLOY_CLIENT_ID` secret | not needed |

@@ -1,4 +1,4 @@
-# Azure Setup
+# Azure Setup (Path A — GitHub Actions)
 
 ## Required Permissions
 
@@ -13,7 +13,7 @@ The person deploying needs these Azure permissions:
 
 ## Collect These Values
 
-You'll need these for the tfvars file regardless of deployment method:
+You'll need these for the tfvars file and GitHub secrets:
 
 | Value | Where to find it |
 |-------|-----------------|
@@ -21,19 +21,9 @@ You'll need these for the tfvars file regardless of deployment method:
 | **Tenant ID** | Azure Portal → Microsoft Entra ID → Overview, or `az account show --query tenantId -o tsv` |
 | **Region** | Pick one: `westeurope`, `eastus`, `swedencentral`, etc. |
 
-## Login (Path B only)
+## Set Up OIDC for GitHub Actions
 
-> Skip this if you're using **Path A** (GitHub Actions). OIDC handles authentication automatically.
-
-```powershell
-az login
-az account list --output table
-az account set --subscription "<your-subscription-id>"
-```
-
-## Set Up OIDC for GitHub Actions (Path A only)
-
-> Skip this if you're using **Path B** (local deployment). `az login` handles authentication.
+GitHub Actions uses OIDC to authenticate with Azure — no secrets stored, no `az login` needed.
 
 1. Create an **App Registration** in Azure AD (Azure Portal → Microsoft Entra ID → App registrations → New registration).
 2. Add a **federated credential** for GitHub Actions OIDC:
@@ -41,6 +31,13 @@ az account set --subscription "<your-subscription-id>"
    - Subject: `repo:<your-org>/<your-repo>:ref:refs/heads/main`
    - Audience: `api://AzureADTokenExchange`
 3. Assign roles to the App Registration on the target Azure subscription:
-   - **Contributor** — create and manage all resources
-   - **User Access Administrator** — create role assignments for managed identities
-4. Save the **Application (client) ID** — you'll need it as a GitHub secret (`AZURE_CLIENT_ID`).
+   - Go to **Subscriptions** → your subscription → **Access control (IAM)** → **Add** → **Add role assignment**
+   - Select the **Privileged administrator roles** tab (not the search box — there are many "…Contributor" roles, you need the one called exactly **Contributor**)
+   - Select **Contributor** → **Next** → **Select members** → search for your App Registration → **Review + assign**
+   - Repeat for **User Access Administrator** (also on the **Privileged administrator roles** tab)
+   - On the **Conditions** tab, select **Allow user to assign all roles except privileged administrator roles** (the recommended default). Fkh only assigns non-privileged roles (AcrPull, Storage Blob Data Contributor, etc.).
+4. Save the **Application (client) ID** — you'll need it as a GitHub secret (`AZURE_DEPLOY_CLIENT_ID`).
+
+## Next Step
+
+→ [Create the GitHub App](GitHubApp.md)

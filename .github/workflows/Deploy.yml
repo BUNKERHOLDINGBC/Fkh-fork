@@ -14,9 +14,9 @@
 #        • User Access Administrator  (create role assignments for managed identities)
 #
 # ── Required GitHub Secrets ─────────────────────────────────────────────────
-#   AZURE_CLIENT_ID        - App Registration's Application (client) ID
-#   AZURE_TENANT_ID        - Azure AD tenant ID
-#   AZURE_SUBSCRIPTION_ID  - Azure subscription ID
+#   AZURE_DEPLOY_CLIENT_ID        - App Registration's Application (client) ID
+#   AZURE_DEPLOY_TENANT_ID         - Azure AD tenant ID
+#   AZURE_DEPLOY_SUBSCRIPTION_ID   - Azure subscription ID
 #   SQL_SA_PASSWORD         - SA password for the SQL Server deployed in AKS
 #   GITHUB_APP_PRIVATE_KEY - PEM-encoded private key of the GitHub App
 #   GH_PAT                 - GitHub PAT with these scopes:
@@ -47,9 +47,9 @@ env:
   TF_VAR_github_token: ${{ secrets.GH_PAT }}
   TF_VAR_sql_sa_password: ${{ secrets.SQL_SA_PASSWORD }}
   TF_VAR_github_app_private_key: ${{ secrets.GITHUB_APP_PRIVATE_KEY }}
-  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
-  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  ARM_CLIENT_ID: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+  ARM_TENANT_ID: ${{ secrets.AZURE_DEPLOY_TENANT_ID }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_DEPLOY_SUBSCRIPTION_ID }}
   ARM_USE_OIDC: true
 
 jobs:
@@ -81,9 +81,9 @@ jobs:
       - name: Azure CLI login (OIDC)
         uses: azure/login@v3
         with:
-          client-id: ${{ secrets.AZURE_CLIENT_ID }}
-          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
-          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_DEPLOY_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_DEPLOY_SUBSCRIPTION_ID }}
 
       # ── Parse tfvars for state backend ────────────────────────────────────
       - name: Parse tfvars for state storage

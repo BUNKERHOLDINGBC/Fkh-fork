@@ -11,10 +11,10 @@ No local tools needed. Everything runs in the cloud.
 | # | Step | Who | Time |
 |---|------|-----|------|
 | A1 | [Fork the Repository](docs/ForkRepository.md) | Ops | 5 min |
-| A2 | [Collect Azure Info + Set Up OIDC](docs/AzureSetup.md) | Ops | 10 min |
+| A2 | [Collect Azure Info + Set Up OIDC](docs/AzureSetup-PathA.md) | Ops | 10 min |
 | A3 | [Create the GitHub App](docs/GitHubApp.md) | Ops | 10 min |
 | A4 | [Create the tfvars File](docs/ConfigureEnvironment.md#create-your-organization-tfvars-file) | Ops | 10 min |
-| A5 | [Configure GitHub Secrets](docs/Prerequisites.md#method-2-deploy-from-github-actions-recommended) | Ops | 5 min |
+| A5 | [Configure GitHub Secrets](docs/Prerequisites-PathA.md#github-secrets) | Ops | 5 min |
 | A6 | Run the **Deploy** workflow (Actions → Deploy → Run workflow) | Ops | 20 min |
 | A7 | [Set Up End Users](docs/EndUserSetup.md) | Users | 5 min |
 
@@ -25,8 +25,8 @@ Full local control with CLI tools.
 | # | Step | Who | Time |
 |---|------|-----|------|
 | B1 | [Fork the Repository](docs/ForkRepository.md) | Ops | 5 min |
-| B2 | [Install Prerequisites](docs/Prerequisites.md#method-1-deploy-from-your-own-machine) | Ops | 15 min |
-| B3 | [Azure Setup & Login](docs/AzureSetup.md) | Ops | 10 min |
+| B2 | [Install Prerequisites](docs/Prerequisites-PathB.md) | Ops | 15 min |
+| B3 | [Azure Setup & Login](docs/AzureSetup-PathB.md) | Ops | 10 min |
 | B4 | [Create the GitHub App](docs/GitHubApp.md) | Ops | 10 min |
 | B5 | [Configure Your Environment](docs/ConfigureEnvironment.md) | Ops | 10 min |
 | B6 | [Deploy with Terraform](docs/Deploy.md) | Ops | 20 min |
