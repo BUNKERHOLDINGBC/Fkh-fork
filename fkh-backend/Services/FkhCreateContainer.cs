@@ -76,11 +76,13 @@ public class FkhCreateContainer : FkhServiceBase
 
         // Set auto-stop annotation if requested
         var autoStopInfo = "";
-        if (parameters.TryGetValue("autostop", out var autoStopHours) && double.TryParse(autoStopHours, out var hours) && hours > 0)
+        parameters.TryGetValue("autostop", out var autoStopValue);
+        parameters.TryGetValue("_timezone", out var autoStopTz);
+        var autoStop = ParseAutoStop(autoStopValue, autoStopTz);
+        if (autoStop is not null)
         {
-            var stopAt = DateTimeOffset.UtcNow.AddHours(hours);
-            await SetAutoStopAnnotationAsync(client, deploymentName, stopAt);
-            autoStopInfo = $"\n  AutoStop: {stopAt:yyyy-MM-dd HH:mm} UTC ({hours}h)";
+            await SetAutoStopAnnotationAsync(client, deploymentName, autoStop.Value.StopAt);
+            autoStopInfo = $"\n  AutoStop: {autoStop.Value.StopAt:yyyy-MM-dd HH:mm} UTC ({autoStop.Value.Description})";
         }
 
         Logger.LogInformation("Deployment {Deployment} and service {Service} created in namespace {Namespace}",

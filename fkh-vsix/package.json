@@ -63,6 +63,11 @@
         "icon": "$(debug-stop)"
       },
       {
+        "command": "fkh.extendAutoStop",
+        "title": "Extend Auto-Stop (+2h)",
+        "icon": "$(watch)"
+      },
+      {
         "command": "fkh.removeContainer",
         "title": "Remove",
         "icon": "$(trash)"
@@ -176,6 +181,11 @@
           "group": "inline"
         },
         {
+          "command": "fkh.extendAutoStop",
+          "when": "(view == fkhContainers || view == fkhProjects) && viewItem =~ /container-(running|starting)/",
+          "group": "inline"
+        },
+        {
           "command": "fkh.removeContainer",
           "when": "(view == fkhContainers || view == fkhProjects) && viewItem =~ /^container-/",
           "group": "inline"
@@ -187,6 +197,11 @@
         },
         {
           "command": "fkh.stopContainer",
+          "when": "(view == fkhContainers || view == fkhProjects) && viewItem =~ /container-(running|starting)/",
+          "group": "1_actions"
+        },
+        {
+          "command": "fkh.extendAutoStop",
           "when": "(view == fkhContainers || view == fkhProjects) && viewItem =~ /container-(running|starting)/",
           "group": "1_actions"
         },

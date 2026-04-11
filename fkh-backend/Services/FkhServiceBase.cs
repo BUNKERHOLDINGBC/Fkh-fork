@@ -6,6 +6,7 @@ using k8s;
 using k8s.KubeConfigModels;
 using k8s.Models;
 using Microsoft.Extensions.Logging;
+using System.Globalization;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
@@ -316,6 +317,53 @@ public abstract class FkhServiceBase
     }
 
     protected const string AutoStopAnnotation = "fkh/auto-stop-at";
+
+    /// <summary>
+    /// Parses an autostop value. Accepts:
+    ///   "4h"    → 4 hours from now
+    ///   "18:00" → today (or tomorrow) at 18:00 in the client's timezone
+    ///   "6PM"   → today (or tomorrow) at 18:00 in the client's timezone
+    /// Returns null if the value is empty or unparseable.
+    /// </summary>
+    protected static (DateTimeOffset StopAt, string Description)? ParseAutoStop(string? value, string? timeZoneId)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return null;
+
+        value = value.Trim();
+
+        // Hours format: integer followed by 'h' (e.g., "4h", "12h")
+        if (value.EndsWith("h", StringComparison.OrdinalIgnoreCase)
+            && int.TryParse(value[..^1], out var hours)
+            && hours > 0)
+        {
+            var stopAt = DateTimeOffset.UtcNow.AddHours(hours);
+            return (stopAt, $"{hours}h");
+        }
+
+        // Time-of-day format (e.g., "18:00", "6PM", "6:30 PM")
+        if (DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.NoCurrentDateDefault, out var parsed)
+            && parsed.Date == DateTime.MinValue.Date)
+        {
+            var tz = TimeZoneInfo.Utc;
+            if (!string.IsNullOrWhiteSpace(timeZoneId))
+            {
+                try { tz = TimeZoneInfo.FindSystemTimeZoneById(timeZoneId); }
+                catch (TimeZoneNotFoundException) { /* fall back to UTC */ }
+            }
+
+            var nowInTz = TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, tz);
+            var localStop = new DateTime(nowInTz.Year, nowInTz.Month, nowInTz.Day, parsed.Hour, parsed.Minute, parsed.Second);
+            if (localStop <= nowInTz)
+                localStop = localStop.AddDays(1);
+
+            var utcStop = TimeZoneInfo.ConvertTimeToUtc(localStop, tz);
+            var stopAt = new DateTimeOffset(utcStop, TimeSpan.Zero);
+            return (stopAt, value);
+        }
+
+        return null;
+    }
 
     protected async Task SetAutoStopAnnotationAsync(Kubernetes client, string deploymentName, DateTimeOffset stopAt)
     {

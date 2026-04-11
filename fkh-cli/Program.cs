@@ -83,6 +83,9 @@ try
     var endpoint = ResolveEndpoint(function.Route, settings);
     var token = GetGitHubToken();
 
+    // Send the client's timezone so the server can resolve time-of-day autostop values
+    parsed.Parameters["_timezone"] = TimeZoneInfo.Local.Id;
+
     Console.WriteLine($"Calling {endpoint}");
 
     using var cts = new CancellationTokenSource();

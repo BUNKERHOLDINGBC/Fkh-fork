@@ -49,7 +49,7 @@ public static class FunctionCatalog
                 {
                     Name = "autostop",
                     Type = "string",
-                    Description = "Hours after which the container automatically stops (e.g. '2' for 2 hours). Leave empty for no auto-stop.",
+                    Description = "When to auto-stop the container. Use '<n>h' for hours from now (e.g. '4h') or a time of day in UTC (e.g. '18:00' or '6PM'). Leave empty for no auto-stop.",
                     Required = false,
                     DefaultValue = null
                 },
@@ -148,8 +148,25 @@ public static class FunctionCatalog
                 {
                     Name = "autostop",
                     Type = "string",
-                    Description = "Hours after which the container automatically stops (e.g. '2' for 2 hours). Leave empty for no auto-stop.",
+                    Description = "When to auto-stop the container. Use '<n>h' for hours from now (e.g. '4h') or a time of day in UTC (e.g. '18:00' or '6PM'). Leave empty for no auto-stop.",
                     Required = false,
+                    DefaultValue = null
+                }
+            }
+        },
+        new FunctionDefinition
+        {
+            Name = "ExtendAutoStop",
+            Description = "Extends the auto-stop time of a running container by 2 hours.",
+            Route = "ExtendAutoStop",
+            Parameters = new List<FunctionParameterDefinition>
+            {
+                new()
+                {
+                    Name = "name",
+                    Type = "string",
+                    Description = "Name of the container to extend auto-stop for.",
+                    Required = true,
                     DefaultValue = null
                 }
             }

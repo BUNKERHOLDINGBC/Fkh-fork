@@ -124,8 +124,7 @@ public class FkhListContainers : FkhServiceBase
                     var stream = await client.ReadNamespacedPodLogAsync(
                         pod.Metadata.Name,
                         Namespace,
-                        container: pod.Spec.Containers[0].Name,
-                        tailLines: 100);
+                        container: pod.Spec.Containers[0].Name);
                     using var reader = new StreamReader(stream);
                     var logs = await reader.ReadToEndAsync();
                     if (!logs.Contains("Ready for connections!"))

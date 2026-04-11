@@ -43,14 +43,44 @@ public class FkhScaleContainer : FkhServiceBase
         var result = await ScaleAsync(parameters, 1);
         var autoStopInfo = "";
 
-        if (parameters.TryGetValue("autostop", out var autoStopHours) && double.TryParse(autoStopHours, out var hours) && hours > 0)
+        parameters.TryGetValue("autostop", out var autoStopValue);
+        parameters.TryGetValue("_timezone", out var autoStopTz);
+        var autoStop = ParseAutoStop(autoStopValue, autoStopTz);
+        if (autoStop is not null)
         {
-            var stopAt = DateTimeOffset.UtcNow.AddHours(hours);
-            await SetAutoStopAnnotationAsync(client, deploymentName, stopAt);
-            autoStopInfo = $"\n  AutoStop: {stopAt:yyyy-MM-dd HH:mm} UTC ({hours}h)";
+            await SetAutoStopAnnotationAsync(client, deploymentName, autoStop.Value.StopAt);
+            autoStopInfo = $"\n  AutoStop: {autoStop.Value.StopAt:yyyy-MM-dd HH:mm} UTC ({autoStop.Value.Description})";
         }
 
         return result + autoStopInfo;
+    }
+
+    public async Task<string> ExtendAutoStopAsync(Dictionary<string, string> parameters)
+    {
+        var name = parameters["name"];
+        var githubUsername = parameters["_githubUsername"];
+        var appName = SanitizeAppName($"{githubUsername}-{name}");
+        var deploymentName = $"{appName}-deployment";
+
+        var client = await GetKubernetesClientAsync();
+        var deployment = await client.ReadNamespacedDeploymentAsync(deploymentName, Namespace);
+
+        if (deployment.Metadata.Annotations == null
+            || !deployment.Metadata.Annotations.TryGetValue(AutoStopAnnotation, out var stopAtStr)
+            || !DateTimeOffset.TryParse(stopAtStr, out var currentStopAt))
+        {
+            // No auto-stop set — set one 2 hours from now
+            currentStopAt = DateTimeOffset.UtcNow;
+        }
+
+        // If the current stop time is in the past, extend from now instead
+        if (currentStopAt < DateTimeOffset.UtcNow)
+            currentStopAt = DateTimeOffset.UtcNow;
+
+        var newStopAt = currentStopAt.AddHours(2);
+        await SetAutoStopAnnotationAsync(client, deploymentName, newStopAt);
+
+        return $"Extended auto-stop for '{appName}'.\n  AutoStop: {newStopAt:yyyy-MM-dd HH:mm} UTC";
     }
 
     private async Task<string> ScaleAsync(Dictionary<string, string> parameters, int replicas)
