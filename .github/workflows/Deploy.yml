@@ -28,7 +28,7 @@
 #   TFVARS_FILE            - Path to the .tfvars file, e.g. organizations/freddydk.tfvars
 # ============================================================================
 
-name: Deploy
+name: Deploy Fkh
 
 on:
   workflow_dispatch:
@@ -171,12 +171,6 @@ jobs:
             -backend-config="subscription_id=${{ steps.parse.outputs.subscription_id }}" \
             -backend-config="use_azuread_auth=true"
 
-      # ── GitHub team check / import ────────────────────────────────────────
-      - name: Check / import GitHub teams
-        shell: pwsh
-        run: |
-          ./checkGitHubTeam.ps1 -VarFile "${{ vars.TFVARS_FILE }}" -GithubToken "${{ secrets.GH_PAT }}"
-
       # ── Bootstrap (AKS + core infra) ──────────────────────────────────────
       - name: Terraform bootstrap apply
         run: |
@@ -208,6 +202,12 @@ jobs:
           AKS_RG="fkh-${{ steps.parse.outputs.org_name }}"
           AKS_NAME="fkh-${{ steps.parse.outputs.org_name }}-aks"
           az aks get-credentials --resource-group "$AKS_RG" --name "$AKS_NAME" --overwrite-existing
+
+      # ── GitHub team check / import ────────────────────────────────────────
+      - name: Check / import GitHub teams
+        shell: pwsh
+        run: |
+          ./checkGitHubTeam.ps1 -VarFile "${{ vars.TFVARS_FILE }}" -GithubToken "${{ secrets.GH_PAT }}"
 
       # ── Full Terraform apply ──────────────────────────────────────────────
       - name: Terraform apply
