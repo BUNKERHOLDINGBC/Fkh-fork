@@ -316,6 +316,31 @@ public static class FunctionCatalog
                     DefaultValue = "500"
                 }
             }
+        },
+        new FunctionDefinition
+        {
+            Name = "InvokeSqlCmd",
+            Description = "Executes a SQL statement against a container's database.",
+            Route = "InvokeSqlCmd",
+            Parameters = new List<FunctionParameterDefinition>
+            {
+                new()
+                {
+                    Name = "name",
+                    Type = "string",
+                    Description = "Name of the container whose database to run the SQL against.",
+                    Required = true,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "sqlStmt",
+                    Type = "string",
+                    Description = "The SQL statement to execute.",
+                    Required = true,
+                    DefaultValue = null
+                }
+            }
         }
     };
 

@@ -29,6 +29,7 @@ var host = new HostBuilder()
         services.AddSingleton<FkhCreateImage>();
         services.AddSingleton<FkhRemoveImage>();
         services.AddSingleton<FkhListVMs>();
+        services.AddSingleton<FkhInvokeSqlCmd>();
     })
     .Build();
 
