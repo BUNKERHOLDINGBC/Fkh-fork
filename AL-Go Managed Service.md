@@ -10,9 +10,9 @@
 | Your DevOps role | Self-Service | Supported Self-Service | Guided execution | Collaborative team |
 | Roadmap influence | Contribute via community | Suggestions welcome | Suggestions reviewed | Suggestions prioritized |
 | Repository access | ❌ | ✅ (if needed) | ✅ (monitoring) | ✅ (active) |
-| SLA | ❌ | ❌ | 48 hours | 24 hours |
+| SLA | ❌ | ❌ | 48 hours | 24 hours (often faster) |
 | Fkh installation & maintenance | ❌ | ❌ | ✅ | ✅ |
 | Recurring status meetings | ❌ | ❌ | Every 4 weeks | Weekly |
 | Ongoing status reports | ❌ | ❌ | Weekly | Weekly |
 | We will create a PR on your repository | ❌ | ❌ | ❌ | ✅ |
-| Price per month | Free | €100 | €1000 | Contact us at contact@freddy.dk |
+| Price per month | Free | €100 | €800 | Contact us at contact@freddy.dk |
