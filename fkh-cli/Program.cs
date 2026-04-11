@@ -14,6 +14,7 @@ Usage:
 Options:
     --key "value"       Provide a parameter value (discovered from GetFunctionCatalog)
     --nowait            Don't wait for completion (createcontainer, createimage)
+    --asJson            Output the result as JSON
     -h, --help          Show help
     --version           Show version
 
@@ -125,11 +126,31 @@ try
 
         if (response.IsSuccessStatusCode)
         {
-            Console.WriteLine(message);
+            if (parsed.AsJson)
+            {
+                var jsonOutput = JsonSerializer.Serialize(
+                    new { success = true, message },
+                    new JsonSerializerOptions { WriteIndented = true });
+                Console.WriteLine(jsonOutput);
+            }
+            else
+            {
+                Console.WriteLine(message);
+            }
             return 0;
         }
 
-        Console.Error.WriteLine($"Request failed ({(int)response.StatusCode}): {message}");
+        if (parsed.AsJson)
+        {
+            var jsonOutput = JsonSerializer.Serialize(
+                new { success = false, statusCode = (int)response.StatusCode, message },
+                new JsonSerializerOptions { WriteIndented = true });
+            Console.WriteLine(jsonOutput);
+        }
+        else
+        {
+            Console.Error.WriteLine($"Request failed ({(int)response.StatusCode}): {message}");
+        }
         return 1;
     }
 }
@@ -178,6 +199,12 @@ static ParsedArgs ParseArgs(string[] args, FunctionCatalogResponse catalog)
         if (string.Equals(key, "nowait", StringComparison.OrdinalIgnoreCase))
         {
             parsed.NoWait = true;
+            continue;
+        }
+
+        if (string.Equals(key, "asJson", StringComparison.OrdinalIgnoreCase))
+        {
+            parsed.AsJson = true;
             continue;
         }
 
@@ -505,6 +532,7 @@ sealed class ParsedArgs
     public bool ShowHelp { get; init; }
     public string? Command { get; init; }
     public bool NoWait { get; set; }
+    public bool AsJson { get; set; }
     public Dictionary<string, string> Parameters { get; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
