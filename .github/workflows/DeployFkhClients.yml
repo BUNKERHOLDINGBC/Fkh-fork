@@ -1,4 +1,4 @@
-name: Deploy to Marketplace
+name: Deploy Fkh Clients
 
 on:
   push:
@@ -14,7 +14,7 @@ on:
         default: false
 
 jobs:
-  publish-vsix:
+  deployFkhClients-vsix:
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -73,7 +73,7 @@ jobs:
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
 
-  publish-cli:
+  deployFkhClients-cli:
     runs-on: windows-latest
     permissions:
       contents: read

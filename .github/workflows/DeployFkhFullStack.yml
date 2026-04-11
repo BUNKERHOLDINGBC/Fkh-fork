@@ -28,16 +28,10 @@
 #   TFVARS_FILE            - Path to the .tfvars file, e.g. organizations/freddydk.tfvars
 # ============================================================================
 
-name: Deploy Fkh
+name: Deploy Fkh Full Stack
 
 on:
   workflow_dispatch:
-    inputs:
-      auto_approve:
-        description: 'Skip Terraform interactive approval'
-        required: false
-        default: true
-        type: boolean
 
 permissions:
   id-token: write
@@ -53,7 +47,7 @@ env:
   ARM_USE_OIDC: true
 
 jobs:
-  deploy:
+  deployFkhFullStack:
     runs-on: ubuntu-latest
     defaults:
       run:

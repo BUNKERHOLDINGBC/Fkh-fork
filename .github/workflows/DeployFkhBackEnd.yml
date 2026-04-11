@@ -1,5 +1,5 @@
 # ============================================================================
-# Deploy Function Update – Publish function code only (no Terraform)
+# Deploy Fkh Backend – Publish function code only (no Terraform)
 # ============================================================================
 # Mirrors terraform/deploy-functionupdate.ps1 for CI/CD use.
 # Use this when backend code changes but infrastructure is unchanged.
@@ -21,23 +21,12 @@
 # ── Required GitHub Variables (non-secret) ──────────────────────────────────
 #   TFVARS_FILE            - Path to the .tfvars file, e.g. organizations/freddydk.tfvars
 #                            Used to derive the function app name from Terraform state.
-#                            Not required if function_app_name and resource_group are
-#                            provided as workflow inputs.
 # ============================================================================
 
 name: Deploy Fkh Backend
 
 on:
   workflow_dispatch:
-    inputs:
-      function_app_name:
-        description: 'Function App name (leave empty to read from Terraform state)'
-        required: false
-        type: string
-      resource_group:
-        description: 'Resource group name (leave empty to read from Terraform state)'
-        required: false
-        type: string
 
 permissions:
   id-token: write
@@ -50,7 +39,7 @@ env:
   ARM_USE_OIDC: true
 
 jobs:
-  publish:
+  deployFkhBackend:
     runs-on: ubuntu-latest
 
     steps:
@@ -80,12 +69,8 @@ jobs:
         shell: pwsh
         working-directory: terraform
         run: |
-          $functionAppName   = "${{ inputs.function_app_name }}"
-          $resourceGroupName = "${{ inputs.resource_group }}"
-
-          if ([string]::IsNullOrWhiteSpace($functionAppName) -or [string]::IsNullOrWhiteSpace($resourceGroupName)) {
-            # Fall back to Terraform state
-            $varFile = "${{ vars.TFVARS_FILE }}"
+          # Read from Terraform state
+          $varFile = "${{ vars.TFVARS_FILE }}"
             function Get-TfVar([string]$Name, [string]$File) {
               $line = Get-Content $File | Where-Object { $_ -match "^\s*$Name\s*=" } | Select-Object -First 1
               if ($line -match '=\s*"([^"]+)"') { return $Matches[1] }
@@ -107,19 +92,14 @@ jobs:
               -backend-config="subscription_id=$subscriptionId" `
               -backend-config="use_azuread_auth=true"
 
-            if ([string]::IsNullOrWhiteSpace($functionAppName)) {
-              $functionAppName = terraform output -raw function_app_name
-              if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($functionAppName)) {
-                throw "Could not retrieve function_app_name from Terraform output. Pass it as a workflow input."
-              }
+            $functionAppName = terraform output -raw function_app_name
+            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($functionAppName)) {
+              throw "Could not retrieve function_app_name from Terraform output."
             }
-            if ([string]::IsNullOrWhiteSpace($resourceGroupName)) {
-              $resourceGroupName = terraform output -raw resource_group_name
-              if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($resourceGroupName)) {
-                throw "Could not retrieve resource_group_name from Terraform output. Pass it as a workflow input."
-              }
+            $resourceGroupName = terraform output -raw resource_group_name
+            if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($resourceGroupName)) {
+              throw "Could not retrieve resource_group_name from Terraform output."
             }
-          }
 
           "function_app_name=$functionAppName"     >> $env:GITHUB_OUTPUT
           "resource_group_name=$resourceGroupName" >> $env:GITHUB_OUTPUT
