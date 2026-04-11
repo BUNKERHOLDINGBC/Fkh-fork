@@ -15,4 +15,4 @@
 | Recurring status meetings | ❌ | ❌ | Every 4 weeks | Weekly |
 | Ongoing status reports | ❌ | ❌ | Weekly | Weekly |
 | We will create a PR on your repository | ❌ | ❌ | ❌ | ✅ |
-| Price per month | Free | €100 | €800 | Contact us at contact@freddy.dk |
+| Price per month | Free | €100 | €800 | Contact us at fkr@freddy.dk |
