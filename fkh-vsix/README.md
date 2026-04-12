@@ -6,10 +6,13 @@ Fkh is also available as a command-line interface: [fkh on NuGet](https://www.nu
 
 ## Getting Started
 
-- 1. Deploy the Fkh Backend (see `https://github.com/Freddy-DK/Fkh`)
-- 2. Install the extension from the VS Code Marketplace.
-- 3. Set the backend URL in your settings: **Fkh: Backend Url** (e.g. `https://fkh-<org>-backend.azurewebsites.net/api`).
-- 4. The extension will prompt you to sign in with GitHub on first use.
+**1.** Deploy the Fkh Backend (see `https://github.com/Freddy-DK/Fkh`)
+
+**2.** Install the extension from the VS Code Marketplace.
+
+**3.** Set the backend URL in your settings: **Fkh: Backend Url** (e.g. `https://fkh-<org>-backend.azurewebsites.net/api`).
+
+**4.** The extension will prompt you to sign in with GitHub on first use.
 
 ## Authentication & Access Control
 
@@ -17,8 +20,9 @@ The extension authenticates you via GitHub OAuth. When you first interact with t
 
 Access to the backend is guarded by two GitHub teams configured in your organization:
 
-- **Members team** — grants usage access. Members can create, manage, and remove their own containers and images.
-- **Admins team** — grants admin access. Admins can view all containers, list cluster nodes, and use admin-only features like the VMs view.
+**Members team** — grants usage access. Members can create, manage, and remove their own containers and images.
+
+**Admins team** — grants admin access. Admins can view all containers, list cluster nodes, and use admin-only features like the VMs view.
 
 ## Activity Bar
 
@@ -28,9 +32,11 @@ The extension adds an **Fkh** panel to the activity bar with the following tree 
 
 If your workspace contains an [AL-Go](https://github.com/microsoft/AL-Go) repository, this view automatically discovers all AL-Go projects in the repo and displays them as top-level nodes. For each project you can:
 
-- **Create a container** directly from the project node — the container is automatically wired to the correct repository, project, and artifact settings.
-- **See existing containers** nested under each project, with live status indicators (Running, Starting, Stopped, etc.).
-- **Start, stop, extend auto-stop, view logs, or remove** containers using inline actions or the context menu.
+**Create a container** directly from the project node — the container is automatically wired to the correct repository, project, and artifact settings.
+
+**See existing containers** nested under each project, with live status indicators (Running, Starting, Stopped, etc.).
+
+**Start, stop, extend auto-stop, view logs, or remove** containers using inline actions or the context menu.
 
 Containers created for a project are tagged with the repository and project name, so the extension always shows you exactly which containers belong to which project.
 
@@ -38,12 +44,17 @@ Containers created for a project are tagged with the repository and project name
 
 A flat list of **all your containers** across all repositories and projects. Each container can be expanded to see its properties:
 
-- **Status** — Running, Starting, Stopped, Pending, Initializing
-- **Image** — The Business Central artifact image the container is built from
-- **Auto-Stop** — When the container will automatically stop (displayed in your local timezone)
-- **Repo / Project** — Which repository and AL-Go project the container belongs to
-- **Web Client** — A clickable link to open the Business Central web client
-- **Memory** — Current memory usage
+**Status** — Running, Starting, Stopped, Pending, Initializing
+
+**Image** — The Business Central artifact image the container is built from
+
+**Auto-Stop** — When the container will automatically stop (displayed in your local timezone)
+
+**Repo / Project** — Which repository and AL-Go project the container belongs to
+
+**Web Client** — A clickable link to open the Business Central web client
+
+**Memory** — Current memory usage
 
 All the same actions (start, stop, extend auto-stop, get logs, remove) are available here as well.
 
