@@ -471,14 +471,27 @@ public abstract class FunctionBase
 
     private static string? ExtractHeaderValue(string headers, string key)
     {
-        // Look for: name="value" or filename="value"
-        var searchKey = key + "=\"";
-        var idx = headers.IndexOf(searchKey, StringComparison.OrdinalIgnoreCase);
+        // Look for: name="value" or name=value (unquoted, as sent by .NET MultipartFormDataContent)
+        var searchKeyQuoted = key + "=\"";
+        var idx = headers.IndexOf(searchKeyQuoted, StringComparison.OrdinalIgnoreCase);
+        if (idx >= 0)
+        {
+            var start = idx + searchKeyQuoted.Length;
+            var end = headers.IndexOf('"', start);
+            if (end >= 0) return headers[start..end];
+        }
+
+        // Try unquoted: name=value (terminated by ; or end of line)
+        var searchKeyUnquoted = key + "=";
+        idx = headers.IndexOf(searchKeyUnquoted, StringComparison.OrdinalIgnoreCase);
         if (idx < 0) return null;
-        var start = idx + searchKey.Length;
-        var end = headers.IndexOf('"', start);
-        if (end < 0) return null;
-        return headers[start..end];
+        // Make sure we're not matching a longer key (e.g. "filename=" when looking for "name=")
+        if (idx > 0 && headers[idx - 1] != ' ' && headers[idx - 1] != ';')
+            return null;
+        var valStart = idx + searchKeyUnquoted.Length;
+        var valEnd = headers.IndexOfAny([';', '\r', '\n'], valStart);
+        var result = valEnd < 0 ? headers[valStart..] : headers[valStart..valEnd];
+        return result.Trim();
     }
 
     /// <summary>
