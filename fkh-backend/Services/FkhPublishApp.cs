@@ -42,9 +42,9 @@ public class FkhPublishApp : FkhServiceBase
         Logger.LogInformation("Publishing app in container '{Container}'...", appName);
         var script = $@"
 $ErrorActionPreference = 'Stop'
+. 'c:\run\prompt.ps1'  # Load BC admin tools into the session
 $appPath = '{destPath}\{fileName}'
-$serverInstance = (Get-NAVServerInstance | Where-Object {{ $_.Default -eq $true }}).ServerInstance
-if (-not $serverInstance) {{ $serverInstance = 'BC' }}
+$serverInstance = 'BC'
 $tenant = 'default'
 try {{
     $appInfo = Get-NAVAppInfo -Path $appPath
