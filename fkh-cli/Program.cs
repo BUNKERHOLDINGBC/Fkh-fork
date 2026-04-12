@@ -713,6 +713,31 @@ static class Ansi
         if (Environment.GetEnvironmentVariable("WT_SESSION") is not null) return true;
         if (Environment.GetEnvironmentVariable("TERM_PROGRAM") is not null) return true;
         if (Environment.GetEnvironmentVariable("TERM") is not null) return true;
+        if (TryEnableVirtualTerminalProcessing()) return true;
         return false;
     }
+
+    static bool TryEnableVirtualTerminalProcessing()
+    {
+        if (!System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
+            return false;
+
+        var handle = GetStdHandle(-11); // STD_OUTPUT_HANDLE
+        if (handle == IntPtr.Zero || handle == new IntPtr(-1)) return false;
+        if (!GetConsoleMode(handle, out var mode)) return false;
+
+        const uint ENABLE_VIRTUAL_TERMINAL_PROCESSING = 0x0004;
+        if ((mode & ENABLE_VIRTUAL_TERMINAL_PROCESSING) != 0) return true;
+
+        return SetConsoleMode(handle, mode | ENABLE_VIRTUAL_TERMINAL_PROCESSING);
+    }
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+    private static extern IntPtr GetStdHandle(int nStdHandle);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GetConsoleMode(IntPtr hConsoleHandle, out uint lpMode);
+
+    [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool SetConsoleMode(IntPtr hConsoleHandle, uint dwMode);
 }
