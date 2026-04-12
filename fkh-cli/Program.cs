@@ -120,7 +120,7 @@ try
                 return 1;
             }
             filesToUpload[fp] = filePath;
-            parsed.Parameters.Remove(fp);
+            parsed.Parameters[fp] = Path.GetFileName(filePath);
         }
     }
 
