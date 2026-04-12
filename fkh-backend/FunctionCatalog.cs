@@ -334,7 +334,7 @@ public static class FunctionCatalog
                 },
                 new()
                 {
-                    Name = "sqlStmt",
+                    Name = "query",
                     Type = "string",
                     Description = "The SQL statement to execute.",
                     Required = true,

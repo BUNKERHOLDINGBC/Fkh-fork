@@ -10,7 +10,7 @@ public class FkhInvokeSqlCmd : FkhServiceBase
     {
         var githubUsername = parameters["_githubUsername"];
         var containerName = parameters["name"];
-        var sql = parameters["sqlStmt"];
+        var query = parameters["query"];
 
         var sanitizedUser = SanitizeAppName(githubUsername);
         var sanitizedName = SanitizeAppName(containerName);
@@ -37,7 +37,7 @@ public class FkhInvokeSqlCmd : FkhServiceBase
         }
 
         // Execute the SQL statement against the user's database
-        var safeSql = sql.Replace("\"", "\\\"").Replace("$", "\\$");
+        var safeSql = query.Replace("\"", "\\\"").Replace("$", "\\$");
         var execScript = $"{SqlcmdPath} -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -C -d \"{databaseName}\" " +
             $"-Q \"{safeSql}\"";
         var result = await ExecInMssqlPodAsync(client, podName, execScript);
