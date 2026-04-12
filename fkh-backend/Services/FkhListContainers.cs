@@ -25,7 +25,8 @@ public class FkhListContainers : FkhServiceBase
             catch (TimeZoneNotFoundException) { /* fall back to UTC */ }
         }
 
-        if (!isAdmin && parameters.TryGetValue("all", out _))
+        if (!isAdmin && parameters.TryGetValue("all", out var reqAll)
+            && string.Equals(reqAll, "true", StringComparison.OrdinalIgnoreCase))
         {
             throw new UnauthorizedAccessException("The --all option is restricted to administrators.");
         }

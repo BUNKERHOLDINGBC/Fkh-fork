@@ -192,7 +192,7 @@ public static class FunctionCatalog
                     Type = "boolean",
                     Description = "List all containers instead of only your own.",
                     Required = false,
-                    DefaultValue = "false"
+                    DefaultValue = null
                 }
             }
         },
