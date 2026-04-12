@@ -212,6 +212,20 @@ public abstract class FunctionBase
         parametersResult.Parameters!["_githubUsername"] = username;
         parametersResult.Parameters!["_isAdmin"] = isAdmin.ToString();
 
+        // ── Cross-validate name / fullName ────────────────────────────────────────
+        if (function.Parameters.Any(p => string.Equals(p.Name, "fullName", StringComparison.OrdinalIgnoreCase)))
+        {
+            var hasName = parametersResult.Parameters.TryGetValue("name", out var nameVal) && !string.IsNullOrWhiteSpace(nameVal);
+            var hasFullName = parametersResult.Parameters.TryGetValue("fullName", out var fullNameVal) && !string.IsNullOrWhiteSpace(fullNameVal);
+
+            if (hasName && hasFullName)
+                return Respond(req, HttpStatusCode.BadRequest, "Cannot specify both 'name' and 'fullName'.");
+            if (!hasName && !hasFullName)
+                return Respond(req, HttpStatusCode.BadRequest, "Either 'name' or 'fullName' must be specified.");
+            if (hasFullName && !isAdmin)
+                return Respond(req, HttpStatusCode.Forbidden, "The 'fullName' parameter is restricted to administrators.");
+        }
+
         // Resolve artifact shorthand (e.g. "///us/latest") to a full URL
         if (parametersResult.Parameters.TryGetValue("artifactUrl", out var rawArtifact)
             && !string.IsNullOrWhiteSpace(rawArtifact)
@@ -334,7 +348,7 @@ public abstract class FunctionBase
         foreach (var parameter in function.Parameters)
         {
             incoming.TryGetValue(parameter.Name, out var value);
-            value = string.IsNullOrWhiteSpace(vaue) ? parameter.DefaultValue : value;
+            value = string.IsNullOrWhiteSpace(value) ? parameter.DefaultValue : value;
 
             if (parameter.Required && string.IsNullOrWhiteSpace(value))
             {
@@ -349,6 +363,15 @@ public abstract class FunctionBase
             {
                 return ParameterValidationResult.Fail(
                     $"Parameter 'name' may only contain alphanumeric characters (a-z, A-Z, 0-9).");
+            }
+
+            // Validate 'fullName' parameters: alphanumeric, hyphens, and underscores only
+            if (string.Equals(parameter.Name, "fullName", StringComparison.OrdinalIgnoreCase)
+                && !string.IsNullOrWhiteSpace(value)
+                && !value.All(c => char.IsLetterOrDigit(c) || c == '-' || c == '_'))
+            {
+                return ParameterValidationResult.Fail(
+                    $"Parameter 'fullName' may only contain alphanumeric characters, hyphens, and underscores.");
             }
 
             if (!string.IsNullOrWhiteSpace(value))

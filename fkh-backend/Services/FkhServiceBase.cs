@@ -272,6 +272,21 @@ public abstract class FkhServiceBase
     }
 
     /// <summary>
+    /// Resolves the app label from parameters.
+    /// Uses 'fullName' directly if provided (admin), otherwise combines username with 'name'.
+    /// </summary>
+    protected static string ResolveAppName(Dictionary<string, string> parameters)
+    {
+        if (parameters.TryGetValue("fullName", out var fullName) && !string.IsNullOrWhiteSpace(fullName))
+        {
+            return SanitizeAppName(fullName);
+        }
+        var githubUsername = parameters["_githubUsername"];
+        var name = parameters["name"];
+        return SanitizeAppName($"{githubUsername}-{name}");
+    }
+
+    /// <summary>
     /// Converts an app name to a DNS-compatible name by also replacing underscores with hyphens.
     /// Use for Kubernetes resource names (deployments, services, secrets) and DNS labels.
     /// </summary>

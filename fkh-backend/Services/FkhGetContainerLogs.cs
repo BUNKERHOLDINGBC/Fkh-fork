@@ -9,12 +9,12 @@ public class FkhGetContainerLogs : FkhServiceBase
 
     public async Task<object> GetContainerLogsAsync(Dictionary<string, string> parameters)
     {
-        var name = parameters["name"];
+        var name = parameters.TryGetValue("name", out var n) ? n : null;
         var githubUsername = parameters["_githubUsername"];
         var isAdmin = parameters.TryGetValue("_isAdmin", out var adminValue)
             && string.Equals(adminValue, "true", StringComparison.OrdinalIgnoreCase);
 
-        var appName = SanitizeAppName($"{githubUsername}-{name}");
+        var appName = ResolveAppName(parameters);
 
         var client = await GetKubernetesClientAsync();
         var pods = await client.ListNamespacedPodAsync(Namespace, labelSelector: $"app={appName}");

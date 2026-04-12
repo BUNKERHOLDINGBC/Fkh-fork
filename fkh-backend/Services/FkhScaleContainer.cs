@@ -12,9 +12,9 @@ public class FkhScaleContainer : FkhServiceBase
     {
         var result = await ScaleAsync(parameters, 0);
         // Clear auto-stop annotation when manually stopping
-        var name = parameters["name"];
+        var name = parameters.TryGetValue("name", out var n) ? n : null;
         var githubUsername = parameters["_githubUsername"];
-        var appName = SanitizeAppName($"{githubUsername}-{name}");
+        var appName = ResolveAppName(parameters);
         var deploymentName = $"{appName}-deployment";
         var client = await GetKubernetesClientAsync();
         await ClearAutoStopAnnotationAsync(client, deploymentName);
@@ -24,9 +24,9 @@ public class FkhScaleContainer : FkhServiceBase
     public async Task<object> StartContainerAsync(Dictionary<string, string> parameters)
     {
         // Ensure a Windows node with healthy CNS is available before scaling up
-        var name = parameters["name"];
+        var name = parameters.TryGetValue("name", out var n2) ? n2 : null;
         var githubUsername = parameters["_githubUsername"];
-        var appName = SanitizeAppName($"{githubUsername}-{name}");
+        var appName = ResolveAppName(parameters);
         var deploymentName = $"{appName}-deployment";
 
         var client = await GetKubernetesClientAsync();
@@ -63,9 +63,9 @@ public class FkhScaleContainer : FkhServiceBase
 
     public async Task<object> ExtendAutoStopAsync(Dictionary<string, string> parameters)
     {
-        var name = parameters["name"];
+        var name = parameters.TryGetValue("name", out var n3) ? n3 : null;
         var githubUsername = parameters["_githubUsername"];
-        var appName = SanitizeAppName($"{githubUsername}-{name}");
+        var appName = ResolveAppName(parameters);
         var deploymentName = $"{appName}-deployment";
 
         var client = await GetKubernetesClientAsync();
@@ -93,9 +93,7 @@ public class FkhScaleContainer : FkhServiceBase
 
     private async Task<ScaleResult> ScaleAsync(Dictionary<string, string> parameters, int replicas)
     {
-        var name = parameters["name"];
-        var githubUsername = parameters["_githubUsername"];
-        var appName = SanitizeAppName($"{githubUsername}-{name}");
+        var appName = ResolveAppName(parameters);
         var deploymentName = $"{appName}-deployment";
 
         Logger.LogInformation("Scaling deployment '{Deployment}' to {Replicas} replicas...", deploymentName, replicas);

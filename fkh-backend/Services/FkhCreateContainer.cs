@@ -20,7 +20,7 @@ public class FkhCreateContainer : FkhServiceBase
 
     public async Task<object> CreateContainerAsync(Dictionary<string, string> parameters)
     {
-        var name = parameters["name"];
+        var name = parameters.TryGetValue("name", out var n) ? n : null;
         var artifactUrl = parameters["artifactUrl"];
         var adminUsername = parameters["adminUsername"];
         var adminPassword = parameters["adminPassword"];
@@ -35,7 +35,7 @@ public class FkhCreateContainer : FkhServiceBase
 
         var imageTag = GetImageTag(artifactUrl);
         var fullImage = $"{AcrLoginServer}/{AcrRepository}:{imageTag}";
-        var appName = SanitizeAppName($"{githubUsername}-{name}");
+        var appName = ResolveAppName(parameters);
         var databaseName = appName;
 
         if (!Regex.IsMatch(databaseName, @"^[a-zA-Z0-9_-]+$"))

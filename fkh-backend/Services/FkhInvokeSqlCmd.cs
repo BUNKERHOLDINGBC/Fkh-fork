@@ -9,12 +9,10 @@ public class FkhInvokeSqlCmd : FkhServiceBase
     public async Task<object> InvokeSqlCmdAsync(Dictionary<string, string> parameters)
     {
         var githubUsername = parameters["_githubUsername"];
-        var containerName = parameters["name"];
+        var containerName = parameters.TryGetValue("name", out var n) ? n : null;
         var query = parameters["query"];
 
-        var sanitizedUser = SanitizeAppName(githubUsername);
-        var sanitizedName = SanitizeAppName(containerName);
-        var databaseName = $"{sanitizedUser}-{sanitizedName}";
+        var databaseName = ResolveAppName(parameters);
 
         Logger.LogInformation(
             "User '{User}' invoking SQL on database '{Database}'.",

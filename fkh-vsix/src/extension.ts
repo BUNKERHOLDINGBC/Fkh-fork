@@ -257,12 +257,17 @@ async function promptForParameters(
   prefilled: Record<string, string> = {}
 ): Promise<Record<string, string> | undefined> {
   const config = vscode.workspace.getConfiguration('fkh');
+  const isAdmin = vmsProvider?.visible ?? false;
 
   // Resolve defaults: prefilled > settings > auto-detect > catalog default
   const resolvedDefaults: Record<string, string> = {};
   const promptParams: FunctionParameterDefinition[] = [];
 
   for (const param of definition.parameters) {
+    // Hide fullName from non-admins
+    if (param.name.toLowerCase() === 'fullname' && !isAdmin) {
+      continue;
+    }
     const prefilledKey = Object.keys(prefilled).find(
       k => k.toLowerCase() === param.name.toLowerCase()
     );

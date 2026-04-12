@@ -9,9 +9,9 @@ public class FkhRemoveContainer : FkhServiceBase
 
     public async Task<object> RemoveContainerAsync(Dictionary<string, string> parameters)
     {
-        var name = parameters["name"];
+        var name = parameters.TryGetValue("name", out var n) ? n : null;
         var githubUsername = parameters["_githubUsername"];
-        var appName = SanitizeAppName($"{githubUsername}-{name}");
+        var appName = ResolveAppName(parameters);
         var databaseName = appName;
 
         var deploymentName = $"{appName}-deployment";

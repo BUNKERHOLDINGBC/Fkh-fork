@@ -17,8 +17,16 @@ public static class FunctionCatalog
                 {
                     Name = "name",
                     Type = "string",
-                    Description = "Name for the container. Combined with the GitHub username to form the container name.",
-                    Required = true,
+                    Description = "Name for the container. Combined with the GitHub username to form the container name. Mutually exclusive with 'fullName'.",
+                    Required = false,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "fullName",
+                    Type = "string",
+                    Description = "Full app label for the container (admin only). Mutually exclusive with 'name'.",
+                    Required = false,
                     DefaultValue = null
                 },
                 new()
@@ -114,8 +122,16 @@ public static class FunctionCatalog
                 {
                     Name = "name",
                     Type = "string",
-                    Description = "Name of the container to remove (same name used when creating it).",
-                    Required = true,
+                    Description = "Name of the container to remove (same name used when creating it). Mutually exclusive with 'fullName'.",
+                    Required = false,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "fullName",
+                    Type = "string",
+                    Description = "Full app label of the container to remove (admin only). Mutually exclusive with 'name'.",
+                    Required = false,
                     DefaultValue = null
                 }
             }
@@ -131,8 +147,16 @@ public static class FunctionCatalog
                 {
                     Name = "name",
                     Type = "string",
-                    Description = "Name of the container to stop (same name used when creating it).",
-                    Required = true,
+                    Description = "Name of the container to stop (same name used when creating it). Mutually exclusive with 'fullName'.",
+                    Required = false,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "fullName",
+                    Type = "string",
+                    Description = "Full app label of the container to stop (admin only). Mutually exclusive with 'name'.",
+                    Required = false,
                     DefaultValue = null
                 }
             }
@@ -148,8 +172,16 @@ public static class FunctionCatalog
                 {
                     Name = "name",
                     Type = "string",
-                    Description = "Name of the container to start (same name used when creating it).",
-                    Required = true,
+                    Description = "Name of the container to start (same name used when creating it). Mutually exclusive with 'fullName'.",
+                    Required = false,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "fullName",
+                    Type = "string",
+                    Description = "Full app label of the container to start (admin only). Mutually exclusive with 'name'.",
+                    Required = false,
                     DefaultValue = null
                 },
                 new()
@@ -173,8 +205,16 @@ public static class FunctionCatalog
                 {
                     Name = "name",
                     Type = "string",
-                    Description = "Name of the container to extend auto-stop for.",
-                    Required = true,
+                    Description = "Name of the container to extend auto-stop for. Mutually exclusive with 'fullName'.",
+                    Required = false,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "fullName",
+                    Type = "string",
+                    Description = "Full app label of the container to extend auto-stop for (admin only). Mutually exclusive with 'name'.",
+                    Required = false,
                     DefaultValue = null
                 }
             }
@@ -303,8 +343,16 @@ public static class FunctionCatalog
                 {
                     Name = "name",
                     Type = "string",
-                    Description = "Name of the container to wait for (same name used when creating it).",
-                    Required = true,
+                    Description = "Name of the container to wait for (same name used when creating it). Mutually exclusive with 'fullName'.",
+                    Required = false,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "fullName",
+                    Type = "string",
+                    Description = "Full app label of the container to wait for (admin only). Mutually exclusive with 'name'.",
+                    Required = false,
                     DefaultValue = null
                 }
             }
@@ -320,8 +368,16 @@ public static class FunctionCatalog
                 {
                     Name = "name",
                     Type = "string",
-                    Description = "Name of the container to get logs from.",
-                    Required = true,
+                    Description = "Name of the container to get logs from. Mutually exclusive with 'fullName'.",
+                    Required = false,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "fullName",
+                    Type = "string",
+                    Description = "Full app label of the container to get logs from (admin only). Mutually exclusive with 'name'.",
+                    Required = false,
                     DefaultValue = null
                 },
                 new()
@@ -345,8 +401,16 @@ public static class FunctionCatalog
                 {
                     Name = "name",
                     Type = "string",
-                    Description = "Name of the container whose database to run the SQL against.",
-                    Required = true,
+                    Description = "Name of the container whose database to run the SQL against. Mutually exclusive with 'fullName'.",
+                    Required = false,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "fullName",
+                    Type = "string",
+                    Description = "Full app label of the container whose database to run the SQL against (admin only). Mutually exclusive with 'name'.",
+                    Required = false,
                     DefaultValue = null
                 },
                 new()
