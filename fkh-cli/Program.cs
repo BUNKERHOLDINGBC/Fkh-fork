@@ -98,7 +98,9 @@ try
     var token = parsed.OidcToken ?? GetGitHubToken();
 
     // Send the client's timezone so the server can resolve time-of-day autostop values
-    parsed.Parameters["_timezone"] = TimeZoneInfo.Local.Id;
+    parsed.Parameters["_timezone"] = Environment.GetEnvironmentVariable("FKH_TIMEZONE") is string tz && !string.IsNullOrWhiteSpace(tz)
+        ? tz.Trim()
+        : TimeZoneInfo.Local.Id;
 
     // Detect file-type parameters
     var fileParams = function.Parameters

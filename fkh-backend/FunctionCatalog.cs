@@ -163,6 +163,13 @@ public static class FunctionCatalog
         },
         new FunctionDefinition
         {
+            Name = "StopAllContainers",
+            Description = "Stops all running containers in the cluster by scaling their deployments to 0 replicas (admin only).",
+            Route = "StopAllContainers",
+            Parameters = new List<FunctionParameterDefinition>()
+        },
+        new FunctionDefinition
+        {
             Name = "StartContainer",
             Description = "Starts a previously stopped container by scaling its deployment to 1 replica.",
             Route = "StartContainer",

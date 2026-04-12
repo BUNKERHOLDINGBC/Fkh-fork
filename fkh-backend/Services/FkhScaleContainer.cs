@@ -89,6 +89,43 @@ public class FkhScaleContainer : FkhServiceBase
         return new { Container = appName, AutoStop = $"{newStopAt:yyyy-MM-dd HH:mm} UTC" };
     }
 
+    public async Task<object> StopAllContainersAsync(Dictionary<string, string> parameters)
+    {
+        var isAdmin = parameters.TryGetValue("_isAdmin", out var adminValue)
+            && string.Equals(adminValue, "true", StringComparison.OrdinalIgnoreCase);
+
+        if (!isAdmin)
+        {
+            throw new UnauthorizedAccessException("StopAllContainers is restricted to administrators.");
+        }
+
+        var client = await GetKubernetesClientAsync();
+        var allDeployments = await client.ListNamespacedDeploymentAsync(Namespace);
+
+        var containerDeployments = allDeployments.Items
+            .Where(d => d.Spec.Template.Metadata.Labels != null
+                && d.Spec.Template.Metadata.Labels.TryGetValue("app-type", out var appType)
+                && appType == "windows-servicetier"
+                && (d.Spec.Replicas ?? 0) > 0)
+            .ToList();
+
+        var stopped = new List<string>();
+        foreach (var deployment in containerDeployments)
+        {
+            var deploymentName = deployment.Metadata.Name;
+            var appName = deployment.Spec.Template.Metadata.Labels.TryGetValue("app", out var app) ? app : deploymentName;
+
+            Logger.LogInformation("Stopping deployment '{Deployment}'...", deploymentName);
+            deployment.Spec.Replicas = 0;
+            await client.ReplaceNamespacedDeploymentAsync(deployment, deploymentName, Namespace);
+            await ClearAutoStopAnnotationAsync(client, deploymentName);
+            stopped.Add(appName);
+        }
+
+        Logger.LogInformation("Stopped {Count} container(s).", stopped.Count);
+        return new { StoppedCount = stopped.Count, StoppedContainers = stopped };
+    }
+
     private record ScaleResult(string Container, string Deployment, int Replicas);
 
     private async Task<ScaleResult> ScaleAsync(Dictionary<string, string> parameters, int replicas)
