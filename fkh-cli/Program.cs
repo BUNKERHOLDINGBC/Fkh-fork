@@ -13,6 +13,7 @@ Usage:
 
 Options:
     --key "value"       Provide a parameter value (discovered from GetFunctionCatalog)
+    --oidcToken <token> Use a GitHub Actions OIDC token instead of gh auth
     --nowait            Don't wait for completion (createcontainer, createimage)
     --asJson            Output the result as JSON
     -h, --help          Show help
@@ -27,8 +28,11 @@ Configuration (checked in order):
         "backendUrl": "https://fkh-<org>-backend.azurewebsites.net/api"
     }
 
-Authentication:
-  Uses 'gh auth token' by default (or GH_TOKEN/GITHUB_TOKEN if set).
+Authentication (checked in order):
+  1. --oidcToken <token>   GitHub Actions OIDC token (passed on command line)
+  2. OIDC_TOKEN            GitHub Actions OIDC token (environment variable)
+  3. GH_TOKEN              GitHub personal access token
+  4. gh auth token         GitHub CLI (interactive fallback)
 """;
 
 try
@@ -82,7 +86,7 @@ try
     }
 
     var endpoint = ResolveEndpoint(function.Route, settings);
-    var token = GetGitHubToken();
+    var token = parsed.OidcToken ?? GetGitHubToken();
 
     // Send the client's timezone so the server can resolve time-of-day autostop values
     parsed.Parameters["_timezone"] = TimeZoneInfo.Local.Id;
@@ -205,6 +209,17 @@ static ParsedArgs ParseArgs(string[] args, FunctionCatalogResponse catalog)
         if (string.Equals(key, "asJson", StringComparison.OrdinalIgnoreCase))
         {
             parsed.AsJson = true;
+            continue;
+        }
+
+        if (string.Equals(key, "oidcToken", StringComparison.OrdinalIgnoreCase))
+        {
+            i++;
+            if (i >= args.Length)
+            {
+                throw new InvalidOperationException("Missing value for --oidcToken");
+            }
+            parsed.OidcToken = args[i];
             continue;
         }
 
@@ -429,13 +444,13 @@ static void PrintUsage(FunctionCatalogResponse catalog)
 
 static string GetGitHubToken()
 {
-    var token = Environment.GetEnvironmentVariable("GH_TOKEN");
+    var token = Environment.GetEnvironmentVariable("OIDC_TOKEN");
     if (!string.IsNullOrWhiteSpace(token))
     {
         return token;
     }
 
-    token = Environment.GetEnvironmentVariable("GITHUB_TOKEN");
+    token = Environment.GetEnvironmentVariable("GH_TOKEN");
     if (!string.IsNullOrWhiteSpace(token))
     {
         return token;
@@ -626,6 +641,7 @@ sealed class ParsedArgs
     public string? Command { get; init; }
     public bool NoWait { get; set; }
     public bool AsJson { get; set; }
+    public string? OidcToken { get; set; }
     public Dictionary<string, string> Parameters { get; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
