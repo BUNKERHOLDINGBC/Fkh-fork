@@ -1,5 +1,5 @@
 # ============================================================================
-# Deploy Fkh Backend – Publish function code only (no Terraform)
+# Update Fkh Backend – Publish function code only (no Terraform)
 # ============================================================================
 # Mirrors terraform/deploy-functionupdate.ps1 for CI/CD use.
 # Use this when backend code changes but infrastructure is unchanged.
@@ -23,7 +23,7 @@
 #                            Used to derive the function app name from Terraform state.
 # ============================================================================
 
-name: Deploy Fkh Backend
+name: Update Fkh Backend
 
 on:
   workflow_dispatch:
