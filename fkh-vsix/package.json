@@ -1,7 +1,7 @@
 {
   "name": "fkh",
   "displayName": "Freddy's Kubernetes Helper",
-  "description": "Provision AKS containers via authenticated Azure Function",
+  "description": "Manage Business Central containers on Kubernetes with persisted SQL Server, authenticated via GitHub",
   "version": "0.2.1",
   "publisher": "Freddy-DK",
   "icon": "images/icon.png",
