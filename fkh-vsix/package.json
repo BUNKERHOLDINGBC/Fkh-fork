@@ -19,6 +19,13 @@
   "categories": [
     "Other"
   ],
+  "keywords": [
+    "Kubernetes",
+    "AL-Go for GitHub",
+    "Business Central",
+    "Containers",
+    "AL-Go"
+  ],
   "activationEvents": [],
   "main": "./dist/extension.js",
   "browser": "./dist/web/extension.js",
