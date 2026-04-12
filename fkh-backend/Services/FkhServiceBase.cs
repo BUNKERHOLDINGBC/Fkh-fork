@@ -266,7 +266,7 @@ public abstract class FkhServiceBase
 
     protected static string SanitizeAppName(string name)
     {
-        var appName = name.Replace('.', '-').ToLowerInvariant();
+        var appName = name.Replace('.', '-').Replace('_', '-').ToLowerInvariant();
         if (appName.Length > 63) appName = appName[..63];
         return appName.TrimEnd('-');
     }
@@ -286,14 +286,7 @@ public abstract class FkhServiceBase
         return SanitizeAppName($"{githubUsername}-{name}");
     }
 
-    /// <summary>
-    /// Converts an app name to a DNS-compatible name by also replacing underscores with hyphens.
-    /// Use for Kubernetes resource names (deployments, services, secrets) and DNS labels.
-    /// </summary>
-    protected static string SanitizeDnsName(string name)
-    {
-        return SanitizeAppName(name).Replace('_', '-').TrimEnd('-');
-    }
+
 
     protected const string SqlcmdPath = "/opt/mssql-tools18/bin/sqlcmd";
 
