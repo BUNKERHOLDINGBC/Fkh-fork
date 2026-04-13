@@ -507,7 +507,8 @@ public abstract class FunctionBase
             }
 
             username = repository.Replace('/', '-');
-            logger.LogInformation("Received {Operation} request from OIDC caller: {Repository} (username: {Username})", operationName, repository, username);
+            isAdmin = true;
+            logger.LogInformation("Received {Operation} request from OIDC caller: {Repository} (username: {Username}, admin: true)", operationName, repository, username);
         }
         else
         {

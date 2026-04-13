@@ -577,6 +577,14 @@ public static class FunctionCatalog
         },
         new FunctionDefinition
         {
+            Name = "GetDatabaseDownloadSas",
+            Description = "Returns a read-only SAS URL for downloading database backups from blob storage.",
+            Route = "GetDatabaseDownloadSas",
+            Hidden = true,
+            Parameters = new List<FunctionParameterDefinition>()
+        },
+        new FunctionDefinition
+        {
             Name = "Status",
             Description = "Returns system status including Kubernetes nodes, BC containers, SQL, storage, quotas, and security. Admin only.",
             Route = "Status",

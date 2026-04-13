@@ -35,6 +35,7 @@ var host = new HostBuilder()
         services.AddSingleton<FkhWaitForContainer>();
         services.AddSingleton<FkhPublishApp>();
         services.AddSingleton<FkhGetDatabaseUploadSas>();
+        services.AddSingleton<FkhGetDatabaseDownloadSas>();
         services.AddSingleton<FkhStatus>();
     })
     .Build();
