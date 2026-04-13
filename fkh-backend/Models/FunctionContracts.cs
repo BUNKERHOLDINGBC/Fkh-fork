@@ -6,6 +6,7 @@ public sealed class FunctionParameterDefinition
     public required string Type { get; init; }
     public required string Description { get; init; }
     public bool Required { get; init; }
+    public bool AdminOnly { get; init; }
     public string? DefaultValue { get; init; }
 }
 

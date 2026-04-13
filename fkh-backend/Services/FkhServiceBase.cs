@@ -273,16 +273,18 @@ public abstract class FkhServiceBase
 
     /// <summary>
     /// Resolves the app label from parameters.
-    /// Uses 'fullName' directly if provided (admin), otherwise combines username with 'name'.
+    /// Uses 'name' directly if 'useNameAsIs' is true (admin), otherwise combines username with 'name'.
     /// </summary>
     protected static string ResolveAppName(Dictionary<string, string> parameters)
     {
-        if (parameters.TryGetValue("fullName", out var fullName) && !string.IsNullOrWhiteSpace(fullName))
+        var name = parameters["name"];
+        var useNameAsIs = parameters.TryGetValue("useNameAsIs", out var asIs)
+            && string.Equals(asIs, "true", StringComparison.OrdinalIgnoreCase);
+        if (useNameAsIs)
         {
-            return SanitizeAppName(fullName);
+            return SanitizeAppName(name);
         }
         var githubUsername = parameters["_githubUsername"];
-        var name = parameters["name"];
         return SanitizeAppName($"{githubUsername}-{name}");
     }
 

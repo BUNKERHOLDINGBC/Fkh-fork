@@ -166,6 +166,7 @@ type FunctionParameterDefinition = {
   type: string;
   description: string;
   required: boolean;
+  adminOnly?: boolean;
   defaultValue?: string;
 };
 
@@ -290,8 +291,8 @@ async function promptForParameters(
   for (const param of definition.parameters) {
     // Skip file-type params (already handled above)
     if (param.type.toLowerCase() === 'file') { continue; }
-    // Hide fullName from non-admins
-    if (param.name.toLowerCase() === 'fullname' && !isAdmin) {
+    // Hide admin-only params from non-admins
+    if (param.adminOnly && !isAdmin) {
       continue;
     }
     const prefilledKey = Object.keys(prefilled).find(
@@ -394,7 +395,8 @@ async function promptForParameters(
     const fieldsHtml = promptParams.map(param => {
       const defaultVal = resolvedDefaults[param.name] ?? param.defaultValue ?? '';
       const escapedDefault = defaultVal.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
-      const escapedDesc = param.description.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+      let desc = param.description;
+      const escapedDesc = desc.replace(/&/g, '&amp;').replace(/</g, '&lt;');
       const requiredBadge = param.required ? '<span class="required">required</span>' : '';
       const isPassword = param.name.toLowerCase().includes('password');
 
@@ -790,7 +792,7 @@ async function createContainer(project?: string): Promise<void> {
   }
   outputChannel.show(true);
 
-  await invokeFunctionByName('CreateContainer', { artifactUrl, repo: options.repoName, project: options.project || '', fullName: '', ...prefilled });
+  await invokeFunctionByName('CreateContainer', { artifactUrl, repo: options.repoName, project: options.project || '', ...prefilled });
 }
 
 async function createImage(): Promise<void> {

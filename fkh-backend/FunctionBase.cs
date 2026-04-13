@@ -240,14 +240,21 @@ public abstract class FunctionBase
                 return Respond(req, HttpStatusCode.BadRequest, $"Missing required parameter '{parameter.Name}' for {auth.Function.Name}.");
 
             if (string.Equals(parameter.Name, "name", StringComparison.OrdinalIgnoreCase)
-                && !string.IsNullOrWhiteSpace(value)
-                && !value.All(char.IsLetterOrDigit))
-                return Respond(req, HttpStatusCode.BadRequest, "Parameter 'name' may only contain alphanumeric characters (a-z, A-Z, 0-9).");
-
-            if (string.Equals(parameter.Name, "fullName", StringComparison.OrdinalIgnoreCase)
-                && !string.IsNullOrWhiteSpace(value)
-                && !value.All(c => char.IsLetterOrDigit(c) || c == '-' || c == '_'))
-                return Respond(req, HttpStatusCode.BadRequest, "Parameter 'fullName' may only contain alphanumeric characters, hyphens, and underscores.");
+                && !string.IsNullOrWhiteSpace(value))
+            {
+                var useNameAsIs = parameters.TryGetValue("useNameAsIs", out var asIs)
+                    && string.Equals(asIs, "true", StringComparison.OrdinalIgnoreCase);
+                if (useNameAsIs)
+                {
+                    if (!value.All(c => char.IsLetterOrDigit(c) || c == '-'))
+                        return Respond(req, HttpStatusCode.BadRequest, "Parameter 'name' may only contain alphanumeric characters and hyphens when 'useNameAsIs' is enabled.");
+                }
+                else
+                {
+                    if (!value.All(char.IsLetterOrDigit))
+                        return Respond(req, HttpStatusCode.BadRequest, "Parameter 'name' may only contain alphanumeric characters (a-z, A-Z, 0-9).");
+                }
+            }
 
             if (!string.IsNullOrWhiteSpace(value))
                 parameters[parameter.Name] = value;
@@ -259,10 +266,11 @@ public abstract class FunctionBase
         foreach (var kv in internalParams)
             parameters[kv.Key] = kv.Value;
 
-        // ── Cross-validate name / fullName ────────────────────────────────────────
-        var nameError = ValidateNameFullName(auth.Function, parameters, auth.IsAdmin);
-        if (nameError is not null)
-            return Respond(req, nameError.Value.StatusCode, nameError.Value.Message);
+        // ── Validate useNameAsIs is admin-only ───────────────────────────────────
+        if (parameters.TryGetValue("useNameAsIs", out var useNameAsIsVal)
+            && string.Equals(useNameAsIsVal, "true", StringComparison.OrdinalIgnoreCase)
+            && !auth.IsAdmin)
+            return Respond(req, HttpStatusCode.Forbidden, "The 'useNameAsIs' parameter is restricted to administrators.");
 
         // ── Execute operation ─────────────────────────────────────────────────────
         return await RunOperationAsync(req, logger, operationName, auth.Username,
@@ -419,10 +427,11 @@ public abstract class FunctionBase
         parametersResult.Parameters!["_githubUsername"] = auth.Username;
         parametersResult.Parameters!["_isAdmin"] = auth.IsAdmin.ToString();
 
-        // ── Cross-validate name / fullName ────────────────────────────────────────
-        var nameError = ValidateNameFullName(auth.Function, parametersResult.Parameters, auth.IsAdmin);
-        if (nameError is not null)
-            return Respond(req, nameError.Value.StatusCode, nameError.Value.Message);
+        // ── Validate useNameAsIs is admin-only ───────────────────────────────────
+        if (parametersResult.Parameters!.TryGetValue("useNameAsIs", out var useNameAsIsVal2)
+            && string.Equals(useNameAsIsVal2, "true", StringComparison.OrdinalIgnoreCase)
+            && !auth.IsAdmin)
+            return Respond(req, HttpStatusCode.Forbidden, "The 'useNameAsIs' parameter is restricted to administrators.");
 
         // Resolve artifact shorthand (e.g. "///us/latest") to a full URL
         var artifactError = await ResolveArtifactAsync(req, logger, parametersResult.Parameters);
@@ -562,30 +571,7 @@ public abstract class FunctionBase
         }, null);
     }
 
-    /// <summary>
-    /// Cross-validates name / fullName parameters. Returns null if valid,
-    /// or an error tuple if validation fails.
-    /// </summary>
-    private static (HttpStatusCode StatusCode, string Message)? ValidateNameFullName(
-        FunctionDefinition function,
-        Dictionary<string, string> parameters,
-        bool isAdmin)
-    {
-        if (!function.Parameters.Any(p => string.Equals(p.Name, "fullName", StringComparison.OrdinalIgnoreCase)))
-            return null;
 
-        var hasName = parameters.TryGetValue("name", out var nameVal) && !string.IsNullOrWhiteSpace(nameVal);
-        var hasFullName = parameters.TryGetValue("fullName", out var fullNameVal) && !string.IsNullOrWhiteSpace(fullNameVal);
-
-        if (hasName && hasFullName)
-            return (HttpStatusCode.BadRequest, "Cannot specify both 'name' and 'fullName'.");
-        if (!hasName && !hasFullName)
-            return (HttpStatusCode.BadRequest, "Either 'name' or 'fullName' must be specified.");
-        if (hasFullName && !isAdmin)
-            return (HttpStatusCode.Forbidden, "The 'fullName' parameter is restricted to administrators.");
-
-        return null;
-    }
 
     /// <summary>
     /// Resolves artifact shorthand (e.g. "///us/latest") to a full URL if present.
@@ -740,22 +726,28 @@ public abstract class FunctionBase
                     $"Missing required parameter '{parameter.Name}' for {function.Name}.");
             }
 
-            // Validate 'name' parameters: alphanumeric only
+            // Validate 'name' parameters
             if (string.Equals(parameter.Name, "name", StringComparison.OrdinalIgnoreCase)
-                && !string.IsNullOrWhiteSpace(value)
-                && !value.All(char.IsLetterOrDigit))
+                && !string.IsNullOrWhiteSpace(value))
             {
-                return ParameterValidationResult.Fail(
-                    $"Parameter 'name' may only contain alphanumeric characters (a-z, A-Z, 0-9).");
-            }
-
-            // Validate 'fullName' parameters: alphanumeric, hyphens, and underscores only
-            if (string.Equals(parameter.Name, "fullName", StringComparison.OrdinalIgnoreCase)
-                && !string.IsNullOrWhiteSpace(value)
-                && !value.All(c => char.IsLetterOrDigit(c) || c == '-' || c == '_'))
-            {
-                return ParameterValidationResult.Fail(
-                    $"Parameter 'fullName' may only contain alphanumeric characters, hyphens, and underscores.");
+                var useNameAsIs = incoming.TryGetValue("useNameAsIs", out var asIs)
+                    && string.Equals(asIs, "true", StringComparison.OrdinalIgnoreCase);
+                if (useNameAsIs)
+                {
+                    if (!value.All(c => char.IsLetterOrDigit(c) || c == '-'))
+                    {
+                        return ParameterValidationResult.Fail(
+                            "Parameter 'name' may only contain alphanumeric characters and hyphens when 'useNameAsIs' is enabled.");
+                    }
+                }
+                else
+                {
+                    if (!value.All(char.IsLetterOrDigit))
+                    {
+                        return ParameterValidationResult.Fail(
+                            "Parameter 'name' may only contain alphanumeric characters (a-z, A-Z, 0-9).");
+                    }
+                }
             }
 
             if (!string.IsNullOrWhiteSpace(value))

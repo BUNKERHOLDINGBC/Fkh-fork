@@ -17,17 +17,18 @@ public static class FunctionCatalog
                 {
                     Name = "name",
                     Type = "string",
-                    Description = "Name for the container. Combined with the GitHub username to form the container name. Mutually exclusive with 'fullName'.",
-                    Required = false,
+                    Description = "Name for the container. Combined with the GitHub username to form the container name.",
+                    Required = true,
                     DefaultValue = null
                 },
                 new()
                 {
-                    Name = "fullName",
-                    Type = "string",
-                    Description = "Full app label for the container (admin only). Mutually exclusive with 'name'.",
+                    Name = "useNameAsIs",
+                    Type = "boolean",
+                    Description = "Use the name as-is without prefixing with your GitHub username. Name may contain hyphens. (admin only)",
                     Required = false,
-                    DefaultValue = null
+                    AdminOnly = true,
+                    DefaultValue = "false"
                 },
                 new()
                 {
@@ -122,17 +123,18 @@ public static class FunctionCatalog
                 {
                     Name = "name",
                     Type = "string",
-                    Description = "Name of the container to remove (same name used when creating it). Mutually exclusive with 'fullName'.",
-                    Required = false,
+                    Description = "Name of the container to remove (same name used when creating it).",
+                    Required = true,
                     DefaultValue = null
                 },
                 new()
                 {
-                    Name = "fullName",
-                    Type = "string",
-                    Description = "Full app label of the container to remove (admin only). Mutually exclusive with 'name'.",
+                    Name = "useNameAsIs",
+                    Type = "boolean",
+                    Description = "Use the name as-is without prefixing with your GitHub username. Name may contain hyphens. (admin only)",
                     Required = false,
-                    DefaultValue = null
+                    AdminOnly = true,
+                    DefaultValue = "false"
                 }
             }
         },
@@ -147,17 +149,18 @@ public static class FunctionCatalog
                 {
                     Name = "name",
                     Type = "string",
-                    Description = "Name of the container to stop (same name used when creating it). Mutually exclusive with 'fullName'.",
-                    Required = false,
+                    Description = "Name of the container to stop (same name used when creating it).",
+                    Required = true,
                     DefaultValue = null
                 },
                 new()
                 {
-                    Name = "fullName",
-                    Type = "string",
-                    Description = "Full app label of the container to stop (admin only). Mutually exclusive with 'name'.",
+                    Name = "useNameAsIs",
+                    Type = "boolean",
+                    Description = "Use the name as-is without prefixing with your GitHub username. Name may contain hyphens. (admin only)",
                     Required = false,
-                    DefaultValue = null
+                    AdminOnly = true,
+                    DefaultValue = "false"
                 }
             }
         },
@@ -179,17 +182,18 @@ public static class FunctionCatalog
                 {
                     Name = "name",
                     Type = "string",
-                    Description = "Name of the container to start (same name used when creating it). Mutually exclusive with 'fullName'.",
-                    Required = false,
+                    Description = "Name of the container to start (same name used when creating it).",
+                    Required = true,
                     DefaultValue = null
                 },
                 new()
                 {
-                    Name = "fullName",
-                    Type = "string",
-                    Description = "Full app label of the container to start (admin only). Mutually exclusive with 'name'.",
+                    Name = "useNameAsIs",
+                    Type = "boolean",
+                    Description = "Use the name as-is without prefixing with your GitHub username. Name may contain hyphens. (admin only)",
                     Required = false,
-                    DefaultValue = null
+                    AdminOnly = true,
+                    DefaultValue = "false"
                 },
                 new()
                 {
@@ -212,17 +216,18 @@ public static class FunctionCatalog
                 {
                     Name = "name",
                     Type = "string",
-                    Description = "Name of the container to extend auto-stop for. Mutually exclusive with 'fullName'.",
-                    Required = false,
+                    Description = "Name of the container to extend auto-stop for.",
+                    Required = true,
                     DefaultValue = null
                 },
                 new()
                 {
-                    Name = "fullName",
-                    Type = "string",
-                    Description = "Full app label of the container to extend auto-stop for (admin only). Mutually exclusive with 'name'.",
+                    Name = "useNameAsIs",
+                    Type = "boolean",
+                    Description = "Use the name as-is without prefixing with your GitHub username. Name may contain hyphens. (admin only)",
                     Required = false,
-                    DefaultValue = null
+                    AdminOnly = true,
+                    DefaultValue = "false"
                 }
             }
         },
@@ -350,17 +355,18 @@ public static class FunctionCatalog
                 {
                     Name = "name",
                     Type = "string",
-                    Description = "Name of the container to wait for (same name used when creating it). Mutually exclusive with 'fullName'.",
-                    Required = false,
+                    Description = "Name of the container to wait for (same name used when creating it).",
+                    Required = true,
                     DefaultValue = null
                 },
                 new()
                 {
-                    Name = "fullName",
-                    Type = "string",
-                    Description = "Full app label of the container to wait for (admin only). Mutually exclusive with 'name'.",
+                    Name = "useNameAsIs",
+                    Type = "boolean",
+                    Description = "Use the name as-is without prefixing with your GitHub username. Name may contain hyphens. (admin only)",
                     Required = false,
-                    DefaultValue = null
+                    AdminOnly = true,
+                    DefaultValue = "false"
                 }
             }
         },
@@ -375,17 +381,18 @@ public static class FunctionCatalog
                 {
                     Name = "name",
                     Type = "string",
-                    Description = "Name of the container to get logs from. Mutually exclusive with 'fullName'.",
-                    Required = false,
+                    Description = "Name of the container to get logs from.",
+                    Required = true,
                     DefaultValue = null
                 },
                 new()
                 {
-                    Name = "fullName",
-                    Type = "string",
-                    Description = "Full app label of the container to get logs from (admin only). Mutually exclusive with 'name'.",
+                    Name = "useNameAsIs",
+                    Type = "boolean",
+                    Description = "Use the name as-is without prefixing with your GitHub username. Name may contain hyphens. (admin only)",
                     Required = false,
-                    DefaultValue = null
+                    AdminOnly = true,
+                    DefaultValue = "false"
                 },
                 new()
                 {
@@ -408,17 +415,18 @@ public static class FunctionCatalog
                 {
                     Name = "name",
                     Type = "string",
-                    Description = "Name of the container whose database to run the SQL against. Mutually exclusive with 'fullName'.",
-                    Required = false,
+                    Description = "Name of the container whose database to run the SQL against.",
+                    Required = true,
                     DefaultValue = null
                 },
                 new()
                 {
-                    Name = "fullName",
-                    Type = "string",
-                    Description = "Full app label of the container whose database to run the SQL against (admin only). Mutually exclusive with 'name'.",
+                    Name = "useNameAsIs",
+                    Type = "boolean",
+                    Description = "Use the name as-is without prefixing with your GitHub username. Name may contain hyphens. (admin only)",
                     Required = false,
-                    DefaultValue = null
+                    AdminOnly = true,
+                    DefaultValue = "false"
                 },
                 new()
                 {
@@ -441,17 +449,18 @@ public static class FunctionCatalog
                 {
                     Name = "name",
                     Type = "string",
-                    Description = "Name of the container to publish the app to. Mutually exclusive with 'fullName'.",
-                    Required = false,
+                    Description = "Name of the container to publish the app to.",
+                    Required = true,
                     DefaultValue = null
                 },
                 new()
                 {
-                    Name = "fullName",
-                    Type = "string",
-                    Description = "Full app label of the container to publish the app to (admin only). Mutually exclusive with 'name'.",
+                    Name = "useNameAsIs",
+                    Type = "boolean",
+                    Description = "Use the name as-is without prefixing with your GitHub username. Name may contain hyphens. (admin only)",
                     Required = false,
-                    DefaultValue = null
+                    AdminOnly = true,
+                    DefaultValue = "false"
                 },
                 new()
                 {
