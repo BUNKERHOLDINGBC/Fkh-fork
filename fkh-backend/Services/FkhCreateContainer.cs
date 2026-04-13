@@ -32,6 +32,8 @@ public class FkhCreateContainer : FkhServiceBase
         var useSpot = parameters.TryGetValue("spot", out var spotValue)
             && string.Equals(spotValue, "true", StringComparison.OrdinalIgnoreCase);
         var useDatabase = parameters.TryGetValue("useDatabase", out var udb) ? udb : null;
+        var moveAllAppsToDevScope = parameters.TryGetValue("moveAllAppsToDevScope", out var devScopeVal)
+            && string.Equals(devScopeVal, "true", StringComparison.OrdinalIgnoreCase);
 
         var imageTag = GetImageTag(artifactUrl);
         var fullImage = $"{AcrLoginServer}/{AcrRepository}:{imageTag}";
@@ -64,6 +66,12 @@ public class FkhCreateContainer : FkhServiceBase
             : await GetDatabaseBackupSasUrlAsync(imageTag);
         await EnsureDatabaseDoesNotExistAsync(client, databaseName);
         await RestoreDatabaseViaExecAsync(client, sasUrl, databaseName);
+
+        if (moveAllAppsToDevScope)
+        {
+            Logger.LogInformation("Moving all apps to dev scope for database '{DatabaseName}'...", databaseName);
+            await MoveAllAppsToDevScopeAsync(client, databaseName);
+        }
 
         // ── Get SQL disk usage after restore ─────────────────────────────────
         var diskInfo = await GetSqlDiskUsageAsync(client);
@@ -301,6 +309,33 @@ public class FkhCreateContainer : FkhServiceBase
         // Step 3: Clean up the backup file
         await ExecInMssqlPodAsync(client, podName, $"rm -f '/var/opt/mssql/data/{databaseName}.bak'");
         Logger.LogInformation("Database '{DatabaseName}' restored successfully.", databaseName);
+    }
+
+    private async Task MoveAllAppsToDevScopeAsync(Kubernetes client, string databaseName)
+    {
+        var podName = await FindMssqlPodAsync(client);
+
+        // Set Published As = 2 (Dev) and Tenant ID = 'default' on all published apps
+        var updateSql = $"UPDATE [{databaseName}].[dbo].[Published Application] SET [Published As] = 2, [Tenant ID] = 'default'";
+        var safeSql1 = updateSql.Replace("\"", "\\\"").Replace("$", "\\$");
+        var updateScript = $"{SqlcmdPath} -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -C -b -Q \"{safeSql1}\"";
+        var updateResult = await ExecInMssqlPodAsync(client, podName, updateScript);
+        if (!string.IsNullOrWhiteSpace(updateResult.Stderr))
+        {
+            Logger.LogWarning("moveAllAppsToDevScope UPDATE stderr: {StdErr}", updateResult.Stderr);
+        }
+
+        // Delete uninstalled app records from the tenant database
+        var deleteSql = $"DELETE FROM [default].[dbo].[$ndo$navappuninstalledapp]";
+        var safeSql2 = deleteSql.Replace("\"", "\\\"").Replace("$", "\\$");
+        var deleteScript = $"{SqlcmdPath} -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -C -b -Q \"{safeSql2}\"";
+        var deleteResult = await ExecInMssqlPodAsync(client, podName, deleteScript);
+        if (!string.IsNullOrWhiteSpace(deleteResult.Stderr))
+        {
+            Logger.LogWarning("moveAllAppsToDevScope DELETE stderr: {StdErr}", deleteResult.Stderr);
+        }
+
+        Logger.LogInformation("All apps moved to dev scope for database '{DatabaseName}'.", databaseName);
     }
 
     private async Task<string> GetSqlDiskUsageAsync(Kubernetes client)

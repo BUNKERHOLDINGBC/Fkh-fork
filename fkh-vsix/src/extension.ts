@@ -255,7 +255,8 @@ async function getFunctionCatalog(): Promise<FunctionCatalogResponse | undefined
 
 async function promptForParameters(
   definition: FunctionDefinition,
-  prefilled: Record<string, string> = {}
+  prefilled: Record<string, string> = {},
+  context?: string
 ): Promise<Record<string, string> | undefined> {
   const config = vscode.workspace.getConfiguration('fkh');
   const isAdmin = vmsProvider?.visible ?? false;
@@ -363,7 +364,7 @@ async function promptForParameters(
   return new Promise<Record<string, string> | undefined>((resolve) => {
     const panel = vscode.window.createWebviewPanel(
       'fkhParameters',
-      `${definition.name}`,
+      context ? `${definition.name} – ${context}` : `${definition.name}`,
       vscode.ViewColumn.Active,
       { enableScripts: true }
     );
@@ -447,7 +448,7 @@ async function promptForParameters(
 </style>
 </head>
 <body>
-  <h2>${definition.name}</h2>
+  <h2>${definition.name}${context ? ` for ${context}` : ''}</h2>
   <div class="subtitle">${definition.description}</div>
   <form id="paramForm">
     ${fieldsHtml}
@@ -516,7 +517,7 @@ function formatJsonResult(obj: unknown, indent = 0): string {
   return String(obj);
 }
 
-async function invokeFunctionByName(functionName: string, prefilled: Record<string, string> = {}): Promise<void> {
+async function invokeFunctionByName(functionName: string, prefilled: Record<string, string> = {}, context?: string): Promise<void> {
   const catalog = await getFunctionCatalog();
   if (!catalog) { return; }
 
@@ -526,7 +527,7 @@ async function invokeFunctionByName(functionName: string, prefilled: Record<stri
     return;
   }
 
-  const parameters = await promptForParameters(definition, prefilled);
+  const parameters = await promptForParameters(definition, prefilled, context);
   if (!parameters) { return; }
 
   // Send the client's timezone so the server can resolve time-of-day autostop values
@@ -792,7 +793,8 @@ async function createContainer(project?: string): Promise<void> {
   }
   outputChannel.show(true);
 
-  await invokeFunctionByName('CreateContainer', { artifactUrl, repo: options.repoName, project: options.project || '', ...prefilled });
+  const projectContext = options.project ? `${options.repoName}/${options.project}` : options.repoName;
+  await invokeFunctionByName('CreateContainer', { artifactUrl, repo: options.repoName, project: options.project || '', ...prefilled }, projectContext);
 }
 
 async function createImage(): Promise<void> {

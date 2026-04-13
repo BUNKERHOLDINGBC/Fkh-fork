@@ -109,6 +109,14 @@ public static class FunctionCatalog
                     Description = "Place the container on a Spot (preemptible) VM for lower cost. The container may be evicted if Azure reclaims capacity.",
                     Required = false,
                     DefaultValue = "false"
+                },
+                new()
+                {
+                    Name = "moveAllAppsToDevScope",
+                    Type = "boolean",
+                    Description = "Move all published apps to dev scope after database restore. Sets Published As to Dev and clears uninstalled app records.",
+                    Required = false,
+                    DefaultValue = "false"
                 }
             }
         },
@@ -434,6 +442,48 @@ public static class FunctionCatalog
                     Type = "string",
                     Description = "The SQL statement to execute.",
                     Required = true,
+                    DefaultValue = null
+                }
+            }
+        },
+        new FunctionDefinition
+        {
+            Name = "InvokeScript",
+            Description = "Invokes a PowerShell 7 (pwsh) script inside a running Business Central container.",
+            Route = "InvokeScript",
+            Parameters = new List<FunctionParameterDefinition>
+            {
+                new()
+                {
+                    Name = "name",
+                    Type = "string",
+                    Description = "Name of the container to run the script in.",
+                    Required = true,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "useNameAsIs",
+                    Type = "boolean",
+                    Description = "Use the name as-is without prefixing with your GitHub username. Name may contain hyphens. (admin only)",
+                    Required = false,
+                    AdminOnly = true,
+                    DefaultValue = "false"
+                },
+                new()
+                {
+                    Name = "command",
+                    Type = "string",
+                    Description = "PowerShell script to execute in the container. Use this or --file, not both.",
+                    Required = false,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "scriptFile",
+                    Type = "file",
+                    Description = "Path to a PowerShell script file (.ps1) to execute in the container. Use this or --command, not both.",
+                    Required = false,
                     DefaultValue = null
                 }
             }

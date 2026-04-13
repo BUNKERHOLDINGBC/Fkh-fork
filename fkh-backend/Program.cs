@@ -30,6 +30,7 @@ var host = new HostBuilder()
         services.AddSingleton<FkhRemoveImage>();
         services.AddSingleton<FkhListVMs>();
         services.AddSingleton<FkhInvokeSqlCmd>();
+        services.AddSingleton<FkhInvokeScript>();
         services.AddSingleton<FkhWaitForContainer>();
         services.AddSingleton<FkhPublishApp>();
         services.AddSingleton<FkhGetDatabaseUploadSas>();
