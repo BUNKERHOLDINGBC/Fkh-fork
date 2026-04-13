@@ -1,5 +1,6 @@
 using Azure.Identity;
 using Azure.ResourceManager;
+using Azure.ResourceManager.Compute;
 using Azure.ResourceManager.ContainerService;
 using Azure.Storage.Blobs;
 using k8s;
@@ -264,8 +265,6 @@ public class FkhStatus : FkhServiceBase
             var blobServiceClient = new BlobServiceClient(
                 new Uri($"https://{DbsStorageAccountName}.blob.core.windows.net"), credential);
 
-            var accountProps = await blobServiceClient.GetPropertiesAsync();
-
             var containers = new List<object>();
             await foreach (var container in blobServiceClient.GetBlobContainersAsync())
             {
@@ -311,30 +310,76 @@ public class FkhStatus : FkhServiceBase
             var armClient = new ArmClient(credential);
             var subscription = armClient.GetDefaultSubscription();
 
-            // Get AKS cluster to check agent pool profiles
-            var aksId = ContainerServiceManagedClusterResource
-                .CreateResourceIdentifier(SubscriptionId, ResourceGroup, ClusterName);
-            var cluster = armClient.GetContainerServiceManagedClusterResource(aksId);
-            var clusterData = (await cluster.GetAsync()).Value.Data;
+            // Run Kubernetes and Azure quota lookups in parallel
+            var aksTask = GetAksQuotaAsync(armClient);
+            var azureTask = GetAzureComputeQuotaAsync(subscription);
 
-            var agentPools = clusterData.AgentPoolProfiles?.Select(p => new
-            {
-                Name = p.Name,
-                VmSize = p.VmSize,
-                Count = p.Count,
-                MinCount = p.MinCount,
-                MaxCount = p.MaxCount,
-                Mode = p.Mode?.ToString(),
-                OsSku = p.OSSku?.ToString(),
-                EnableAutoScaling = p.IsAutoScalingEnabled,
-            }).ToList();
+            await Task.WhenAll(aksTask, azureTask);
 
             return new
             {
-                SubscriptionId,
-                ResourceGroup,
-                ClusterName,
-                AgentPools = agentPools,
+                Kubernetes = await aksTask,
+                Azure = await azureTask,
+            };
+        }
+        catch (Exception ex)
+        {
+            return new { Error = ex.Message };
+        }
+    }
+
+    private async Task<object> GetAksQuotaAsync(ArmClient armClient)
+    {
+        var aksId = ContainerServiceManagedClusterResource
+            .CreateResourceIdentifier(SubscriptionId, ResourceGroup, ClusterName);
+        var cluster = armClient.GetContainerServiceManagedClusterResource(aksId);
+        var clusterData = (await cluster.GetAsync()).Value.Data;
+
+        var agentPools = clusterData.AgentPoolProfiles?.Select(p => new
+        {
+            Name = p.Name,
+            VmSize = p.VmSize,
+            Count = p.Count,
+            MinCount = p.MinCount,
+            MaxCount = p.MaxCount,
+            Mode = p.Mode?.ToString(),
+            OsSku = p.OSSku?.ToString(),
+            EnableAutoScaling = p.IsAutoScalingEnabled,
+        }).ToList();
+
+        return new
+        {
+            SubscriptionId,
+            ResourceGroup,
+            ClusterName,
+            AgentPools = agentPools,
+        };
+    }
+
+    private async Task<object> GetAzureComputeQuotaAsync(Azure.ResourceManager.Resources.SubscriptionResource subscription)
+    {
+        try
+        {
+            var location = new Azure.Core.AzureLocation(AksLocation);
+            var usages = new List<object>();
+
+            await foreach (var usage in subscription.GetUsagesAsync(location))
+            {
+                if (usage.CurrentValue > 0 || usage.Name.LocalizedValue?.Contains("vCPU", StringComparison.OrdinalIgnoreCase) == true)
+                {
+                    usages.Add(new
+                    {
+                        Name = usage.Name.LocalizedValue,
+                        CurrentValue = usage.CurrentValue,
+                        Limit = usage.Limit,
+                    });
+                }
+            }
+
+            return new
+            {
+                Location = AksLocation,
+                Usages = usages,
             };
         }
         catch (Exception ex)
