@@ -50,6 +50,20 @@ try
 
     var settings = LoadSettings();
     var wantsHelp = args.Length == 0 || args.Contains("-h") || args.Contains("--help");
+
+    // ── Check for client-side commands first (not in the server catalog) ──────
+    var clientCommands = ClientCommands.All;
+    if (!wantsHelp && args.Length > 0)
+    {
+        var commandName = args[0];
+        var clientCmd = clientCommands.FirstOrDefault(c =>
+            string.Equals(c.Name, commandName, StringComparison.OrdinalIgnoreCase));
+        if (clientCmd is not null)
+        {
+            return await clientCmd.ExecuteAsync(args, settings, asJson);
+        }
+    }
+
     FunctionCatalogResponse catalog;
 
     try
@@ -554,6 +568,24 @@ static void PrintUsage(FunctionCatalogResponse catalog)
                 $"    --{parameter.Name} <{parameter.Type}> [{requiredText}{defaultText}] - {parameter.Description}");
         }
     }
+
+    // Client-side commands
+    var clientCmds = ClientCommands.All;
+    if (clientCmds.Count > 0)
+    {
+        Console.WriteLine();
+        Console.WriteLine("Client-side commands (admin only):");
+        foreach (var cmd in clientCmds)
+        {
+            Console.WriteLine($"  {cmd.Name.ToLowerInvariant()}");
+            Console.WriteLine($"    {cmd.Description}");
+            foreach (var param in cmd.Parameters)
+            {
+                var requiredText = param.Required ? "required" : "optional";
+                Console.WriteLine($"    --{param.Name} <{param.Type}> [{requiredText}] - {param.Description}");
+            }
+        }
+    }
 }
 
 static string GetGitHubToken()
@@ -853,4 +885,280 @@ static class Ansi
 
     [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)]
     private static extern bool SetConsoleMode(IntPtr hConsoleHandle, uint dwMode);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Client-side commands — executed locally, may call non-catalog backend endpoints
+// ═══════════════════════════════════════════════════════════════════════════════
+
+sealed class ClientCommandParameter
+{
+    public required string Name { get; init; }
+    public required string Type { get; init; }
+    public required string Description { get; init; }
+    public bool Required { get; init; }
+}
+
+abstract class ClientCommand
+{
+    public abstract string Name { get; }
+    public abstract string Description { get; }
+    public abstract List<ClientCommandParameter> Parameters { get; }
+    public abstract Task<int> ExecuteAsync(string[] args, CliSettings settings, bool asJson);
+
+    protected static Dictionary<string, string> ParseClientArgs(string[] args)
+    {
+        var parameters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        for (var i = 1; i < args.Length; i++)
+        {
+            var arg = args[i];
+            if (!arg.StartsWith("--", StringComparison.Ordinal))
+                throw new InvalidOperationException($"Unknown argument: {arg}");
+
+            var key = arg[2..];
+            if (string.IsNullOrWhiteSpace(key))
+                throw new InvalidOperationException("Parameter name cannot be empty after '--'.");
+
+            if (string.Equals(key, "asJson", StringComparison.OrdinalIgnoreCase))
+                continue;
+
+            i++;
+            if (i >= args.Length)
+                throw new InvalidOperationException($"Missing value for --{key}");
+
+            parameters[key] = args[i];
+        }
+        return parameters;
+    }
+
+    protected static string GetToken(Dictionary<string, string> parameters)
+    {
+        if (parameters.TryGetValue("oidcToken", out var oidc) && !string.IsNullOrWhiteSpace(oidc))
+        {
+            parameters.Remove("oidcToken");
+            return oidc;
+        }
+        return GetGitHubTokenStatic();
+    }
+
+    private static string GetGitHubTokenStatic()
+    {
+        var token = Environment.GetEnvironmentVariable("OIDC_TOKEN");
+        if (!string.IsNullOrWhiteSpace(token)) return token;
+
+        token = Environment.GetEnvironmentVariable("GH_TOKEN");
+        if (!string.IsNullOrWhiteSpace(token)) return token;
+
+        var psi = new ProcessStartInfo
+        {
+            FileName = "gh",
+            ArgumentList = { "auth", "token" },
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = Process.Start(psi) ?? throw new InvalidOperationException("Could not start 'gh'.");
+        var stdout = process.StandardOutput.ReadToEnd();
+        process.WaitForExit();
+
+        if (process.ExitCode != 0)
+            throw new InvalidOperationException("Could not get GitHub token from 'gh auth token'. Run 'gh auth login' first.");
+
+        token = stdout.Trim();
+        if (string.IsNullOrWhiteSpace(token))
+            throw new InvalidOperationException("'gh auth token' returned an empty token.");
+
+        return token;
+    }
+}
+
+static class ClientCommands
+{
+    public static List<ClientCommand> All { get; } =
+    [
+        new UploadDatabaseCommand()
+    ];
+}
+
+sealed class UploadDatabaseCommand : ClientCommand
+{
+    public override string Name => "UploadDatabase";
+    public override string Description => "Uploads a .bak database file to blob storage. Updates a version manifest (all.json) with all versions and the latest. Admin only.";
+    public override List<ClientCommandParameter> Parameters =>
+    [
+        new() { Name = "name", Type = "string", Description = "Database name (used as the folder name in blob storage).", Required = true },
+        new() { Name = "version", Type = "string", Description = "Version label for this backup (used as the blob name).", Required = true },
+        new() { Name = "bakFile", Type = "file", Description = "Path to the .bak database backup file.", Required = true }
+    ];
+
+    public override async Task<int> ExecuteAsync(string[] args, CliSettings settings, bool asJson)
+    {
+        Dictionary<string, string> parameters;
+        try
+        {
+            parameters = ParseClientArgs(args);
+        }
+        catch (InvalidOperationException ex)
+        {
+            Console.Error.WriteLine($"{Ansi.Red}{ex.Message}{Ansi.Reset}");
+            return 1;
+        }
+
+        if (!parameters.TryGetValue("name", out var name) || string.IsNullOrWhiteSpace(name))
+        {
+            Console.Error.WriteLine($"{Ansi.Red}Missing required parameter --name{Ansi.Reset}");
+            return 1;
+        }
+        if (!parameters.TryGetValue("version", out var version) || string.IsNullOrWhiteSpace(version))
+        {
+            Console.Error.WriteLine($"{Ansi.Red}Missing required parameter --version{Ansi.Reset}");
+            return 1;
+        }
+        if (!parameters.TryGetValue("bakFile", out var bakFile) || string.IsNullOrWhiteSpace(bakFile))
+        {
+            Console.Error.WriteLine($"{Ansi.Red}Missing required parameter --bakFile{Ansi.Reset}");
+            return 1;
+        }
+        if (!File.Exists(bakFile))
+        {
+            Console.Error.WriteLine($"{Ansi.Red}File not found: {bakFile}{Ansi.Reset}");
+            return 1;
+        }
+
+        var token = GetToken(parameters);
+        var backendUrl = settings.BackendUrl?.TrimEnd('/');
+        if (string.IsNullOrWhiteSpace(backendUrl))
+        {
+            Console.Error.WriteLine($"{Ansi.Red}No backend URL configured.{Ansi.Reset}");
+            return 1;
+        }
+
+        // Step 1: Get SAS URL from backend (admin-only endpoint, not in catalog)
+        if (!asJson)
+            Console.WriteLine($"{Ansi.Dim}Requesting upload SAS from backend...{Ansi.Reset}");
+
+        string sasUrl;
+        using (var httpClient = new HttpClient())
+        {
+            var sasRequest = new HttpRequestMessage(HttpMethod.Post, $"{backendUrl}/GetDatabaseUploadSas");
+            sasRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            sasRequest.Content = new StringContent(
+                JsonSerializer.Serialize(new FunctionInvokeRequest
+                {
+                    Parameters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["containerName"] = "databases"
+                    }
+                }),
+                Encoding.UTF8, "application/json");
+
+            var sasResponse = await httpClient.SendAsync(sasRequest);
+            var sasBody = await sasResponse.Content.ReadAsStringAsync();
+
+            if (!sasResponse.IsSuccessStatusCode)
+            {
+                Console.Error.WriteLine($"{Ansi.Red}Failed to get upload SAS ({(int)sasResponse.StatusCode}): {sasBody}{Ansi.Reset}");
+                return 1;
+            }
+
+            using var doc = JsonDocument.Parse(sasBody);
+            sasUrl = doc.RootElement.GetProperty("sasUrl").GetString()
+                ?? throw new InvalidOperationException("Backend returned empty SAS URL.");
+        }
+
+        if (!asJson)
+            Console.WriteLine($"{Ansi.Dim}SAS URL obtained (valid for 60 minutes).{Ansi.Reset}");
+
+        // Step 2: Upload the .bak file directly to blob storage
+        var blobName = $"{name}/{version}.bak";
+        var fileSize = new FileInfo(bakFile).Length;
+        if (!asJson)
+            Console.WriteLine($"{Ansi.Dim}Uploading {bakFile} ({fileSize:N0} bytes) as {blobName}...{Ansi.Reset}");
+
+        var containerUri = new Uri(sasUrl);
+        var containerClient = new Azure.Storage.Blobs.BlobContainerClient(containerUri);
+        var blobClient = containerClient.GetBlobClient(blobName);
+
+        await using (var fileStream = File.OpenRead(bakFile))
+        {
+            await blobClient.UploadAsync(fileStream, overwrite: true);
+        }
+
+        if (!asJson)
+            Console.WriteLine($"{Ansi.Cyan}Uploaded:{Ansi.Reset} {blobName}");
+
+        // Step 3: Update all.json manifest
+        var manifestBlobName = $"{name}/all.json";
+        var manifestClient = containerClient.GetBlobClient(manifestBlobName);
+
+        DatabaseManifest manifest;
+        try
+        {
+            var downloadResponse = await manifestClient.DownloadContentAsync();
+            var existingJson = downloadResponse.Value.Content.ToString();
+            manifest = JsonSerializer.Deserialize<DatabaseManifest>(existingJson,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                ?? new DatabaseManifest();
+        }
+        catch (Azure.RequestFailedException ex) when (ex.Status == 404)
+        {
+            manifest = new DatabaseManifest();
+        }
+
+        // Add version if not already present
+        if (!manifest.Versions.Contains(version, StringComparer.OrdinalIgnoreCase))
+        {
+            manifest.Versions.Add(version);
+        }
+        manifest.Latest = version;
+
+        var manifestJson = JsonSerializer.Serialize(manifest, new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        });
+
+        using (var manifestStream = new MemoryStream(Encoding.UTF8.GetBytes(manifestJson)))
+        {
+            await manifestClient.UploadAsync(manifestStream, overwrite: true);
+        }
+
+        if (!asJson)
+            Console.WriteLine($"{Ansi.Cyan}Updated:{Ansi.Reset} {manifestBlobName}");
+
+        // Output result
+        var result = new
+        {
+            Name = name,
+            Version = version,
+            BlobName = blobName,
+            Manifest = manifestBlobName,
+            Versions = manifest.Versions,
+            Latest = manifest.Latest
+        };
+
+        if (asJson)
+        {
+            Console.WriteLine(JsonSerializer.Serialize(result, new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
+        }
+        else
+        {
+            Console.WriteLine($"{Ansi.Cyan}Done.{Ansi.Reset} Database '{name}' version '{version}' uploaded successfully.");
+            Console.WriteLine($"  Versions: {string.Join(", ", manifest.Versions)}");
+            Console.WriteLine($"  Latest: {manifest.Latest}");
+        }
+
+        return 0;
+    }
+}
+
+sealed class DatabaseManifest
+{
+    [JsonPropertyName("versions")]
+    public List<string> Versions { get; set; } = new();
+
+    [JsonPropertyName("latest")]
+    public string? Latest { get; set; }
 }

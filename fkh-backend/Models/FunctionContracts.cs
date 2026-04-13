@@ -15,6 +15,18 @@ public sealed class FunctionDefinition
     public required string Description { get; init; }
     public required string Route { get; init; }
     public required List<FunctionParameterDefinition> Parameters { get; init; }
+
+    /// <summary>
+    /// When true, this function is excluded from the public catalog response
+    /// but can still be invoked directly by clients that know the route.
+    /// </summary>
+    public bool Hidden { get; init; }
+
+    /// <summary>
+    /// When true, only admin-team members may invoke this function.
+    /// OIDC callers are also rejected.
+    /// </summary>
+    public bool AdminOnly { get; init; }
 }
 
 public sealed class FunctionCatalogResponse

@@ -1,4 +1,4 @@
-# AL-Go for GitHub Managed Service - Service Tiers
+# Freddy.DK's AL-Go for GitHub Managed Service
 
 | Feature | Free | Essential | Advanced | Enterprise |
 |---|---|---|---|---|
@@ -15,4 +15,4 @@
 | Recurring status meetings | ❌ | ❌ | Every 4 weeks | Weekly |
 | Ongoing status reports | ❌ | ❌ | Weekly | Weekly |
 | We will create a PR on your repository | ❌ | ❌ | ❌ | ✅ |
-| Price per month | Free | €100 | €800 | Contact us at fkr@freddy.dk |
+| Price per month | Free - [Sponsor me](https://github.com/sponsors/Freddy-DK) | €100 | €750 | Contact us at fkr@freddy.dk |

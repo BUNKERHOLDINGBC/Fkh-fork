@@ -470,6 +470,25 @@ public static class FunctionCatalog
                     DefaultValue = "Add"
                 }
             }
+        },
+        new FunctionDefinition
+        {
+            Name = "GetDatabaseUploadSas",
+            Description = "Returns a SAS URL for uploading database backups to blob storage. Admin only.",
+            Route = "GetDatabaseUploadSas",
+            Hidden = true,
+            AdminOnly = true,
+            Parameters = new List<FunctionParameterDefinition>
+            {
+                new()
+                {
+                    Name = "containerName",
+                    Type = "string",
+                    Description = "Blob container name to get upload access to.",
+                    Required = false,
+                    DefaultValue = "databases"
+                }
+            }
         }
     };
 

@@ -104,107 +104,17 @@ public abstract class FunctionBase
         string operationName,
         Func<Dictionary<string, string>, Dictionary<string, byte[]>, Task<object>> aksOperation)
     {
-        var clientIp = GetClientIp(req);
+        var (auth, errorResponse) = await AuthenticateAndAuthorizeAsync(req, logger, gitHub, operationName);
+        if (errorResponse is not null) return errorResponse;
 
-        // ── Step 0: Check IP block list ───────────────────────────────────────────────
-        if (IsIpBlocked(clientIp))
-        {
-            logger.LogWarning("Blocked request from {IP} — too many failed auth attempts.", clientIp);
-            return Respond(req, HttpStatusCode.Forbidden, "Too many failed attempts. Try again later.");
-        }
-
-        // ── Step 1: Extract Bearer token ─────────────────────────────────────────────
-        if (!req.Headers.TryGetValues("Authorization", out var authValues))
-        {
-            RecordFailedAttempt(clientIp);
-            return Respond(req, HttpStatusCode.Unauthorized, "Missing Authorization header.");
-        }
-
-        var authHeader = authValues.FirstOrDefault();
-        if (string.IsNullOrWhiteSpace(authHeader) || !authHeader.StartsWith("Bearer "))
-        {
-            RecordFailedAttempt(clientIp);
-            return Respond(req, HttpStatusCode.Unauthorized, "Authorization header must be a Bearer token.");
-        }
-
-        var function = FunctionCatalog.GetRequired(operationName);
-        var token = authHeader["Bearer ".Length..].Trim();
-
-        // ── Step 2 & 3: Authenticate and authorize (same as ExecuteAsync) ────────────
-        string username;
-        var isAdmin = false;
-
-        if (GitHubOidcService.IsOidcToken(token))
-        {
-            var repository = await OidcService.ValidateTokenAsync(token);
-            if (repository is null)
-            {
-                logger.LogWarning("OIDC token validation failed or repository not in allow-list.");
-                RecordFailedAttempt(clientIp);
-                return Respond(req, HttpStatusCode.Forbidden,
-                    "OIDC token invalid or repository not authorized. Check ALLOWED_OIDC_REPOS configuration.");
-            }
-            username = repository.Replace('/', '-');
-            logger.LogInformation("Received {Operation} request from OIDC caller: {Repository} (username: {Username})", operationName, repository, username);
-        }
-        else
-        {
-            var ghUsername = await gitHub.GetAuthenticatedUsernameAsync(token);
-            if (ghUsername is null)
-            {
-                logger.LogWarning("Invalid or expired GitHub token received.");
-                RecordFailedAttempt(clientIp);
-                return Respond(req, HttpStatusCode.Unauthorized, "Invalid or expired GitHub token.");
-            }
-
-            username = ghUsername;
-            logger.LogInformation("Received {Operation} request from GitHub user: {Username}", operationName, username);
-
-            var authorized = false;
-            foreach (var orgTeam in AdminOrgTeams)
-            {
-                if (await gitHub.IsTeamMemberAsync(token, orgTeam.Org, orgTeam.Team, username))
-                {
-                    logger.LogInformation("User {Username} authorized as admin via org={Org} team={Team}", username, orgTeam.Org, orgTeam.Team);
-                    authorized = true;
-                    isAdmin = true;
-                    break;
-                }
-            }
-
-            if (!authorized)
-            {
-                foreach (var orgTeam in AllowedOrgTeams)
-                {
-                    if (await gitHub.IsTeamMemberAsync(token, orgTeam.Org, orgTeam.Team, username))
-                    {
-                        logger.LogInformation("User {Username} authorized via org={Org} team={Team}", username, orgTeam.Org, orgTeam.Team);
-                        authorized = true;
-                        break;
-                    }
-                }
-            }
-
-            if (!authorized)
-            {
-                logger.LogWarning("User {Username} is not a member of any authorized team.", username);
-                RecordFailedAttempt(clientIp);
-                return Respond(req, HttpStatusCode.Forbidden, "You are not a member of an authorized team.");
-            }
-        }
-
-        // ── Step 4: Parse multipart/form-data ────────────────────────────────────────
+        // ── Parse multipart/form-data ────────────────────────────────────────────
         var contentType = req.Headers.GetValues("Content-Type").FirstOrDefault() ?? "";
         if (!contentType.Contains("multipart/form-data"))
-        {
             return Respond(req, HttpStatusCode.BadRequest, "Expected multipart/form-data request.");
-        }
 
         var boundary = GetMultipartBoundary(contentType);
         if (boundary is null)
-        {
             return Respond(req, HttpStatusCode.BadRequest, "Missing multipart boundary.");
-        }
 
         // Try to seek body stream to start in case it was already read
         logger.LogWarning("[DEBUG] req.Body type: {Type}, CanSeek: {CanSeek}, CanRead: {CanRead}", req.Body.GetType().FullName, req.Body.CanSeek, req.Body.CanRead);
@@ -271,7 +181,7 @@ public abstract class FunctionBase
             parameters.Remove(key);
 
         // Remove file-type parameters from validation (they come from formFiles)
-        var fileParamNames = function.Parameters
+        var fileParamNames = auth!.Function.Parameters
             .Where(p => string.Equals(p.Type, "file", StringComparison.OrdinalIgnoreCase))
             .Select(p => p.Name)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
@@ -282,12 +192,12 @@ public abstract class FunctionBase
         logger.LogWarning("[DEBUG] formFiles keys at validation: [{Keys}]", string.Join(", ", formFiles.Keys));
 
         // Validate non-file parameters
-        var allowedNames = function.Parameters.Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var allowedNames = auth.Function.Parameters.Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
         var unknown = parameters.Keys.Where(k => !allowedNames.Contains(k)).ToList();
         if (unknown.Count > 0)
-            return Respond(req, HttpStatusCode.BadRequest, $"Unknown parameters for {function.Name}: {string.Join(", ", unknown)}.");
+            return Respond(req, HttpStatusCode.BadRequest, $"Unknown parameters for {auth.Function.Name}: {string.Join(", ", unknown)}.");
 
-        foreach (var parameter in function.Parameters)
+        foreach (var parameter in auth.Function.Parameters)
         {
             if (fileParamNames.Contains(parameter.Name))
             {
@@ -301,7 +211,7 @@ public abstract class FunctionBase
             value = string.IsNullOrWhiteSpace(value) ? parameter.DefaultValue : value;
 
             if (parameter.Required && string.IsNullOrWhiteSpace(value))
-                return Respond(req, HttpStatusCode.BadRequest, $"Missing required parameter '{parameter.Name}' for {function.Name}.");
+                return Respond(req, HttpStatusCode.BadRequest, $"Missing required parameter '{parameter.Name}' for {auth.Function.Name}.");
 
             if (string.Equals(parameter.Name, "name", StringComparison.OrdinalIgnoreCase)
                 && !string.IsNullOrWhiteSpace(value)
@@ -317,56 +227,20 @@ public abstract class FunctionBase
                 parameters[parameter.Name] = value;
         }
 
-        ClearFailedAttempts(clientIp);
-        parameters["_githubUsername"] = username;
-        parameters["_isAdmin"] = isAdmin.ToString();
+        ClearFailedAttempts(auth.ClientIp);
+        parameters["_githubUsername"] = auth.Username;
+        parameters["_isAdmin"] = auth.IsAdmin.ToString();
         foreach (var kv in internalParams)
             parameters[kv.Key] = kv.Value;
 
         // ── Cross-validate name / fullName ────────────────────────────────────────
-        if (function.Parameters.Any(p => string.Equals(p.Name, "fullName", StringComparison.OrdinalIgnoreCase)))
-        {
-            var hasName = parameters.TryGetValue("name", out var nameVal) && !string.IsNullOrWhiteSpace(nameVal);
-            var hasFullName = parameters.TryGetValue("fullName", out var fullNameVal) && !string.IsNullOrWhiteSpace(fullNameVal);
+        var nameError = ValidateNameFullName(auth.Function, parameters, auth.IsAdmin);
+        if (nameError is not null)
+            return Respond(req, nameError.Value.StatusCode, nameError.Value.Message);
 
-            if (hasName && hasFullName)
-                return Respond(req, HttpStatusCode.BadRequest, "Cannot specify both 'name' and 'fullName'.");
-            if (!hasName && !hasFullName)
-                return Respond(req, HttpStatusCode.BadRequest, "Either 'name' or 'fullName' must be specified.");
-            if (hasFullName && !isAdmin)
-                return Respond(req, HttpStatusCode.Forbidden, "The 'fullName' parameter is restricted to administrators.");
-        }
-
-        // ── Step 5: Execute AKS operation ────────────────────────────────────────────
-        try
-        {
-            var result = await aksOperation(parameters, formFiles);
-            var response = req.CreateResponse(HttpStatusCode.OK);
-            var jsonString = JsonSerializer.Serialize(result, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull });
-            response.Headers.Add("Content-Type", "application/json; charset=utf-8");
-            response.WriteString(jsonString);
-            return response;
-        }
-        catch (RetryAfterException retryEx)
-        {
-            logger.LogInformation("Operation {Operation} requested retry in {Seconds}s: {Message}",
-                operationName, retryEx.RetryAfterSeconds, retryEx.Message);
-            var response = req.CreateResponse(HttpStatusCode.Accepted);
-            response.Headers.Add("Retry-After", retryEx.RetryAfterSeconds.ToString());
-            await response.WriteAsJsonAsync(new { message = retryEx.Message, retryAfterSeconds = retryEx.RetryAfterSeconds });
-            return response;
-        }
-        catch (Exception ex)
-        {
-            logger.LogError(ex, "Failed to execute {Operation} for user {Username}.", operationName, username);
-            var detail = $"[{ex.GetType().Name}] {ex.Message}";
-            if (ex.InnerException is { } inner)
-                detail += $"\n  Inner: [{inner.GetType().Name}] {inner.Message}";
-            var frames = ex.StackTrace?.Split('\n').Take(5);
-            if (frames != null)
-                detail += "\n" + string.Join("\n", frames);
-            return Respond(req, HttpStatusCode.InternalServerError, detail);
-        }
+        // ── Execute operation ─────────────────────────────────────────────────────
+        return await RunOperationAsync(req, logger, operationName, auth.Username,
+            () => aksOperation(parameters, formFiles));
     }
 
     private static string? GetMultipartBoundary(string contentType)
@@ -505,46 +379,96 @@ public abstract class FunctionBase
         string operationName,
         Func<Dictionary<string, string>, Task<object>> aksOperation)
     {
+        var (auth, errorResponse) = await AuthenticateAndAuthorizeAsync(req, logger, gitHub, operationName);
+        if (errorResponse is not null) return errorResponse;
+
+        // ── Parse and validate request parameters ───────────────────────────────
+        var parametersResult = await ParseAndValidateParametersAsync(req, auth!.Function);
+        if (!parametersResult.Success)
+            return Respond(req, HttpStatusCode.BadRequest, parametersResult.ErrorMessage!);
+
+        ClearFailedAttempts(auth.ClientIp);
+
+        // Inject the authenticated GitHub username so services can use it
+        parametersResult.Parameters!["_githubUsername"] = auth.Username;
+        parametersResult.Parameters!["_isAdmin"] = auth.IsAdmin.ToString();
+
+        // ── Cross-validate name / fullName ────────────────────────────────────────
+        var nameError = ValidateNameFullName(auth.Function, parametersResult.Parameters, auth.IsAdmin);
+        if (nameError is not null)
+            return Respond(req, nameError.Value.StatusCode, nameError.Value.Message);
+
+        // Resolve artifact shorthand (e.g. "///us/latest") to a full URL
+        var artifactError = await ResolveArtifactAsync(req, logger, parametersResult.Parameters);
+        if (artifactError is not null) return artifactError;
+
+        // ── Execute operation ─────────────────────────────────────────────────────
+        return await RunOperationAsync(req, logger, operationName, auth.Username,
+            () => aksOperation(parametersResult.Parameters!));
+    }
+
+    // ═══════════════════════════════════════════════════════════════════════════════
+    // Shared pipeline helpers
+    // ═══════════════════════════════════════════════════════════════════════════════
+
+    private sealed class AuthResult
+    {
+        public required string Username { get; init; }
+        public required bool IsAdmin { get; init; }
+        public required string ClientIp { get; init; }
+        public required FunctionDefinition Function { get; init; }
+    }
+
+    /// <summary>
+    /// Shared authentication and authorization pipeline used by both
+    /// <see cref="ExecuteAsync"/> and <see cref="ExecuteWithFileAsync"/>.
+    /// Returns (AuthResult, null) on success or (null, errorResponse) on failure.
+    /// </summary>
+    private async Task<(AuthResult?, HttpResponseData?)> AuthenticateAndAuthorizeAsync(
+        HttpRequestData req,
+        ILogger logger,
+        GitHubAuthService gitHub,
+        string operationName)
+    {
         var clientIp = GetClientIp(req);
 
-        // ── Step 0: Check IP block list ───────────────────────────────────────────────
+        // ── Step 0: Check IP block list ───────────────────────────────────────────
         if (IsIpBlocked(clientIp))
         {
             logger.LogWarning("Blocked request from {IP} — too many failed auth attempts.", clientIp);
-            return Respond(req, HttpStatusCode.Forbidden, "Too many failed attempts. Try again later.");
+            return (null, Respond(req, HttpStatusCode.Forbidden, "Too many failed attempts. Try again later."));
         }
 
-        // ── Step 1: Extract Bearer token ─────────────────────────────────────────────
+        // ── Step 1: Extract Bearer token ─────────────────────────────────────────
         if (!req.Headers.TryGetValues("Authorization", out var authValues))
         {
             RecordFailedAttempt(clientIp);
-            return Respond(req, HttpStatusCode.Unauthorized, "Missing Authorization header.");
+            return (null, Respond(req, HttpStatusCode.Unauthorized, "Missing Authorization header."));
         }
 
         var authHeader = authValues.FirstOrDefault();
         if (string.IsNullOrWhiteSpace(authHeader) || !authHeader.StartsWith("Bearer "))
         {
             RecordFailedAttempt(clientIp);
-            return Respond(req, HttpStatusCode.Unauthorized, "Authorization header must be a Bearer token.");
+            return (null, Respond(req, HttpStatusCode.Unauthorized, "Authorization header must be a Bearer token."));
         }
 
         var function = FunctionCatalog.GetRequired(operationName);
         var token = authHeader["Bearer ".Length..].Trim();
 
-        // ── Step 2 & 3: Authenticate and authorize ───────────────────────────────────
+        // ── Step 2 & 3: Authenticate and authorize ───────────────────────────────
         string username;
         var isAdmin = false;
 
         if (GitHubOidcService.IsOidcToken(token))
         {
-            // OIDC path: GitHub Actions workflow token
             var repository = await OidcService.ValidateTokenAsync(token);
             if (repository is null)
             {
                 logger.LogWarning("OIDC token validation failed or repository not in allow-list.");
                 RecordFailedAttempt(clientIp);
-                return Respond(req, HttpStatusCode.Forbidden,
-                    "OIDC token invalid or repository not authorized. Check ALLOWED_OIDC_REPOS configuration.");
+                return (null, Respond(req, HttpStatusCode.Forbidden,
+                    "OIDC token invalid or repository not authorized. Check ALLOWED_OIDC_REPOS configuration."));
             }
 
             username = repository.Replace('/', '-');
@@ -552,43 +476,36 @@ public abstract class FunctionBase
         }
         else
         {
-            // User token path: GitHub PAT / user token
             var ghUsername = await gitHub.GetAuthenticatedUsernameAsync(token);
             if (ghUsername is null)
             {
                 logger.LogWarning("Invalid or expired GitHub token received.");
                 RecordFailedAttempt(clientIp);
-                return Respond(req, HttpStatusCode.Unauthorized, "Invalid or expired GitHub token.");
+                return (null, Respond(req, HttpStatusCode.Unauthorized, "Invalid or expired GitHub token."));
             }
 
             username = ghUsername;
             logger.LogInformation("Received {Operation} request from GitHub user: {Username}", operationName, username);
 
-            // Check admin teams first
             var authorized = false;
             foreach (var orgTeam in AdminOrgTeams)
             {
                 if (await gitHub.IsTeamMemberAsync(token, orgTeam.Org, orgTeam.Team, username))
                 {
-                    logger.LogInformation(
-                        "User {Username} authorized as admin via org={Org} team={Team}",
-                        username, orgTeam.Org, orgTeam.Team);
+                    logger.LogInformation("User {Username} authorized as admin via org={Org} team={Team}", username, orgTeam.Org, orgTeam.Team);
                     authorized = true;
                     isAdmin = true;
                     break;
                 }
             }
 
-            // If not admin, check regular member teams
             if (!authorized)
             {
                 foreach (var orgTeam in AllowedOrgTeams)
                 {
                     if (await gitHub.IsTeamMemberAsync(token, orgTeam.Org, orgTeam.Team, username))
                     {
-                        logger.LogInformation(
-                            "User {Username} authorized via org={Org} team={Team}",
-                            username, orgTeam.Org, orgTeam.Team);
+                        logger.LogInformation("User {Username} authorized via org={Org} team={Team}", username, orgTeam.Org, orgTeam.Team);
                         authorized = true;
                         break;
                     }
@@ -599,76 +516,114 @@ public abstract class FunctionBase
             {
                 logger.LogWarning("User {Username} is not a member of any authorized team.", username);
                 RecordFailedAttempt(clientIp);
-                return Respond(req, HttpStatusCode.Forbidden, "You are not a member of an authorized team.");
+                return (null, Respond(req, HttpStatusCode.Forbidden, "You are not a member of an authorized team."));
             }
         }
 
-        // ── Step 4: Parse and validate request parameters ───────────────────────────
-        var parametersResult = await ParseAndValidateParametersAsync(req, function);
-        if (!parametersResult.Success)
+        // ── Admin-only check ─────────────────────────────────────────────────────
+        if (function.AdminOnly && !isAdmin)
         {
-            return Respond(req, HttpStatusCode.BadRequest, parametersResult.ErrorMessage!);
-        }
-        // Auth succeeded — clear any prior failed attempts for this IP
-        ClearFailedAttempts(clientIp);
-
-        // Inject the authenticated GitHub username so services can use it
-        parametersResult.Parameters!["_githubUsername"] = username;
-        parametersResult.Parameters!["_isAdmin"] = isAdmin.ToString();
-
-        // ── Cross-validate name / fullName ────────────────────────────────────────
-        if (function.Parameters.Any(p => string.Equals(p.Name, "fullName", StringComparison.OrdinalIgnoreCase)))
-        {
-            var hasName = parametersResult.Parameters.TryGetValue("name", out var nameVal) && !string.IsNullOrWhiteSpace(nameVal);
-            var hasFullName = parametersResult.Parameters.TryGetValue("fullName", out var fullNameVal) && !string.IsNullOrWhiteSpace(fullNameVal);
-
-            if (hasName && hasFullName)
-                return Respond(req, HttpStatusCode.BadRequest, "Cannot specify both 'name' and 'fullName'.");
-            if (!hasName && !hasFullName)
-                return Respond(req, HttpStatusCode.BadRequest, "Either 'name' or 'fullName' must be specified.");
-            if (hasFullName && !isAdmin)
-                return Respond(req, HttpStatusCode.Forbidden, "The 'fullName' parameter is restricted to administrators.");
+            logger.LogWarning("User {Username} attempted admin-only operation {Operation}.", username, operationName);
+            return (null, Respond(req, HttpStatusCode.Forbidden, "This operation is restricted to administrators."));
         }
 
-        // Resolve artifact shorthand (e.g. "///us/latest") to a full URL
-        if (parametersResult.Parameters.TryGetValue("artifactUrl", out var rawArtifact)
-            && !string.IsNullOrWhiteSpace(rawArtifact)
-            && !rawArtifact.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+        return (new AuthResult
         {
-            try
-            {
-                var segments = ($"{rawArtifact}/////").Split('/');
-                var storageAccount = segments[0];
-                var artifactType = string.IsNullOrEmpty(segments[1]) ? "Sandbox" : segments[1];
-                var version = segments[2];
-                var country = string.IsNullOrEmpty(segments[3]) ? "us" : segments[3];
-                var selectStr = string.IsNullOrEmpty(segments[4]) ? "latest" : segments[4];
+            Username = username,
+            IsAdmin = isAdmin,
+            ClientIp = clientIp,
+            Function = function
+        }, null);
+    }
 
-                var type = Enum.Parse<BcArtifacts.ArtifactType>(artifactType, ignoreCase: true);
-                var select = Enum.Parse<BcArtifacts.ArtifactSelect>(selectStr, ignoreCase: true);
+    /// <summary>
+    /// Cross-validates name / fullName parameters. Returns null if valid,
+    /// or an error tuple if validation fails.
+    /// </summary>
+    private static (HttpStatusCode StatusCode, string Message)? ValidateNameFullName(
+        FunctionDefinition function,
+        Dictionary<string, string> parameters,
+        bool isAdmin)
+    {
+        if (!function.Parameters.Any(p => string.Equals(p.Name, "fullName", StringComparison.OrdinalIgnoreCase)))
+            return null;
 
-                var resolved = (await BcArtifacts.BcArtifactHelper.GetBcArtifactUrlAsync(
-                    type: type, country: country, version: version,
-                    select: select, storageAccount: storageAccount)).FirstOrDefault();
+        var hasName = parameters.TryGetValue("name", out var nameVal) && !string.IsNullOrWhiteSpace(nameVal);
+        var hasFullName = parameters.TryGetValue("fullName", out var fullNameVal) && !string.IsNullOrWhiteSpace(fullNameVal);
 
-                if (string.IsNullOrEmpty(resolved))
-                    return Respond(req, HttpStatusCode.BadRequest, $"No artifacts found for '{rawArtifact}'.");
+        if (hasName && hasFullName)
+            return (HttpStatusCode.BadRequest, "Cannot specify both 'name' and 'fullName'.");
+        if (!hasName && !hasFullName)
+            return (HttpStatusCode.BadRequest, "Either 'name' or 'fullName' must be specified.");
+        if (hasFullName && !isAdmin)
+            return (HttpStatusCode.Forbidden, "The 'fullName' parameter is restricted to administrators.");
 
-                logger.LogInformation("Resolved artifact shorthand '{Raw}' to '{Resolved}'", rawArtifact, resolved);
-                parametersResult.Parameters["artifactUrl"] = resolved;
-            }
-            catch (Exception ex)
-            {
-                return Respond(req, HttpStatusCode.BadRequest, $"Failed to resolve artifact '{rawArtifact}': {ex.Message}");
-            }
-        }
+        return null;
+    }
 
-        // ── Step 5: Execute AKS operation ────────────────────────────────────────────
+    /// <summary>
+    /// Resolves artifact shorthand (e.g. "///us/latest") to a full URL if present.
+    /// Returns null on success, or an error response on failure.
+    /// </summary>
+    private static async Task<HttpResponseData?> ResolveArtifactAsync(
+        HttpRequestData req,
+        ILogger logger,
+        Dictionary<string, string> parameters)
+    {
+        if (!parameters.TryGetValue("artifactUrl", out var rawArtifact)
+            || string.IsNullOrWhiteSpace(rawArtifact)
+            || rawArtifact.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            return null;
+
         try
         {
-            var result = await aksOperation(parametersResult.Parameters!);
+            var segments = ($"{rawArtifact}/////").Split('/');
+            var storageAccount = segments[0];
+            var artifactType = string.IsNullOrEmpty(segments[1]) ? "Sandbox" : segments[1];
+            var version = segments[2];
+            var country = string.IsNullOrEmpty(segments[3]) ? "us" : segments[3];
+            var selectStr = string.IsNullOrEmpty(segments[4]) ? "latest" : segments[4];
+
+            var type = Enum.Parse<BcArtifacts.ArtifactType>(artifactType, ignoreCase: true);
+            var select = Enum.Parse<BcArtifacts.ArtifactSelect>(selectStr, ignoreCase: true);
+
+            var resolved = (await BcArtifacts.BcArtifactHelper.GetBcArtifactUrlAsync(
+                type: type, country: country, version: version,
+                select: select, storageAccount: storageAccount)).FirstOrDefault();
+
+            if (string.IsNullOrEmpty(resolved))
+                return Respond(req, HttpStatusCode.BadRequest, $"No artifacts found for '{rawArtifact}'.");
+
+            logger.LogInformation("Resolved artifact shorthand '{Raw}' to '{Resolved}'", rawArtifact, resolved);
+            parameters["artifactUrl"] = resolved;
+            return null;
+        }
+        catch (Exception ex)
+        {
+            return Respond(req, HttpStatusCode.BadRequest, $"Failed to resolve artifact '{rawArtifact}': {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Executes the operation, serializes the result as JSON, and handles
+    /// <see cref="RetryAfterException"/> and unexpected errors uniformly.
+    /// </summary>
+    private static async Task<HttpResponseData> RunOperationAsync(
+        HttpRequestData req,
+        ILogger logger,
+        string operationName,
+        string username,
+        Func<Task<object>> operation)
+    {
+        try
+        {
+            var result = await operation();
             var response = req.CreateResponse(HttpStatusCode.OK);
-            var jsonString = JsonSerializer.Serialize(result, new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase, DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull });
+            var jsonString = JsonSerializer.Serialize(result, new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+            });
             response.Headers.Add("Content-Type", "application/json; charset=utf-8");
             response.WriteString(jsonString);
             return response;
@@ -688,7 +643,6 @@ public abstract class FunctionBase
             var detail = $"[{ex.GetType().Name}] {ex.Message}";
             if (ex.InnerException is { } inner)
                 detail += $"\n  Inner: [{inner.GetType().Name}] {inner.Message}";
-            // Include first few frames to identify the call site
             var frames = ex.StackTrace?.Split('\n').Take(5);
             if (frames != null)
                 detail += "\n" + string.Join("\n", frames);

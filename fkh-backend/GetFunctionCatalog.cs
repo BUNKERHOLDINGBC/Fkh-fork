@@ -23,7 +23,7 @@ public class GetFunctionCatalog
         response.Headers.Add("Content-Type", "application/json; charset=utf-8");
         var catalog = new FunctionCatalogResponse
         {
-            Functions = FunctionCatalog.Functions
+            Functions = FunctionCatalog.Functions.Where(f => !f.Hidden).ToList()
         };
         await response.WriteStringAsync(JsonSerializer.Serialize(catalog, _jsonOptions));
 
