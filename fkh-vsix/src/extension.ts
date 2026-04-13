@@ -699,7 +699,7 @@ async function showContainerLogs(appLabel: string, containerName: string): Promi
     },
     async () => {
       try {
-        const body: FunctionInvokeRequest = { parameters: { name: appLabel } };
+        const body: FunctionInvokeRequest = { parameters: { name: containerName } };
         const response = await fetch(`${baseUrl}/GetContainerLogs`, {
           method: 'POST',
           headers: {
