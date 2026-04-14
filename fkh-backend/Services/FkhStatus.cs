@@ -1,5 +1,6 @@
 using Azure.Identity;
 using Azure.Monitor.Query;
+using Azure.Monitor.Query.Models;
 using Azure.ResourceManager;
 using Azure.ResourceManager.Compute;
 using Azure.ResourceManager.ContainerService;
@@ -247,7 +248,8 @@ public class FkhStatus : FkhServiceBase
                 TotalBcContainers = totalBcContainers,
                 RunningBcContainers = runningBcContainers,
                 StoppedBcContainers = stoppedBcContainers,
-            }
+            },
+            _metricsDebug = _historicalMetricsError,
         };
     }
 
@@ -515,12 +517,17 @@ public class FkhStatus : FkhServiceBase
         return result;
     }
 
+    private string? _historicalMetricsError;
+
     private async Task<Dictionary<string, HistoricalNodeMetrics>> GetHistoricalNodeMetricsAsync()
     {
         var result = new Dictionary<string, HistoricalNodeMetrics>(StringComparer.OrdinalIgnoreCase);
 
         if (string.IsNullOrEmpty(LogAnalyticsWorkspaceId))
+        {
+            _historicalMetricsError = "LOG_ANALYTICS_WORKSPACE_ID not configured";
             return result;
+        }
 
         try
         {
@@ -529,6 +536,43 @@ public class FkhStatus : FkhServiceBase
 #pragma warning restore CS0618
             var logsClient = new LogsQueryClient(credential);
 
+            // First, discover which tables/namespaces have data
+            var discoveryKql = @"
+InsightsMetrics
+| where TimeGenerated > ago(65m)
+| summarize Count = count() by Namespace, Name
+| order by Count desc";
+
+            var resourceId = new Azure.Core.ResourceIdentifier(LogAnalyticsWorkspaceId);
+            var discoveryResponse = await logsClient.QueryResourceAsync(
+                resourceId, discoveryKql, new QueryTimeRange(TimeSpan.FromMinutes(65)));
+
+            var availableMetrics = new List<string>();
+            foreach (var row in discoveryResponse.Value.Table.Rows)
+            {
+                availableMetrics.Add($"{row[0]}/{row[1]}={row[2]}");
+            }
+
+            // Also check Perf table
+            var perfDiscoveryKql = @"
+Perf
+| where TimeGenerated > ago(65m)
+| where ObjectName has 'K8S' or ObjectName has 'Node'
+| summarize Count = count() by ObjectName, CounterName
+| order by Count desc";
+
+            var perfDiscovery = await logsClient.QueryResourceAsync(
+                resourceId, perfDiscoveryKql, new QueryTimeRange(TimeSpan.FromMinutes(65)));
+
+            var availablePerfMetrics = new List<string>();
+            foreach (var row in perfDiscovery.Value.Table.Rows)
+            {
+                availablePerfMetrics.Add($"{row[0]}/{row[1]}={row[2]}");
+            }
+
+            _historicalMetricsError = $"InsightsMetrics: [{string.Join(", ", availableMetrics)}]; Perf: [{string.Join(", ", availablePerfMetrics)}]; WorkspaceId: {LogAnalyticsWorkspaceId[..Math.Min(50, LogAnalyticsWorkspaceId.Length)]}...";
+
+            // Try Perf table (Container Insights v1 / oms_agent)
             var kql = @"
 let cpuMem = Perf
 | where ObjectName == 'K8SNode'
@@ -538,9 +582,8 @@ let cpuMem = Perf
 let disk = InsightsMetrics
 | where Namespace == 'disk' and Name == 'used_percent'
 | where TimeGenerated > ago(65m)
-| extend Computer = tostring(parse_json(Tags).hostName)
-| where isnotempty(Computer)
-| project TimeGenerated, Computer, Metric = 'diskUsedPercent', Val;
+| extend Computer0 = tostring(parse_json(Tags).hostName)
+| project TimeGenerated, Computer = iff(isnotempty(Computer0), Computer0, Computer), Metric = 'diskUsedPercent', Val;
 let allData = union cpuMem, disk;
 let avgs = allData
 | summarize
@@ -554,11 +597,13 @@ avgs
 | join kind=leftouter max5m on Computer, Metric
 | project Computer, Metric, Avg30m, Avg60m, Max5m";
 
-            var response = await logsClient.QueryWorkspaceAsync(
-                LogAnalyticsWorkspaceId, kql, new QueryTimeRange(TimeSpan.FromMinutes(65)));
+            var response = await logsClient.QueryResourceAsync(
+                resourceId, kql, new QueryTimeRange(TimeSpan.FromMinutes(65)));
 
+            var rowCount = 0;
             foreach (var row in response.Value.Table.Rows)
             {
+                rowCount++;
                 var computer = row[0]?.ToString() ?? "";
                 var metric = row[1]?.ToString() ?? "";
                 var avg30m = row[2] is not null ? Convert.ToDouble(row[2]) : 0;
@@ -588,9 +633,11 @@ avgs
                         break;
                 }
             }
+            _historicalMetricsError += $"; QueryRows={rowCount}; Computers=[{string.Join(",", result.Keys)}]";
         }
         catch (Exception ex)
         {
+            _historicalMetricsError = $"Error: {ex.Message}";
             Logger.LogWarning(ex, "Failed to fetch historical node metrics from Log Analytics");
         }
         return result;
