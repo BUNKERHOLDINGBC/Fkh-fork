@@ -143,36 +143,17 @@ public abstract class FunctionBase
             return Respond(req, HttpStatusCode.BadRequest, "Missing multipart boundary.");
 
         // Try to seek body stream to start in case it was already read
-        logger.LogWarning("[DEBUG] req.Body type: {Type}, CanSeek: {CanSeek}, CanRead: {CanRead}", req.Body.GetType().FullName, req.Body.CanSeek, req.Body.CanRead);
         if (req.Body.CanSeek)
         {
-            logger.LogWarning("[DEBUG] Body position before seek: {Pos}, length: {Len}", req.Body.Position, req.Body.Length);
             req.Body.Position = 0;
         }
-        logger.LogWarning("[DEBUG] boundary: '{Boundary}'", boundary);
 
-        // Read body into buffer so we can log its size
+        // Read body into buffer
         using var bodyMs = new MemoryStream();
         await req.Body.CopyToAsync(bodyMs);
         var bodyBytes = bodyMs.ToArray();
-        logger.LogWarning("[DEBUG] raw body size: {Size} bytes", bodyBytes.Length);
-        if (bodyBytes.Length > 0)
-        {
-            var preview = bodyBytes.Length > 300
-                ? Encoding.UTF8.GetString(bodyBytes, 0, 300)
-                : Encoding.UTF8.GetString(bodyBytes);
-            logger.LogWarning("[DEBUG] body preview: '{Preview}'", preview);
-        }
 
         var (formFields, formFiles) = await ParseMultipartAsync(new MemoryStream(bodyBytes), boundary);
-
-        // ── DEBUG: Dump what we got from multipart parsing ─────────────────────
-        logger.LogWarning("[DEBUG] formFields keys: [{Keys}]", string.Join(", ", formFields.Keys));
-        logger.LogWarning("[DEBUG] formFiles keys: [{Keys}]", string.Join(", ", formFiles.Keys));
-        foreach (var ff in formFiles)
-            logger.LogWarning("[DEBUG] formFile '{Name}' = {Size} bytes", ff.Key, ff.Value.Length);
-        foreach (var ff in formFields)
-            logger.LogWarning("[DEBUG] formField '{Name}' = '{Value}'", ff.Key, ff.Value.Length > 200 ? ff.Value[..200] + "..." : ff.Value);
 
         // Build parameter dictionary from the "parameters" JSON field or individual form fields
         var parameters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -211,11 +192,6 @@ public abstract class FunctionBase
             .Where(p => string.Equals(p.Type, "file", StringComparison.OrdinalIgnoreCase))
             .Select(p => p.Name)
             .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-        // ── DEBUG: Dump parameters and file param names after extraction ────
-        logger.LogWarning("[DEBUG] parameters keys after extraction: [{Keys}]", string.Join(", ", parameters.Keys));
-        logger.LogWarning("[DEBUG] fileParamNames: [{Names}]", string.Join(", ", fileParamNames));
-        logger.LogWarning("[DEBUG] formFiles keys at validation: [{Keys}]", string.Join(", ", formFiles.Keys));
 
         // Validate non-file parameters
         var allowedNames = auth.Function.Parameters.Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);

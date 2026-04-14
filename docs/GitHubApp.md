@@ -4,7 +4,7 @@ The GitHub App lets the Fkh backend automatically trigger image-build workflows 
 
 ## Required GitHub Permissions
 
-The person creating the app needs **Owner** access on the GitHub organization (or admin on the target repository).
+The person performing this step needs **Owner** access on the GitHub organization (or admin on the target repository).
 
 ## 1. Create the App
 

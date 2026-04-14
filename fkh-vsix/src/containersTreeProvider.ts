@@ -125,6 +125,12 @@ export interface ContainerInfo {
   memory?: string;
 }
 
+function parseContainerLabels(containers: string | string[] | undefined): string[] {
+  if (!containers) { return []; }
+  if (Array.isArray(containers)) { return containers.map(s => s.trim()); }
+  return containers.split(',').map(s => s.trim());
+}
+
 function buildContainerPropertyNodes<T extends vscode.TreeItem>(
   info: ContainerInfo,
   Ctor: new (label: string, state: vscode.TreeItemCollapsibleState, ...args: any[]) => T,
@@ -379,7 +385,7 @@ export class ImagesTreeProvider implements vscode.TreeDataProvider<ImageTreeItem
 export interface VMInfo {
   name: string;
   status: string;
-  containers: string;
+  containers: string | string[];
   cns: string;
   cpu: string;
   memory: string;
@@ -457,7 +463,7 @@ export class VMsTreeProvider implements vscode.TreeDataProvider<VMTreeItem> {
         item.tooltip = `${vm.name}\nStatus: ${vm.status}`;
         item.contextValue = 'windowsVM';
         const allContainers = this._getContainers();
-        const vmContainerLabels = new Set(vm.containers ? vm.containers.split(',').map(s => s.trim()) : []);
+        const vmContainerLabels = new Set(parseContainerLabels(vm.containers));
         const matchedContainerCount = allContainers.filter(p => vmContainerLabels.has(p.appLabel)).length;
         if (matchedContainerCount > 0) {
           item.description = `${matchedContainerCount} container${matchedContainerCount !== 1 ? 's' : ''}`;
@@ -483,7 +489,7 @@ export class VMsTreeProvider implements vscode.TreeDataProvider<VMTreeItem> {
 
       // Containers on this VM
       const allContainers = this._getContainers();
-      const vmContainerLabels = new Set(element.vmInfo.containers ? element.vmInfo.containers.split(',').map(s => s.trim()) : []);
+      const vmContainerLabels = new Set(parseContainerLabels(element.vmInfo.containers));
       const vmContainers = allContainers.filter(p => vmContainerLabels.has(p.appLabel));
       for (const container of vmContainers) {
         const statusLower = container.status.toLowerCase();
@@ -521,7 +527,7 @@ export class VMsTreeProvider implements vscode.TreeDataProvider<VMTreeItem> {
       };
       add('CNS', vm.cns, vm.cns === 'Ready' ? 'pass' : 'error',
         vm.cns === 'Ready' ? new vscode.ThemeColor('testing.iconPassed') : new vscode.ThemeColor('testing.iconFailed'));
-      add('Containers', vm.containers, 'vm');
+      add('Containers', Array.isArray(vm.containers) ? vm.containers.join(', ') : vm.containers, 'vm');
       add('CPU', vm.cpu, 'dashboard');
       add('Memory', vm.memory, 'server-process');
       add('Kubelet', vm.kubelet, 'versions');

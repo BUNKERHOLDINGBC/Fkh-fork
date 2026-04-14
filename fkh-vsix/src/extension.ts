@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { createReadSettingsOptions, readSettings, getRepoName } from './readALGoSettings';
 import { ProjectsTreeProvider, ProjectTreeItem, ContainersTreeProvider, ContainerTreeItem, ImagesTreeProvider, ImageTreeItem, VMsTreeProvider, VMTreeItem } from './containersTreeProvider';
+import { updateLaunchJsonAfterCreate } from './updateLaunchJson';
 
 let functionCatalog: FunctionCatalogResponse | undefined;
 let outputChannel: vscode.OutputChannel;
@@ -202,22 +203,14 @@ async function getPublicIp(): Promise<string | undefined> {
 async function getGitHubSession(): Promise<vscode.AuthenticationSession | undefined> {
   try {
     // Try to get an existing session silently first (works in vscode.dev where
-    // the user is already signed in via GitHub)
+    // the user is already signed in via GitHub).
+    // Always require read:org — without it the backend's team membership check fails.
     const existing = await vscode.authentication.getSession(
       'github',
       ['read:user', 'read:org'],
       { createIfNone: false, silent: true }
     );
     if (existing) { return existing; }
-
-    // Fall back: try without read:org — the backend will return 403 if
-    // the token lacks permissions, but at least auth won't fail entirely
-    const fallback = await vscode.authentication.getSession(
-      'github',
-      ['read:user'],
-      { createIfNone: false, silent: true }
-    );
-    if (fallback) { return fallback; }
 
     // No silent session — prompt interactively
     return await vscode.authentication.getSession(
@@ -243,16 +236,26 @@ async function getFunctionCatalog(): Promise<FunctionCatalogResponse | undefined
     const response = await fetch(`${baseUrl}/functions`, { method: 'GET' });
     if (!response.ok) {
       const error = await response.text();
-      vscode.window.showErrorMessage(`Failed to fetch function metadata: ${error}`);
+      const action = await vscode.window.showErrorMessage(
+        `Failed to fetch function metadata: ${error}. Check that fkh.backendUrl is correct.`,
+        'Open Settings'
+      );
+      if (action === 'Open Settings') {
+        await vscode.commands.executeCommand('workbench.action.openSettings', 'fkh.backendUrl');
+      }
       return undefined;
     }
 
     functionCatalog = await response.json() as FunctionCatalogResponse;
     return functionCatalog;
   } catch (err) {
-    vscode.window.showErrorMessage(
-      `Could not fetch function metadata: ${err instanceof Error ? err.message : String(err)}`
+    const action = await vscode.window.showErrorMessage(
+      `Could not reach the Fkh backend at ${baseUrl}. Check that fkh.backendUrl is correct (${err instanceof Error ? err.message : String(err)}).`,
+      'Open Settings'
     );
+    if (action === 'Open Settings') {
+      await vscode.commands.executeCommand('workbench.action.openSettings', 'fkh.backendUrl');
+    }
     return undefined;
   }
 }
@@ -521,7 +524,7 @@ function formatJsonResult(obj: unknown, indent = 0): string {
   return String(obj);
 }
 
-async function invokeFunctionByName(functionName: string, prefilled: Record<string, string> = {}, context?: string): Promise<void> {
+async function invokeFunctionByName(functionName: string, prefilled: Record<string, string> = {}, context?: string): Promise<Record<string, unknown> | undefined> {
   const catalog = await getFunctionCatalog();
   if (!catalog) { return; }
 
@@ -557,6 +560,8 @@ async function invokeFunctionByName(functionName: string, prefilled: Record<stri
   }
 
   const hasFiles = Object.keys(filesToUpload).length > 0;
+
+  let invokeResult: Record<string, unknown> | undefined;
 
   await vscode.window.withProgress(
     {
@@ -622,12 +627,14 @@ async function invokeFunctionByName(functionName: string, prefilled: Record<stri
           }
 
           if (response.ok) {
-            const result = await response.json();
+            const result = await response.json() as Record<string, unknown>;
             logOutput(`[${definition.name}] ${formatJsonResult(result)}`);
+            invokeResult = result;
           } else {
+            const responseText = await response.text();
             const error = response.status === 401 || response.status === 403
-              ? `Access denied (${response.status}). Make sure your GitHub account is a member of an authorized team.`
-              : `Failed (${response.status}): ${await response.text()}`;
+              ? `Access denied (${response.status}). ${responseText || 'Make sure your GitHub account is a member of an authorized team.'}`
+              : `Failed (${response.status}): ${responseText}`;
             logOutput(`[${definition.name}] ${error}`, true);
           }
           break;
@@ -641,6 +648,8 @@ async function invokeFunctionByName(functionName: string, prefilled: Record<stri
       imagesProvider.refresh();
     }
   );
+
+  return invokeResult;
 }
 
 async function invokeContainerAction(
@@ -676,9 +685,10 @@ async function invokeContainerAction(
           const result = await response.json();
           logOutput(`[${functionName}] ${formatJsonResult(result)}`);
         } else {
+          const responseText = await response.text();
           const error = response.status === 401 || response.status === 403
-            ? `Access denied (${response.status}).`
-            : `Failed (${response.status}): ${await response.text()}`;
+            ? `Access denied (${response.status}). ${responseText || 'Make sure your GitHub account is a member of an authorized team.'}`
+            : `Failed (${response.status}): ${responseText}`;
           logOutput(`[${functionName}] ${error}`, true);
         }
       } catch (err) {
@@ -870,7 +880,21 @@ async function createContainer(project?: string): Promise<void> {
   outputChannel.show(true);
 
   const projectContext = options.project ? `${options.repoName}/${options.project}` : options.repoName;
-  await invokeFunctionByName('CreateContainer', { artifactUrl, repo: options.repoName, project: options.project || '', ...prefilled }, projectContext);
+
+  const result = await invokeFunctionByName('CreateContainer', { artifactUrl, repo: options.repoName, project: options.project || '', ...prefilled }, projectContext);
+
+  // Update launch.json if configured and container was created successfully
+  if (result) {
+    const serverUrl = String(result.fqdn || '');
+    const containerName = String(result.deployment || '');
+    if (serverUrl && containerName) {
+      try {
+        await updateLaunchJsonAfterCreate(containerName, serverUrl, options.project || '');
+      } catch (err) {
+        logOutput(`[UpdateLaunchJson] ${err instanceof Error ? err.message : String(err)}`, true);
+      }
+    }
+  }
 }
 
 async function createImage(): Promise<void> {

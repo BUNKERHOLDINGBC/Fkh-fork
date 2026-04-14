@@ -51,7 +51,7 @@ function getGitRepository(): GitRepository | undefined {
   return git.repositories[0];
 }
 
-function getGitRootUri(): vscode.Uri | undefined {
+export function getGitRootUri(): vscode.Uri | undefined {
   const repo = getGitRepository();
   if (repo) { return repo.rootUri; }
   // Fallback for web environments where vscode.git may not be available

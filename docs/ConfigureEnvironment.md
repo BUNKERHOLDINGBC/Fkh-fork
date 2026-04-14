@@ -31,11 +31,11 @@ Edit the file and fill in all values:
 # Azure
 subscription_id = "<from Azure Portal or az account show>"
 tenant_id       = "<from Azure Portal or az account show>"
-location        = "westeurope"
-org_name   = "mycompany"         # lowercase, no spaces
+location        = "<Azure Location - from Azure Setup>"
+org_name        = "<your-github-org>"         # lowercase, no spaces
 
 # AKS
-linux_vm_size   = "Standard_D2s_v3"   # system pool, always on
+linux_vm_size   = "Standard_D4s_v3"   # system pool, always on
 windows_vm_size = "Standard_D8s_v3"   # BC containers run here
 aks_sku_tier    = "Free"              # Free | Standard ($73/mo SLA)
 windows_min_node_count = 0            # 0 = scale to zero, 1 = warm node
@@ -48,7 +48,7 @@ sql_storage_size = "128Gi"
 
 # GitHub
 github_org        = "your-org"        # case sensitive
-github_repo       = "Fkh"            # your fork name
+github_repo       = "Fkh"             # your fork name
 github_team_name  = "Fkh-members"
 github_team_members = [
   "user1",

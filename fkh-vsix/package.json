@@ -274,6 +274,17 @@
           "type": "string",
           "default": "",
           "description": "IANA timezone (e.g. 'Europe/Copenhagen'). Set this when running in Codespaces or remote environments where the auto-detected timezone is incorrect."
+        },
+        "fkh.CreateContainer.updateLaunchJson": {
+          "type": "string",
+          "default": "project",
+          "enum": ["none", "project", "repo"],
+          "enumDescriptions": [
+            "Do not update launch.json files after creating a container.",
+            "Update launch.json files in app folders under the AL-Go project directory.",
+            "Update launch.json files in app folders under the repository root."
+          ],
+          "description": "After creating a container, automatically add or update a launch configuration in launch.json files found in app folders."
         }
       }
     }

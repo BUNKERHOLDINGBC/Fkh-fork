@@ -13,7 +13,7 @@ No local tools needed. Everything runs in the cloud.
 | A1 | [Fork the Repository](docs/ForkRepository.md) | Ops | 5 min |
 | A2 | [Collect Azure Info + Set Up OIDC](docs/AzureSetup-PathA.md) | Ops | 10 min |
 | A3 | [Create the GitHub App](docs/GitHubApp.md) | Ops | 10 min |
-| A4 | [Create the tfvars File](docs/ConfigureEnvironment.md#create-your-organization-tfvars-file) | Ops | 10 min |
+| A4 | [Configure Your Environment](docs/ConfigureEnvironment.md) | Ops | 10 min |
 | A5 | [Configure GitHub Secrets](docs/Prerequisites-PathA.md#github-secrets) | Ops | 5 min |
 | A6 | Run the **Deploy** workflow (Actions → Deploy → Run workflow) | Ops | 20 min |
 | A7 | [Set Up End Users](docs/EndUserSetup.md) | Users | 5 min |
