@@ -357,6 +357,7 @@ public abstract class FkhServiceBase
             && hours > 0)
         {
             var stopAt = DateTimeOffset.UtcNow.AddHours(hours);
+            stopAt = EnforceMinimumAutoStop(stopAt);
             return (stopAt, $"{hours}h");
         }
 
@@ -378,10 +379,17 @@ public abstract class FkhServiceBase
 
             var utcStop = TimeZoneInfo.ConvertTimeToUtc(localStop, tz);
             var stopAt = new DateTimeOffset(utcStop, TimeSpan.Zero);
+            stopAt = EnforceMinimumAutoStop(stopAt);
             return (stopAt, value);
         }
 
         return null;
+    }
+
+    private static DateTimeOffset EnforceMinimumAutoStop(DateTimeOffset stopAt)
+    {
+        var minimumStopAt = DateTimeOffset.UtcNow.AddHours(2);
+        return stopAt < minimumStopAt ? minimumStopAt : stopAt;
     }
 
     protected async Task SetAutoStopAnnotationAsync(Kubernetes client, string deploymentName, DateTimeOffset stopAt)

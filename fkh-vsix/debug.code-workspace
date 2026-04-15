@@ -5,7 +5,13 @@
     }
   ],
   "settings": {
-    "fkh.backendUrl": "https://fkh-freddydk-backend.azurewebsites.net/api",
+    "fkh.backendUrl": {
+      "freddydk": "https://fkh-freddydk-backend.azurewebsites.net/api",
+      "FreundDK": [
+        "https://fkh-bunkerholdingbc-backend.azurewebsites.net/api",
+        "https://fkh-freddydk-backend.azurewebsites.net/api"
+      ]
+    },
     "fkh.CreateContainer.adminUsername": "admin",
     "fkh.CreateContainer.adminPassword": "P@ssword1",
     "fkh.CreateContainer.autostop": "18:00"

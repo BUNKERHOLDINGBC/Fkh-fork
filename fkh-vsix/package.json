@@ -288,12 +288,15 @@
             {
               "type": "object",
               "additionalProperties": {
-                "type": "string"
+                "oneOf": [
+                  { "type": "string" },
+                  { "type": "array", "items": { "type": "string" } }
+                ]
               }
             }
           ],
           "default": "",
-          "description": "URL of the Fkh backend. Use a string for a single backend, or an object mapping GitHub account names to URLs (e.g. { \"user1\": \"https://fkh-org1-backend.azurewebsites.net/api\", \"user2\": \"https://fkh-org2-backend.azurewebsites.net/api\" })."
+          "description": "URL of the Fkh backend. Use a string for a single backend, or an object mapping GitHub account names to a URL or array of URLs (e.g. { \"user1\": [\"https://fkh-org1-backend.azurewebsites.net/api\", \"https://fkh-org2-backend.azurewebsites.net/api\"] })."
         },
         "fkh.timezone": {
           "type": "string",

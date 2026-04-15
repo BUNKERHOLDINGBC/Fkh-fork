@@ -10,6 +10,11 @@ let containersProvider: ContainersTreeProvider;
 let imagesProvider: ImagesTreeProvider;
 let vmsProvider: VMsTreeProvider;
 let currentAccountLabel: string | undefined;
+let currentBackendUrl: string | undefined;
+let projectsView: vscode.TreeView<ProjectTreeItem>;
+let containersView: vscode.TreeView<ContainerTreeItem>;
+let imagesView: vscode.TreeView<ImageTreeItem>;
+let vmsView: vscode.TreeView<VMTreeItem>;
 
 const containerLogContents = new Map<string, string>();
 const containerLogProvider: vscode.TextDocumentContentProvider = {
@@ -18,59 +23,85 @@ const containerLogProvider: vscode.TextDocumentContentProvider = {
   }
 };
 
-function getBackendUrl(): string | undefined {
-  const raw = vscode.workspace.getConfiguration('fkh').get<string | Record<string, string>>('backendUrl', '');
+function getOrgNameFromUrl(url: string): string {
+  const match = url.match(/fkh-(.+?)-backend/);
+  return match ? match[1] : '';
+}
 
-  let url: string | undefined;
+function updateConnectionTitle(): void {
+  const org = currentBackendUrl ? getOrgNameFromUrl(currentBackendUrl) : '';
+  const desc = org || undefined;
+  projectsView.description = desc;
+  containersView.description = desc;
+  imagesView.description = desc;
+  vmsView.description = desc;
+}
+
+function getBackendUrlsForAccount(): string[] {
+  const raw = vscode.workspace.getConfiguration('fkh').get<string | Record<string, string | string[]>>('backendUrl', '');
+
   if (typeof raw === 'string') {
-    url = raw.trim();
-  } else if (typeof raw === 'object' && raw !== null) {
-    // Map of GitHub account label → backend URL
-    if (currentAccountLabel && raw[currentAccountLabel]) {
-      url = raw[currentAccountLabel].trim();
-    } else {
-      // Fall back to the first entry if the current account isn't mapped
-      const first = Object.values(raw)[0];
-      url = first?.trim();
-    }
+    const trimmed = raw.trim();
+    return trimmed ? [trimmed] : [];
+  }
+  if (typeof raw === 'object' && raw !== null) {
+    const entry = (currentAccountLabel && raw[currentAccountLabel]) ?? Object.values(raw)[0];
+    if (!entry) { return []; }
+    if (typeof entry === 'string') { return [entry.trim()].filter(Boolean); }
+    if (Array.isArray(entry)) { return entry.map(u => u.trim()).filter(Boolean); }
+  }
+  return [];
+}
+
+function getBackendUrl(): string | undefined {
+  if (currentBackendUrl) { return currentBackendUrl; }
+
+  const urls = getBackendUrlsForAccount();
+  if (urls.length === 1) {
+    currentBackendUrl = urls[0];
+    updateConnectionTitle();
+    return currentBackendUrl;
+  }
+  if (urls.length > 1) {
+    // Multiple backends — use the first as a default until the user picks one
+    currentBackendUrl = urls[0];
+    updateConnectionTitle();
+    return currentBackendUrl;
   }
 
-  if (!url) {
-    vscode.window.showErrorMessage(
-      'Fkh: Backend URL is not configured. Set "fkh.backendUrl" in your settings.',
-      'Open Settings'
-    ).then((action: string | undefined) => {
-      if (action === 'Open Settings') {
-        vscode.commands.executeCommand('workbench.action.openSettings', 'fkh.backendUrl');
-      }
-    });
-    return undefined;
-  }
-  return url;
+  vscode.window.showErrorMessage(
+    'Fkh: Backend URL is not configured. Set "fkh.backendUrl" in your settings.',
+    'Open Settings'
+  ).then((action: string | undefined) => {
+    if (action === 'Open Settings') {
+      vscode.commands.executeCommand('workbench.action.openSettings', 'fkh.backendUrl');
+    }
+  });
+  return undefined;
 }
 
 export function activate(context: vscode.ExtensionContext) {
   outputChannel = vscode.window.createOutputChannel('Fkh');
 
   projectsProvider = new ProjectsTreeProvider(getRepoName, () => containersProvider.getContainers());
-  const projectsView = vscode.window.createTreeView('fkhProjects', {
+  projectsView = vscode.window.createTreeView('fkhProjects', {
     treeDataProvider: projectsProvider,
   });
 
   containersProvider = new ContainersTreeProvider(getBackendUrl, getGitHubSession);
-  const containersView = vscode.window.createTreeView('fkhContainers', {
+  containersView = vscode.window.createTreeView('fkhContainers', {
     treeDataProvider: containersProvider,
     showCollapseAll: true,
   });
 
   imagesProvider = new ImagesTreeProvider(getBackendUrl, getGitHubSession);
-  const imagesView = vscode.window.createTreeView('fkhImages', {
+  imagesView = vscode.window.createTreeView('fkhImages', {
     treeDataProvider: imagesProvider,
     showCollapseAll: true,
   });
 
   vmsProvider = new VMsTreeProvider(getBackendUrl, getGitHubSession, () => containersProvider.getContainers());
-  const vmsView = vscode.window.createTreeView('fkhVMs', {
+  vmsView = vscode.window.createTreeView('fkhVMs', {
     treeDataProvider: vmsProvider,
     showCollapseAll: true,
   });
@@ -195,16 +226,38 @@ export function activate(context: vscode.ExtensionContext) {
           ['read:user', 'read:org'],
           { createIfNone: true, clearSessionPreference: true }
         );
-        if (session) {
-          currentAccountLabel = session.account.label;
-          functionCatalog = undefined;
-          vscode.window.showInformationMessage(`Fkh: Signed in as ${session.account.label}`);
-          await containersProvider.refresh();
-          projectsProvider.refresh();
-          imagesProvider.refresh();
-          await vmsProvider.refresh();
-          vscode.commands.executeCommand('setContext', 'fkh.isAdmin', vmsProvider.visible);
+        if (!session) { return; }
+
+        currentAccountLabel = session.account.label;
+        currentBackendUrl = undefined;
+        functionCatalog = undefined;
+
+        const urls = getBackendUrlsForAccount();
+        if (urls.length > 1) {
+          const items = urls.map(u => ({
+            label: getOrgNameFromUrl(u) || u,
+            description: u,
+            url: u,
+          }));
+          const picked = await vscode.window.showQuickPick(items, {
+            placeHolder: `Select a backend for ${session.account.label}`,
+          });
+          if (!picked) { return; }
+          currentBackendUrl = picked.url;
+        } else if (urls.length === 1) {
+          currentBackendUrl = urls[0];
         }
+
+        updateConnectionTitle();
+        vscode.window.showInformationMessage(
+          `Fkh: Signed in as ${session.account.label}` +
+          (currentBackendUrl ? ` (${getOrgNameFromUrl(currentBackendUrl) || currentBackendUrl})` : '')
+        );
+        await containersProvider.refresh();
+        projectsProvider.refresh();
+        imagesProvider.refresh();
+        await vmsProvider.refresh();
+        vscode.commands.executeCommand('setContext', 'fkh.isAdmin', vmsProvider.visible);
       } catch {
         vscode.window.showErrorMessage('GitHub sign-in was cancelled or failed.');
       }
@@ -257,7 +310,10 @@ async function getGitHubSession(): Promise<vscode.AuthenticationSession | undefi
       { createIfNone: false, silent: true }
     );
     if (existing) {
-      currentAccountLabel = existing.account.label;
+      if (currentAccountLabel !== existing.account.label) {
+        currentAccountLabel = existing.account.label;
+        currentBackendUrl = undefined;
+      }
       return existing;
     }
 
@@ -269,7 +325,10 @@ async function getGitHubSession(): Promise<vscode.AuthenticationSession | undefi
       { createIfNone: true, clearSessionPreference: true }
     );
     if (session) {
-      currentAccountLabel = session.account.label;
+      if (currentAccountLabel !== session.account.label) {
+        currentAccountLabel = session.account.label;
+        currentBackendUrl = undefined;
+      }
     }
     return session;
   } catch {
