@@ -100,8 +100,8 @@ public class FkhScaleContainer : FkhServiceBase
             ?? throw new ArgumentException("Invalid autostop value. Use '<n>h' (e.g. '2h') or a time of day (e.g. '18:00' or '6PM').");
 
         var client = await GetKubernetesClientAsync();
-        await SetAutoStopAnnotationAsync(client, deploymentName, autoStop.Value.StopAt);
-        return new { Container = appName, AutoStop = $"{autoStop.Value.StopAt:yyyy-MM-dd HH:mm} UTC ({autoStop.Value.Description})" };
+        await SetAutoStopAnnotationAsync(client, deploymentName, autoStop.StopAt);
+        return new { Container = appName, AutoStop = $"{autoStop.StopAt:yyyy-MM-dd HH:mm} UTC ({autoStop.Description})" };
     }
 
     public async Task<object> ClearAutoStopForContainerAsync(Dictionary<string, string> parameters)
