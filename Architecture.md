@@ -217,6 +217,105 @@ deletes expired resources. Users can also revoke access immediately via `RevokeS
 Each user can have only one active SQL access grant. Calling `AllowSqlAccess` again
 replaces the existing grant (updating the allowed IP and extending the timer).
 
+## Kubernetes Cluster
+
+```mermaid
+graph TB
+    subgraph AKS["AKS Cluster (Azure CNI overlay)"]
+        subgraph LP["Linux Pool (1 node, fixed)"]
+            MSSQL["mssql-deployment<br/>(SQL Server 2022)"]
+            PVC["mssql-data-pvc<br/>(Premium SSD)"]
+            MSSQL --- PVC
+        end
+
+        subgraph WP["Windows Pool (autoscaler 0–N)"]
+            BC1["bc-container-1<br/>replicas: 1 (running)"]
+            BC2["bc-container-2<br/>replicas: 0 (stopped)"]
+            PP["fkh-image-prepull<br/>(DaemonSet, optional)"]
+            OP["fkh-overprovision<br/>(placeholder, optional)"]
+        end
+
+        subgraph SP["Spot Pool (optional, autoscaler 0–N)"]
+            BC3["bc-container-3<br/>replicas: 1 (spot)"]
+        end
+    end
+
+    SVC_MSSQL["mssql-service<br/>(ClusterIP :1433)"]
+    NP["NetworkPolicy<br/>(app-type: windows-servicetier only)"]
+    SVC_MSSQL --> MSSQL
+    NP -.->|"restrict ingress"| MSSQL
+
+    SVC1["LoadBalancer<br/>{app}.{region}.cloudapp.azure.com"]
+    SVC1 --> BC1
+
+    BC1 -->|"TCP 1433"| SVC_MSSQL
+    BC3 -->|"TCP 1433"| SVC_MSSQL
+
+    subgraph "Stop / Start"
+        STOP["StopContainer<br/>replicas: 1 → 0"]
+        START["StartContainer<br/>replicas: 0 → 1"]
+    end
+
+    STOP -.-> BC2
+    START -.-> BC2
+
+    subgraph "Temporary SQL Access"
+        EXT_SVC["mssql-ext-{user}<br/>(LoadBalancer, IP-restricted)"]
+        EXT_NP["mssql-allow-ip-{user}<br/>(NetworkPolicy)"]
+    end
+
+    EXT_SVC -->|":1433"| MSSQL
+    EXT_NP -.->|"allow user IP"| MSSQL
+```
+
+### Node Pools
+
+The AKS cluster has up to three node pools:
+
+| Pool | OS | VM Size | Scaling | Purpose |
+|------|----|---------|---------|---------|
+| **linuxpool** | Ubuntu | Configurable (`linux_vm_size`) | Fixed, 1 node | Runs the SQL Server pod. Always on. |
+| **win** | Windows 2022 | Configurable (`windows_vm_size`) | Autoscaler, `windows_min_node_count`–`windows_max_node_count` | Runs BC containers. Can scale to zero when idle. |
+| **spot** (optional) | Windows 2022 | Configurable (`windows_spot_vm_size`) | Autoscaler, `windows_spot_min_node_count`–`windows_spot_max_node_count` | Cheaper spot-priced Windows nodes. Can be evicted by Azure at any time (eviction policy: Delete). Tainted with `kubernetes.azure.com/scalesetpriority=spot:NoSchedule` so only containers that explicitly tolerate spot scheduling land here. |
+
+Networking uses Azure CNI overlay.
+
+### BC Containers (Windows)
+
+Each BC container is a Kubernetes Deployment + LoadBalancer Service + Secret, created dynamically by `FkhCreateContainer`. The deployment runs a single Windows pod with the BC image from ACR. The service exposes the web client on a public IP with an Azure DNS label (`{appName}.{region}.cloudapp.azure.com`).
+
+**Stop / Start** — Containers are stopped and started by scaling the deployment's replica count:
+
+- **StopContainer** — Sets `replicas: 0`. The pod is terminated but the Deployment, Service, and Secret remain. The database is preserved in SQL Server.
+- **StartContainer** — Sets `replicas: 1`. A new pod is created from the same image, reconnects to the existing database, and the same public DNS name resolves again once the LoadBalancer is ready.
+
+This means stopping a container releases all Windows node resources (and the autoscaler can scale down the node pool), while the database and Kubernetes metadata survive for a fast restart.
+
+**Auto-stop** — An optional `fkh/auto-stop-at` annotation on the deployment records a UTC timestamp. The `AutoStop` timer function (runs every 30 minutes) scales down any deployment past its stop time. Users can set, extend, or clear auto-stop via the API.
+
+### Overprovisioning (optional)
+
+When `windows_overprovision = true`, a low-priority placeholder deployment (`fkh-overprovision`) keeps a pause container running on a Windows node, reserving 500m CPU + 3 GiB. When a real BC container is scheduled, it preempts the placeholder and starts immediately. The displaced placeholder triggers the autoscaler to provision a new VM in the background, restoring spare capacity.
+
+### Image Pre-Pull (optional)
+
+When `windows_prepull_images` is set, a DaemonSet (`fkh-image-prepull`) runs init containers on every Windows node (including spot nodes) to pull the listed images. This avoids the ~14-minute image pull when creating the first container on a fresh node.
+
+### SQL Server (Linux)
+
+SQL Server 2022 runs as a single-replica Deployment on the Linux node pool (`node_selector: kubernetes.io/os = linux`).
+
+| Resource | Description |
+|----------|-------------|
+| **PersistentVolumeClaim** | `mssql-data-pvc` — Premium SSD (`managed-csi-premium`), configurable size (`sql_storage_size`, default 128 GiB). Mounted as two sub-paths: `/var/opt/mssql/data` and `/var/opt/mssql/log`. |
+| **Secret** | `mssql-secret` — Holds the SA password, injected as the `MSSQL_SA_PASSWORD` env var. |
+| **Service** | `mssql-service` — ClusterIP on port 1433 (internal only). |
+| **NetworkPolicy** | `mssql-allow-windows-app-only` — Restricts ingress to pods labeled `app-type: windows-servicetier` on port 1433. External SQL access is granted temporarily per-user via `AllowSqlAccess` (creates a separate LoadBalancer + NetworkPolicy). |
+
+An init container (`fix-permissions`) runs as root to `chown` the data and log directories to the `mssql` user (UID 10001) before SQL Server starts.
+
+All BC container databases live in this single SQL Server instance. Each container gets its own database, restored from a `.bak` backup via `sqlcmd`. When a container is removed, its database is dropped. The PVC ensures data survives pod restarts and node reboots.
+
 ## Deployment
 
 ### Overview
