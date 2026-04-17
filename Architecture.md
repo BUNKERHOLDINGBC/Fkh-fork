@@ -231,7 +231,7 @@ There are two ways to deploy the infrastructure:
 
 Both the local script and the `DeployFkhFullStack` workflow perform the **same steps**. The workflow reimplements the `deploy.ps1` logic as individual workflow steps. The only differences are:
 
-- **Authentication** — `deploy.ps1` uses an interactive `az login`; the workflow uses OIDC (federated credential on the Deploy App Registration).
+- **Authentication** — `deploy.ps1` uses the user's own `az login` session (the user needs `Contributor` + `User Access Administrator` on the subscription); the workflow uses OIDC via the Deploy App Registration.
 - **Secrets** — `deploy.ps1` recovers secrets from Terraform state on re-deploys (or prompts interactively); the workflow gets them from GitHub Actions secrets.
 
 ### Deploy Steps
@@ -306,9 +306,11 @@ Audience: api://AzureADTokenExchange
 
 This lets the `CreateImages` workflow authenticate to Azure as the managed identity (passwordless) to push images to ACR and upload database backups to Blob Storage.
 
-#### 2. Deploy App Registration (created manually)
+#### 2. Deploy App Registration (created manually, workflows only)
 
-For the **deploy workflows** (`DeployFkhFullStack`, `UpdateFkhBackEnd`), you must create a separate Azure AD App Registration with:
+The `DeployFkhFullStack` and `UpdateFkhBackEnd` **workflows** need an Azure AD App Registration to authenticate via OIDC. (`deploy.ps1` does **not** use this — it relies on the user's own `az login` session, which must have `Contributor` + `User Access Administrator` on the subscription.)
+
+Create an App Registration with:
 
 - A **federated credential** for GitHub Actions OIDC:
   ```
@@ -395,19 +397,20 @@ graph TB
         S1 --> S2 --> S3 --> S4 --> S5 --> S6 --> S7 --> S8 --> S9
     end
 
-    LOCAL["deploy.ps1<br/>(interactive az login)"] --> S1
-    WF["DeployFkhFullStack<br/>(OIDC federated cred)"] --> S1
+    LOCAL["deploy.ps1"] --> S1
+    WF["DeployFkhFullStack"] --> S1
 
     LOCAL -.->|"secrets from state<br/>or interactive prompt"| S3
     WF -.->|"secrets from<br/>GitHub Actions secrets"| S3
 
     subgraph "Identities"
+        USER["User's az login<br/>(Contributor + UAA)"]
         DEPLOY_APP["Deploy App Registration<br/>(Contributor + UAA)"]
         MI["Managed Identity<br/>(AKS + ACR + Storage)"]
         GH_APP["GitHub App<br/>(workflow dispatch)"]
     end
 
-    LOCAL -.->|"az login<br/>(interactive)"| DEPLOY_APP
+    LOCAL -.->|"interactive az login"| USER
     WF -.->|"OIDC"| DEPLOY_APP
     S7 --> MI
 ```
