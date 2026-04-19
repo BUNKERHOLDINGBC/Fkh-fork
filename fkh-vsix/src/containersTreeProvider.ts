@@ -255,11 +255,11 @@ export class ContainersTreeProvider implements vscode.TreeDataProvider<Container
   }
 
   private async fetchContainers(showAll?: boolean): Promise<{ containers: ContainerInfo[]; connected: boolean }> {
-    const baseUrl = this._getBackendUrl();
-    if (!baseUrl) { return { containers: [], connected: false }; }
-
     const session = await this._getGitHubSession();
     if (!session) { return { containers: [], connected: false }; }
+
+    const baseUrl = this._getBackendUrl();
+    if (!baseUrl) { return { containers: [], connected: false }; }
 
     try {
       const response = await fetch(`${baseUrl}/ListContainers`, {
@@ -370,11 +370,11 @@ export class ImagesTreeProvider implements vscode.TreeDataProvider<ImageTreeItem
   }
 
   private async fetchImages(): Promise<ImageInfo[]> {
-    const baseUrl = this._getBackendUrl();
-    if (!baseUrl) { return []; }
-
     const session = await this._getGitHubSession();
     if (!session) { return []; }
+
+    const baseUrl = this._getBackendUrl();
+    if (!baseUrl) { return []; }
 
     try {
       const response = await fetch(`${baseUrl}/ListImages`, {
@@ -560,11 +560,11 @@ export class VMsTreeProvider implements vscode.TreeDataProvider<VMTreeItem> {
   }
 
   private async fetchVMs(): Promise<{ vms: VMInfo[]; visible: boolean }> {
-    const baseUrl = this._getBackendUrl();
-    if (!baseUrl) { return { vms: [], visible: false }; }
-
     const session = await this._getGitHubSession();
     if (!session) { return { vms: [], visible: false }; }
+
+    const baseUrl = this._getBackendUrl();
+    if (!baseUrl) { return { vms: [], visible: false }; }
 
     try {
       const response = await fetch(`${baseUrl}/ListVMs`, {

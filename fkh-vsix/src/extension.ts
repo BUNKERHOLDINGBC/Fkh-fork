@@ -33,8 +33,11 @@ function getOrgNameFromUrl(url: string): string {
 function updateConnectionTitle(): void {
   const org = currentBackendUrl ? getOrgNameFromUrl(currentBackendUrl) : '';
   const desc = !currentBackendUrl ? undefined
-    : (containersProvider.initialized && !containersProvider.connected) ? 'disconnected'
-    : (org || undefined);
+    : (containersProvider.initialized && containersProvider.connected)
+      ? [currentAccountLabel, org].filter(Boolean).join(' - ') || undefined
+    : containersProvider.initialized
+      ? [currentAccountLabel, 'disconnected'].filter(Boolean).join(' - ')
+    : undefined;
   projectsView.description = desc;
   containersView.description = desc;
   imagesView.description = desc;
@@ -130,6 +133,18 @@ export function activate(context: vscode.ExtensionContext) {
     containersView,
     imagesView,
     vmsView,
+    vscode.workspace.onDidChangeConfiguration(async (e) => {
+      if (e.affectsConfiguration('fkh.backendUrl')) {
+        currentBackendUrl = undefined;
+        functionCatalog = undefined;
+        await containersProvider.refresh();
+        updateConnectionTitle();
+        projectsProvider.refresh();
+        imagesProvider.refresh();
+        await vmsProvider.refresh();
+        vscode.commands.executeCommand('setContext', 'fkh.isAdmin', vmsProvider.visible);
+      }
+    }),
     vscode.workspace.registerTextDocumentContentProvider('fkh-log', containerLogProvider),
     vscode.commands.registerCommand('fkh.refreshProjects', () => projectsProvider.refresh()),
     vscode.commands.registerCommand('fkh.refreshContainers', async () => {
