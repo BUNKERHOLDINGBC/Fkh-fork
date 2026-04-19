@@ -12,10 +12,12 @@ namespace Fkh.Services;
 public class FkhCreateContainer : FkhServiceBase
 {
     private readonly GitHubAppTokenService _gitHubAppTokenService;
+    private readonly FkhUserSettings _userSettings;
 
-    public FkhCreateContainer(ILogger<FkhCreateContainer> logger, GitHubAppTokenService gitHubAppTokenService) : base(logger)
+    public FkhCreateContainer(ILogger<FkhCreateContainer> logger, GitHubAppTokenService gitHubAppTokenService, FkhUserSettings userSettings) : base(logger)
     {
         _gitHubAppTokenService = gitHubAppTokenService;
+        _userSettings = userSettings;
     }
 
     public async Task<object> CreateContainerAsync(Dictionary<string, string> parameters)
@@ -48,6 +50,29 @@ public class FkhCreateContainer : FkhServiceBase
 
         Logger.LogInformation("Image found. Ensuring a Windows node is ready...");
         var client = await GetKubernetesClientAsync();
+
+        // ── Enforce MaxContainers limit ──────────────────────────────────────
+        var isAdmin = parameters.TryGetValue("_isAdmin", out var isAdminVal)
+            && string.Equals(isAdminVal, "true", StringComparison.OrdinalIgnoreCase);
+        var maxNode = await _userSettings.GetResolvedSettingAsync(githubUsername, isAdmin, "MaxContainers");
+        var maxContainers = maxNode?.GetValue<int>() ?? -1;
+
+        var allDeployments = await client.ListNamespacedDeploymentAsync(Namespace,
+            labelSelector: "app-type=windows-servicetier");
+        var usernamePrefix = $"{githubUsername.ToLowerInvariant()}-";
+        var activeCount = allDeployments.Items
+            .Count(d => d.Spec.Template.Metadata.Labels != null
+                && d.Spec.Template.Metadata.Labels.TryGetValue("app", out var app)
+                && app.StartsWith(usernamePrefix, StringComparison.OrdinalIgnoreCase)
+                && (d.Spec.Replicas ?? 0) > 0);
+
+        if (maxContainers >= 0 && activeCount >= maxContainers)
+        {
+            throw new InvalidOperationException(
+                $"You already have {activeCount} active container(s). Your limit is {maxContainers}. "
+                + "Please stop or remove an existing container before creating a new one.");
+        }
+
         await EnsureWindowsNodeReadyAsync(client, useSpot);
         await CleanupPlaceholderPodAsync(client, useSpot);
 
