@@ -20,3 +20,6 @@ terraform/terraform.tfstate.backup
 
 # Private keys
 *.pem
+
+# Visual Studio solution file
+Fkh.sln

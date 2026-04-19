@@ -216,3 +216,26 @@ variable "contact_email_for_letsencrypt" {
   description = "Contact email for Let's Encrypt certificate generation."
   type        = string
 }
+
+# ── User Settings ─────────────────────────────────────────────────────────────
+
+variable "default_user_settings" {
+  description = "Default user settings JSON. Deployed to the 'settings/defaultusersettings.json' blob. Keys '_members' and '_admins' define defaults for each role."
+  type        = string
+  default     = <<-EOT
+    {
+      "_members": {
+        "MaxContainers": 3
+      },
+      "_admins": {
+        "MaxContainers": 10
+      }
+    }
+  EOT
+}
+
+variable "kubecost_enabled" {
+  description = "Deploy Kubecost free tier for per-pod cost analysis."
+  type        = bool
+  default     = false
+}

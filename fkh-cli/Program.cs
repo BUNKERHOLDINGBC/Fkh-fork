@@ -14,6 +14,8 @@ Usage:
 Options:
     --key "value"       Provide a parameter value (discovered from GetFunctionCatalog)
     --oidcToken <token> Use a GitHub Actions OIDC token instead of gh auth
+    --ghUser <user>     GitHub user account for gh auth token -u <user>
+    --backendUrl <url>  Override the backend URL (takes priority over env/settings)
     --nowait            Don't wait for completion (createcontainer, createimage)
     --asJson            Output the result as JSON
     --output <path>     Save binary output (e.g. event log) to this file path
@@ -21,9 +23,10 @@ Options:
     --version           Show version
 
 Configuration (checked in order):
-  1. FKH_BACKEND_URL environment variable
-  2. ~/.fkh/settings.json   (recommended for dotnet tool install)
-  3. fkh.settings.json next to the executable
+  1. --backendUrl <url>     command-line override
+  2. FKH_BACKEND_URL environment variable
+  3. ~/.fkh/settings.json   (recommended for dotnet tool install)
+  4. fkh.settings.json next to the executable
 
     {
         "backendUrl": "https://fkh-<org>-backend.azurewebsites.net/api"
@@ -34,6 +37,7 @@ Authentication (checked in order):
   2. OIDC_TOKEN            GitHub Actions OIDC token (environment variable)
   3. GH_TOKEN              GitHub personal access token
   4. gh auth token         GitHub CLI (interactive fallback)
+                           Use --ghUser <user> to target a specific GitHub account
 """;
 
 var asJson = args.Contains("--asJson", StringComparer.OrdinalIgnoreCase);
@@ -50,6 +54,12 @@ try
     }
 
     var settings = LoadSettings();
+
+    // Apply command-line overrides
+    var cliBackendUrl = FindArgValue(args, "backendUrl");
+    if (!string.IsNullOrWhiteSpace(cliBackendUrl))
+        settings.BackendUrl = cliBackendUrl;
+    settings.User = FindArgValue(args, "ghUser");
     var wantsHelp = args.Length == 0 || args.Contains("-h") || args.Contains("--help");
 
     // ── Check for client-side commands first (not in the server catalog) ──────
@@ -110,7 +120,7 @@ try
     }
 
     var endpoint = ResolveEndpoint(function.Route, settings);
-    var token = parsed.OidcToken ?? GetGitHubToken();
+    var token = parsed.OidcToken ?? GetGitHubToken(settings.User);
 
     // Send the client's timezone so the server can resolve time-of-day autostop values
     parsed.Parameters["_timezone"] = Environment.GetEnvironmentVariable("FKH_TIMEZONE") is string tz && !string.IsNullOrWhiteSpace(tz)
@@ -328,6 +338,17 @@ static ParsedArgs ParseArgs(string[] args, FunctionCatalogResponse catalog)
                 throw new InvalidOperationException("Missing value for --oidcToken");
             }
             parsed.OidcToken = args[i];
+            continue;
+        }
+
+        if (string.Equals(key, "ghUser", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(key, "backendUrl", StringComparison.OrdinalIgnoreCase))
+        {
+            i++;
+            if (i >= args.Length)
+            {
+                throw new InvalidOperationException($"Missing value for --{key}");
+            }
             continue;
         }
 
@@ -606,7 +627,17 @@ static void PrintUsage(FunctionCatalogResponse catalog)
     }
 }
 
-static string GetGitHubToken()
+static string? FindArgValue(string[] args, string name)
+{
+    for (var i = 0; i < args.Length - 1; i++)
+    {
+        if (string.Equals(args[i], $"--{name}", StringComparison.OrdinalIgnoreCase))
+            return args[i + 1];
+    }
+    return null;
+}
+
+static string GetGitHubToken(string? user = null)
 {
     var token = Environment.GetEnvironmentVariable("OIDC_TOKEN");
     if (!string.IsNullOrWhiteSpace(token))
@@ -629,6 +660,11 @@ static string GetGitHubToken()
         UseShellExecute = false,
         CreateNoWindow = true
     };
+    if (!string.IsNullOrWhiteSpace(user))
+    {
+        psi.ArgumentList.Add("-u");
+        psi.ArgumentList.Add(user);
+    }
 
     using var process = Process.Start(psi) ?? throw new InvalidOperationException("Could not start 'gh'.");
     var stdout = process.StandardOutput.ReadToEnd();
@@ -734,7 +770,7 @@ static void FormatElement(StringBuilder sb, JsonElement element, int indent)
         case JsonValueKind.Object:
             foreach (var prop in element.EnumerateObject())
             {
-                var label = PascalToTitle(prop.Name);
+                var label = prop.Name;
                 if (prop.Value.ValueKind == JsonValueKind.Object)
                 {
                     sb.AppendLine($"{prefix}{Ansi.Cyan}{label}:{Ansi.Reset}");
@@ -787,22 +823,6 @@ static void FormatElement(StringBuilder sb, JsonElement element, int indent)
     }
 }
 
-static string PascalToTitle(string name)
-{
-    if (string.IsNullOrEmpty(name)) return name;
-    var sb = new StringBuilder();
-    sb.Append(char.ToUpper(name[0]));
-    for (var i = 1; i < name.Length; i++)
-    {
-        if (char.IsUpper(name[i]) && i > 0 && !char.IsUpper(name[i - 1]))
-        {
-            sb.Append(' ');
-        }
-        sb.Append(name[i]);
-    }
-    return sb.ToString();
-}
-
 static CliSettings LoadSettings()
 {
     // 1. Environment variable takes priority
@@ -847,7 +867,8 @@ sealed class ParsedArgs
 
 sealed class CliSettings
 {
-    public string? BackendUrl { get; init; }
+    public string? BackendUrl { get; set; }
+    public string? User { get; set; }
 }
 
 sealed class FunctionCatalogResponse
@@ -976,6 +997,15 @@ abstract class ClientCommand
             if (string.Equals(key, "asJson", StringComparison.OrdinalIgnoreCase))
                 continue;
 
+            if (string.Equals(key, "ghUser", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(key, "backendUrl", StringComparison.OrdinalIgnoreCase))
+            {
+                i++;
+                if (i >= args.Length)
+                    throw new InvalidOperationException($"Missing value for --{key}");
+                continue;
+            }
+
             i++;
             if (i >= args.Length)
                 throw new InvalidOperationException($"Missing value for --{key}");
@@ -985,17 +1015,17 @@ abstract class ClientCommand
         return parameters;
     }
 
-    protected static string GetToken(Dictionary<string, string> parameters)
+    protected static string GetToken(Dictionary<string, string> parameters, string? user = null)
     {
         if (parameters.TryGetValue("oidcToken", out var oidc) && !string.IsNullOrWhiteSpace(oidc))
         {
             parameters.Remove("oidcToken");
             return oidc;
         }
-        return GetGitHubTokenStatic();
+        return GetGitHubTokenStatic(user);
     }
 
-    private static string GetGitHubTokenStatic()
+    private static string GetGitHubTokenStatic(string? user = null)
     {
         var token = Environment.GetEnvironmentVariable("OIDC_TOKEN");
         if (!string.IsNullOrWhiteSpace(token)) return token;
@@ -1012,6 +1042,11 @@ abstract class ClientCommand
             UseShellExecute = false,
             CreateNoWindow = true
         };
+        if (!string.IsNullOrWhiteSpace(user))
+        {
+            psi.ArgumentList.Add("-u");
+            psi.ArgumentList.Add(user);
+        }
 
         using var process = Process.Start(psi) ?? throw new InvalidOperationException("Could not start 'gh'.");
         var stdout = process.StandardOutput.ReadToEnd();
@@ -1083,7 +1118,7 @@ sealed class UploadDatabaseCommand : ClientCommand
             return 1;
         }
 
-        var token = GetToken(parameters);
+        var token = GetToken(parameters, settings.User);
         var backendUrl = settings.BackendUrl?.TrimEnd('/');
         if (string.IsNullOrWhiteSpace(backendUrl))
         {
@@ -1251,7 +1286,7 @@ sealed class DownloadDatabaseCommand : ClientCommand
 
         parameters.TryGetValue("output", out var outputPath);
 
-        var token = GetToken(parameters);
+        var token = GetToken(parameters, settings.User);
         var backendUrl = settings.BackendUrl?.TrimEnd('/');
         if (string.IsNullOrWhiteSpace(backendUrl))
         {
@@ -1425,7 +1460,7 @@ sealed class StatusCommand : ClientCommand
             return 1;
         }
 
-        var token = GetToken(parameters);
+        var token = GetToken(parameters, settings.User);
         var backendUrl = settings.BackendUrl?.TrimEnd('/');
         if (string.IsNullOrWhiteSpace(backendUrl))
         {

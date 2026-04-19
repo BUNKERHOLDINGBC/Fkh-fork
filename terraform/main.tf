@@ -18,6 +18,10 @@ terraform {
       source  = "hashicorp/kubernetes"
       version = "~> 2.30"
     }
+    helm = {
+      source  = "hashicorp/helm"
+      version = "~> 2.14"
+    }
   }
 
   backend "azurerm" {}
@@ -76,13 +80,15 @@ resource "azurerm_kubernetes_cluster" "this" {
   resource_group_name = azurerm_resource_group.this.name
   dns_prefix          = local.aks_dns_prefix
   sku_tier            = var.aks_sku_tier
+  cost_analysis_enabled = var.aks_sku_tier != "Free"
   oidc_issuer_enabled = true
 
   default_node_pool {
-    name       = "linuxpool"
-    node_count = 1
-    vm_size    = var.linux_vm_size
-    os_sku     = "Ubuntu"
+    name                         = "linuxpool"
+    node_count                   = 1
+    vm_size                      = var.linux_vm_size
+    os_sku                       = "Ubuntu"
+    temporary_name_for_rotation  = "linuxtmp"
   }
 
   network_profile {
@@ -106,15 +112,16 @@ resource "azurerm_kubernetes_cluster" "this" {
 # ============================================================================
 
 resource "azurerm_kubernetes_cluster_node_pool" "win" {
-  name                  = "win"
-  kubernetes_cluster_id = azurerm_kubernetes_cluster.this.id
-  vm_size               = var.windows_vm_size
-  os_type               = "Windows"
-  os_sku                = "Windows2022"
-  node_count            = var.windows_min_node_count
-  min_count             = var.windows_min_node_count
-  max_count             = var.windows_max_node_count
-  auto_scaling_enabled  = true
+  name                         = "win"
+  kubernetes_cluster_id        = azurerm_kubernetes_cluster.this.id
+  vm_size                      = var.windows_vm_size
+  os_type                      = "Windows"
+  os_sku                       = "Windows2022"
+  temporary_name_for_rotation  = "wintmp"
+  node_count                   = var.windows_min_node_count
+  min_count                    = var.windows_min_node_count
+  max_count                    = var.windows_max_node_count
+  auto_scaling_enabled         = true
 }
 
 # ============================================================================
@@ -122,13 +129,14 @@ resource "azurerm_kubernetes_cluster_node_pool" "win" {
 # ============================================================================
 
 resource "azurerm_kubernetes_cluster_node_pool" "winspot" {
-  count                 = var.windows_spot_enabled ? 1 : 0
-  name                  = "spot"
-  kubernetes_cluster_id = azurerm_kubernetes_cluster.this.id
-  vm_size               = var.windows_spot_vm_size
-  os_type               = "Windows"
-  os_sku                = "Windows2022"
-  node_count            = var.windows_spot_min_node_count
+  count                        = var.windows_spot_enabled ? 1 : 0
+  name                         = "spot"
+  kubernetes_cluster_id        = azurerm_kubernetes_cluster.this.id
+  vm_size                      = var.windows_spot_vm_size
+  os_type                      = "Windows"
+  os_sku                       = "Windows2022"
+  temporary_name_for_rotation  = "spottmp"
+  node_count                   = var.windows_spot_min_node_count
   min_count             = var.windows_spot_min_node_count
   max_count             = var.windows_spot_max_node_count
   auto_scaling_enabled  = true

@@ -178,8 +178,9 @@ export class ContainersTreeProvider implements vscode.TreeDataProvider<Container
 
   private containers: ContainerInfo[] = [];
   private myContainers: ContainerInfo[] = [];
-  private initialized = false;
+  private _initialized = false;
   private _showAll = false;
+  private _connected = false;
   private _getBackendUrl: () => string | undefined;
   private _getGitHubSession: () => Promise<vscode.AuthenticationSession | undefined>;
 
@@ -202,10 +203,15 @@ export class ContainersTreeProvider implements vscode.TreeDataProvider<Container
   get showAll(): boolean { return this._showAll; }
   set showAll(value: boolean) { this._showAll = value; }
 
+  get initialized(): boolean { return this._initialized; }
+  get connected(): boolean { return this._connected; }
+
   async refresh(): Promise<void> {
-    this.myContainers = await this.fetchContainers(false);
-    this.containers = this._showAll ? await this.fetchContainers(true) : this.myContainers;
-    this.initialized = true;
+    const myResult = await this.fetchContainers(false);
+    this._connected = myResult.connected;
+    this.myContainers = myResult.containers;
+    this.containers = this._showAll ? (await this.fetchContainers(true)).containers : this.myContainers;
+    this._initialized = true;
     this._onDidChangeTreeData.fire(undefined);
   }
 
@@ -248,12 +254,12 @@ export class ContainersTreeProvider implements vscode.TreeDataProvider<Container
     return [];
   }
 
-  private async fetchContainers(showAll?: boolean): Promise<ContainerInfo[]> {
+  private async fetchContainers(showAll?: boolean): Promise<{ containers: ContainerInfo[]; connected: boolean }> {
     const baseUrl = this._getBackendUrl();
-    if (!baseUrl) { return []; }
+    if (!baseUrl) { return { containers: [], connected: false }; }
 
     const session = await this._getGitHubSession();
-    if (!session) { return []; }
+    if (!session) { return { containers: [], connected: false }; }
 
     try {
       const response = await fetch(`${baseUrl}/ListContainers`, {
@@ -266,12 +272,12 @@ export class ContainersTreeProvider implements vscode.TreeDataProvider<Container
           || Intl.DateTimeFormat().resolvedOptions().timeZone, ...(showAll ? { all: 'true' } : {}) } }),
       });
 
-      if (!response.ok) { return []; }
+      if (!response.ok) { return { containers: [], connected: false }; }
 
       const result = await response.json() as { containers: ContainerInfo[] };
-      return result.containers ?? [];
+      return { containers: result.containers ?? [], connected: true };
     } catch {
-      return [];
+      return { containers: [], connected: false };
     }
   }
 }

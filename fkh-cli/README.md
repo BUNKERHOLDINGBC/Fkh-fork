@@ -17,9 +17,10 @@ dotnet tool install --global fkh
 
 The CLI looks for the backend URL in this order:
 
-1. `FKH_BACKEND_URL` environment variable
-2. `~/.fkh/settings.json` (recommended for global tool installs)
-3. `fkh.settings.json` next to the executable
+1. `--backendUrl <url>` command-line option
+2. `FKH_BACKEND_URL` environment variable
+3. `~/.fkh/settings.json` (recommended for global tool installs)
+4. `fkh.settings.json` next to the executable
 
 Create a settings file with:
 
@@ -36,7 +37,7 @@ Authentication is resolved in this order:
 1. `--oidcToken <token>` — GitHub Actions OIDC token passed on the command line
 2. `OIDC_TOKEN` environment variable
 3. `GH_TOKEN` environment variable
-4. `gh auth token` — GitHub CLI (interactive fallback)
+4. `gh auth token` — GitHub CLI (interactive fallback). Use `--ghUser <user>` to target a specific GitHub account.
 
 ### Access Control
 
@@ -60,6 +61,8 @@ fkh <command> [--key "value" ...]
 | Option | Description |
 |--------|-------------|
 | `--oidcToken <token>` | Use a GitHub Actions OIDC token instead of `gh auth` |
+| `--ghUser <user>` | GitHub user account for `gh auth token -u <user>` |
+| `--backendUrl <url>` | Override the backend URL (takes priority over env/settings) |
 | `--nowait` | Don't wait for completion (applies to `createcontainer`, `createimage`) |
 | `--asJson` | Output the result as JSON |
 | `-h`, `--help` | Show help and list available commands |

@@ -17,6 +17,8 @@ let imagesView: vscode.TreeView<ImageTreeItem>;
 let vmsView: vscode.TreeView<VMTreeItem>;
 
 const containerLogContents = new Map<string, string>();
+const notifiedAutoStopContainers = new Set<string>();
+let autoStopCheckTimer: ReturnType<typeof setInterval> | undefined;
 const containerLogProvider: vscode.TextDocumentContentProvider = {
   provideTextDocumentContent(uri: vscode.Uri): string {
     return containerLogContents.get(uri.toString()) ?? '';
@@ -30,7 +32,9 @@ function getOrgNameFromUrl(url: string): string {
 
 function updateConnectionTitle(): void {
   const org = currentBackendUrl ? getOrgNameFromUrl(currentBackendUrl) : '';
-  const desc = org || undefined;
+  const desc = !currentBackendUrl ? undefined
+    : (containersProvider.initialized && !containersProvider.connected) ? 'disconnected'
+    : (org || undefined);
   projectsView.description = desc;
   containersView.description = desc;
   imagesView.description = desc;
@@ -109,11 +113,16 @@ export function activate(context: vscode.ExtensionContext) {
   // Delay initial population to let the extension host settle
   setTimeout(async () => {
     await containersProvider.refresh();
+    updateConnectionTitle();
     projectsProvider.refresh();
     imagesProvider.refresh();
     await vmsProvider.refresh();
     vscode.commands.executeCommand('setContext', 'fkh.isAdmin', vmsProvider.visible);
+    checkAutoStopNotifications();
   }, 5000);
+
+  // Check for approaching auto-stop times every 60 seconds
+  autoStopCheckTimer = setInterval(() => checkAutoStopNotifications(), 60_000);
 
   context.subscriptions.push(
     outputChannel,
@@ -125,18 +134,21 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('fkh.refreshProjects', () => projectsProvider.refresh()),
     vscode.commands.registerCommand('fkh.refreshContainers', async () => {
       await containersProvider.refresh();
+      updateConnectionTitle();
       projectsProvider.refresh();
     }),
     vscode.commands.registerCommand('fkh.showAllContainers', async () => {
       containersProvider.showAll = true;
       vscode.commands.executeCommand('setContext', 'fkh.showAllContainers', true);
       await containersProvider.refresh();
+      updateConnectionTitle();
       projectsProvider.refresh();
     }),
     vscode.commands.registerCommand('fkh.showMyContainers', async () => {
       containersProvider.showAll = false;
       vscode.commands.executeCommand('setContext', 'fkh.showAllContainers', false);
       await containersProvider.refresh();
+      updateConnectionTitle();
       projectsProvider.refresh();
     }),
     vscode.commands.registerCommand('fkh.refreshImages', () => imagesProvider.refresh()),
@@ -272,6 +284,7 @@ export function activate(context: vscode.ExtensionContext) {
           (currentBackendUrl ? ` (${getOrgNameFromUrl(currentBackendUrl) || currentBackendUrl})` : '')
         );
         await containersProvider.refresh();
+        updateConnectionTitle();
         projectsProvider.refresh();
         imagesProvider.refresh();
         await vmsProvider.refresh();
@@ -775,6 +788,7 @@ async function invokeFunctionByName(functionName: string, prefilled: Record<stri
       }
 
       await containersProvider.refresh();
+      updateConnectionTitle();
       projectsProvider.refresh();
       imagesProvider.refresh();
     }
@@ -828,6 +842,7 @@ async function invokeContainerAction(
       }
 
       await containersProvider.refresh();
+      updateConnectionTitle();
       projectsProvider.refresh();
     }
   );
@@ -1060,4 +1075,43 @@ async function createImage(): Promise<void> {
   await invokeFunctionByName('CreateImage', { artifactUrl: artifact });
 }
 
-export function deactivate() {}
+export function deactivate() {
+  if (autoStopCheckTimer) {
+    clearInterval(autoStopCheckTimer);
+    autoStopCheckTimer = undefined;
+  }
+}
+
+function checkAutoStopNotifications(): void {
+  const containers = containersProvider.getMyContainers();
+  const now = Date.now();
+
+  for (const c of containers) {
+    if (!c.autoStop) { continue; }
+
+    // Parse "yyyy-MM-dd HH:mm (in Xh XXm)" — extract the absolute time part
+    const match = c.autoStop.match(/^(\d{4}-\d{2}-\d{2} \d{2}:\d{2})/);
+    if (!match) { continue; }
+
+    const stopTime = new Date(match[1].replace(' ', 'T')).getTime();
+    if (isNaN(stopTime)) { continue; }
+
+    const minutesLeft = (stopTime - now) / 60_000;
+    const key = `${c.name}|${match[1]}`;
+
+    if (minutesLeft > 0 && minutesLeft <= 15 && !notifiedAutoStopContainers.has(key)) {
+      notifiedAutoStopContainers.add(key);
+      const label = c.name;
+      vscode.window.showWarningMessage(
+        `Container "${label}" will shut down in ${Math.ceil(minutesLeft)} minutes.`,
+        'Extend 2h',
+        'Dismiss'
+      ).then(async (action) => {
+        if (action === 'Extend 2h') {
+          notifiedAutoStopContainers.delete(key);
+          await invokeContainerAction('ExtendAutoStop', label);
+        }
+      });
+    }
+  }
+}

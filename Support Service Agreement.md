@@ -1,10 +1,10 @@
-# Freddy.DK's AL-Go for GitHub Managed Service
+# Freddy.DK's Support Service Agreement for <br>AL-Go for GitHub and Freddy's Kubernetes Helper (Fkh)
 
 | Feature | Free | Essential | Advanced | Enterprise |
 |---|---|---|---|---|
 | GitHub based AL-Go & Fkh support | ✅ Community | ✅ | ✅ | ✅ Prioritized |
 | Newsletter | ✅ (signup) | ✅ | ✅ | ✅ |
-| Assisted bug reporting to Microsoft | ❌ | ✅ | ✅ | ✅ |
+| Assisted bug reporting to Microsoft on AL-Go and/or Docker | ❌ | ✅ | ✅ | ✅ |
 | Onboarding + report (not included in subscription) | ❌ | ✅ (optional) | ✅ (required) | ✅ (required) |
 | Migration guidance Azure DevOps → AL-Go (not included in subscription) | ❌ | ✅ (optional) | ✅ (optional) | ✅ (optional) |
 | Your DevOps role | Self-Service | Supported Self-Service | Guided execution | Collaborative team |

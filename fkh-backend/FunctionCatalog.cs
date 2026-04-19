@@ -537,6 +537,90 @@ public static class FunctionCatalog
             Hidden = true,
             AdminOnly = true,
             Parameters = new List<FunctionParameterDefinition>()
+        },
+        new FunctionDefinition
+        {
+            Name = "GetSettings",
+            Description = "Gets user settings. Admins can view settings for any user or all users. Users can only view their own settings.",
+            Route = "GetSettings",
+            Parameters = new List<FunctionParameterDefinition>
+            {
+                new()
+                {
+                    Name = "username",
+                    Type = "string",
+                    Description = "Username to get settings for. Omit to get your own settings (or all settings if admin).",
+                    Required = false,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "property",
+                    Type = "string",
+                    Description = "Specific setting to retrieve. Omit to get all settings.",
+                    Required = false,
+                    DefaultValue = null
+                }
+            }
+        },
+        new FunctionDefinition
+        {
+            Name = "SetSettings",
+            Description = "Sets a user setting. Admins can set settings for any user, _members, and _admins. Users can only set their own non-admin settings.",
+            Route = "SetSettings",
+            Parameters = new List<FunctionParameterDefinition>
+            {
+                new()
+                {
+                    Name = "username",
+                    Type = "string",
+                    Description = "Username to set settings for. Omit to set your own settings. Admins can use '_members' or '_admins' for defaults.",
+                    Required = false,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "property",
+                    Type = "string",
+                    Description = "Setting name to set (e.g. 'MaxContainers').",
+                    Required = true,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "value",
+                    Type = "string",
+                    Description = "Value to set the setting to.",
+                    Required = true,
+                    DefaultValue = null
+                }
+            }
+        },
+        new FunctionDefinition
+        {
+            Name = "ClearSettings",
+            Description = "Clears user settings. If a property is specified, only that setting is removed. If omitted, all settings for the user are removed. Admin only.",
+            Route = "ClearSettings",
+            AdminOnly = true,
+            Parameters = new List<FunctionParameterDefinition>
+            {
+                new()
+                {
+                    Name = "username",
+                    Type = "string",
+                    Description = "Username to clear settings for. Use '_members' or '_admins' to clear default settings.",
+                    Required = true,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "property",
+                    Type = "string",
+                    Description = "Specific setting to remove. Omit to remove all settings for the user.",
+                    Required = false,
+                    DefaultValue = null
+                }
+            }
         }
     };
 
