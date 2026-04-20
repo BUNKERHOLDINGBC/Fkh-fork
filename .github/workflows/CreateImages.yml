@@ -143,6 +143,46 @@ jobs:
 
       - name: Build and push image
         shell: pwsh
+        env:
+          DBS_STORAGE_ACCOUNT: ${{ secrets.DBS_STORAGE_ACCOUNT }}
+        run: |
+          $credential = New-Object pscredential -ArgumentList 'admin', (ConvertTo-SecureString -String ([Guid]::NewGuid().ToString()) -AsPlainText -Force)
+          New-BcContainer -accept_eula -containerName bcserver -artifactUrl $env:ARTIFACT_URL -auth UserPassword -Credential $credential -multitenant -myScripts @( @{ "SetupTenant.ps1" = {
+            $customConfigFile = Join-Path (Get-Item "C:\Program Files\Microsoft Dynamics NAV\*\Service").FullName "CustomSettings.config"
+            [xml]$customConfig = [System.IO.File]::ReadAllText($customConfigFile)
+            $multitenant = ($customConfig.SelectSingleNode("//appSettings/add[@key='Multitenant']").Value -eq "true")
+            $databaseServer = $customConfig.SelectSingleNode("//appSettings/add[@key='DatabaseServer']").Value
+            $databaseInstance = $customConfig.SelectSingleNode("//appSettings/add[@key='DatabaseInstance']").Value
+            $databaseName = $customConfig.SelectSingleNode("//appSettings/add[@key='DatabaseName']").Value
+            Write-Host -ForegroundColor Yellow "HERE WE GO $serverInstance $databaseName"
+            $databaseServerInstance = $databaseServer
+            if ("$databaseInstance" -ne "") {
+                $databaseServerInstance = "$databaseServer\$databaseInstance"
+            }
+            Backup-SqlDatabase -ServerInstance $databaseServerInstance -database 'default' -BackupFile 'c:\run\my\tenant.bak'
+            Backup-SqlDatabase -ServerInstance $databaseServerInstance -database $databaseName -BackupFile "c:\run\my\app.bak"
+            . c:\run\SetupTenant.ps1
+          }})
+          $ErrorActionPreference = "Stop"
+          $storageAccount = $env:DBS_STORAGE_ACCOUNT
+          $containerName = "cronus"
+          foreach($dbname in @('app','tenant')) {
+            $blobName = "$($env:IMAGE_TAG)-$dbname"
+            $bakFile = Join-Path $bcContainerHelperConfig.hostHelperFolder "extensions\bcserver\my\$($dbname).bak"
+            $existingBlob = az storage blob show --account-name $storageAccount --container-name $containerName --name $blobName --auth-mode login 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "Blob '$blobName' not found in container '$containerName'. Uploading..."
+                az storage container create --account-name $storageAccount --name $containerName --auth-mode login | Out-Null
+                az storage blob upload --account-name $storageAccount --container-name $containerName --name $blobName --file $bakFile --auth-mode login --overwrite false
+                if ($LASTEXITCODE -ne 0) { throw "Failed to upload database backup to storage account" }
+                Write-Host "Upload complete."
+            } else {
+                Write-Host "Blob '$blobName' already exists in container '$containerName'. Skipping upload."
+            }
+          }
+
+      - name: Build and push image
+        shell: pwsh
         run: |
           $ErrorActionPreference = "Stop"
           Import-Module BcContainerHelper -disableNameChecking
