@@ -24,15 +24,15 @@ variable "org_name" {
 # ── AKS ───────────────────────────────────────────────────────────────────────
 
 variable "linux_vm_size" {
-  description = "VM size for the Linux node pool."
+  description = "VM size for the Linux node pool. Use v5 series (v6 is not yet supported by AKS Windows nodes and SQL Server images)."
   type        = string
-  default     = "Standard_D2s_v3"
+  default     = "Standard_D4s_v5"
 }
 
 variable "windows_vm_size" {
-  description = "VM size for the Windows node pool."
+  description = "VM size for the Windows node pool. Use v5 series (v6 is not yet supported by AKS Windows nodes and SQL Server images)."
   type        = string
-  default     = "Standard_D2s_v3"
+  default     = "Standard_D4s_v5"
 }
 
 variable "aks_sku_tier" {
@@ -65,9 +65,9 @@ variable "windows_spot_enabled" {
 }
 
 variable "windows_spot_vm_size" {
-  description = "VM size for the Windows Spot node pool."
+  description = "VM size for the Windows Spot node pool. Use v5 series (v6 is not yet supported by AKS Windows nodes and SQL Server images)."
   type        = string
-  default     = "Standard_D8s_v3"
+  default     = "Standard_D8s_v5"
 }
 
 variable "windows_spot_min_node_count" {

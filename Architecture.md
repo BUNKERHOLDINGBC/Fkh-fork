@@ -113,7 +113,7 @@ graph TB
 
 | Resource | File | Description |
 |----------|------|-------------|
-| **AKS Cluster** | `main.tf` | Linux system pool (1× D2s_v3) + Windows autoscale pool (0–10 nodes). Azure CNI overlay networking. |
+| **AKS Cluster** | `main.tf` | Linux system pool (1× D4s_v5) + Windows autoscale pool (0–10 nodes). Azure CNI overlay networking. v6 series is not yet supported. |
 | **Function App** | `function.tf` | Windows Consumption (Y1) plan. Isolated .NET 8 worker. All config injected via app settings. |
 | **SQL Server** | `kubernetes.tf` | `mssql/server:2022-latest` on Linux pod with 128 Gi Premium SSD PVC. ClusterIP service on port 1433. Network policy restricts ingress to `app-type: windows-servicetier` pods. External access can be temporarily granted per-user via `AllowSqlAccess`. |
 | **ACR** | `acr.tf` | Basic SKU. AKS kubelet identity gets `AcrPull`; GitHub Actions federated identity gets `AcrPush`. |

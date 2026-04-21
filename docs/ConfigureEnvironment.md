@@ -29,55 +29,88 @@ Edit the file and fill in all values:
 
 ```hcl
 # Azure
-subscription_id = "<from Azure Portal or az account show>"
-tenant_id       = "<from Azure Portal or az account show>"
-location        = "<Azure Location - from Azure Setup>"
-org_name        = "<your-github-org>"         # lowercase, no spaces
+subscription_id = "00000000-0000-0000-0000-000000000000"
+tenant_id       = "00000000-0000-0000-0000-000000000000"
+location        = "westeurope"
+org_name        = "my-org"
 
 # AKS
-linux_vm_size   = "Standard_D4s_v3"   # system pool, always on
-windows_vm_size = "Standard_D8s_v3"   # BC containers run here
-aks_sku_tier    = "Free"              # Free | Standard ($73/mo SLA)
-windows_min_node_count = 0            # 0 = scale to zero, 1 = warm node
-windows_overprovision  = false
-windows_prepull_images = []
+aks_sku_tier    = "Free"    # Free (dev/test, no SLA) | Standard (99.95% SLA) | Premium (99.99% SLA)
+linux_vm_size   = "Standard_D4s_v5"    # v6 not supported for sqlserver
+windows_vm_size = "Standard_D4s_v5"    # v6 not supported for hypervisor gen1
+windows_min_node_count = 0  # Set to 1 to keep a warm Windows node (~$70-100/mo)
+windows_max_node_count = 10 # Maximum Windows nodes the autoscaler can scale to
+windows_overprovision        = false   # Set to true to keep spare capacity for instant container scheduling
+windows_overprovision_cpu    = "250m"  # CPU reserved by the overprovision placeholder
+windows_overprovision_memory = "3Gi"   # Memory reserved by the overprovision placeholder
+container_default_cpu        = "250m"  # Default CPU request for BC containers
+container_default_memory     = "3Gi"   # Default memory request for BC containers
+windows_spot_enabled        = false  # Set to true to add a Spot pricing Windows pool for lower cost
+windows_spot_vm_size        = "Standard_D2ds_v5"  # VM size for spot nodes
+windows_spot_min_node_count = 0      # Minimum spot nodes (0 = scale to zero when idle)
+windows_spot_max_node_count = 10     # Maximum spot nodes the autoscaler can scale to
+windows_prepull_images = [  # Images to pre-pull on Windows nodes (speeds up container creation)
+  # "<acr-name>.azurecr.io/businesscentral:<tag>"
+]
 
 # SQL Server
+# sql_sa_password = ""  # set via TF_VAR_sql_sa_password environment variable
 namespace        = "app"
 sql_storage_size = "128Gi"
 
-# GitHub
-github_org        = "your-org"        # case sensitive
+# GitHub — primary org for team membership validation
+# Note that values here are case sensitive
+github_org        = "my-company"
 github_repo       = "Fkh"             # your fork name
 github_team_name  = "Fkh-members"
 github_team_members = [
-  "user1",
-  "user2"
+  "user1"
 ]
 allowed_org_teams = [
-  { org = "your-org", team = "Fkh-members" }
+  { org = "my-company",   team = "Fkh-members" },
+  { org = "partner-org",  team = "Fkh-members" }
 ]
 
-# Admin team
+# Admin teams — members get admin access (and also have normal access)
+# Note that values here are case sensitive
 github_admin_team_name = "Fkh-admins"
 github_admin_team_members = [
-  "admin-user"
+  # "admin-username"
 ]
 admin_org_teams = [
-  { org = "your-org", team = "Fkh-admins" }
+  { org = "my-company",   team = "Fkh-admins" }
 ]
 
-# OIDC (repos allowed to call via GitHub Actions)
+# Repositories — GitHub repos allowed to call via OIDC from GitHub Actions
+# Please note that the AUTH token provided must be the ID token
 allowed_oidc_repos = [
-  # "your-org/your-bc-app"
+  # "my-company/my-bc-app"
 ]
 
-# Let's Encrypt
+# Contact email for Let's Encrypt
 contact_email_for_letsencrypt = "admin@example.com"
 
-# GitHub App (from Create the GitHub App step)
-github_app_id              = "<app-id>"
-github_app_installation_id = "<installation-id>"
+# GitHub App (see docs/GitHubApp.md)
+github_app_id              = ""   # App ID from the GitHub App settings page
+# github_app_private_key   = ""  # set via TF_VAR_github_app_private_key environment variable
+github_app_installation_id = ""   # Installation ID from the install URL
+
+# Default user settings (deployed to settings/usersettings.json in storage)
+# _members = defaults for all users, _admins = defaults for admin users
+default_user_settings = <<-EOT
+  {
+    "_members": {
+      "MaxContainers": 3
+    },
+    "_admins": {
+      "MaxContainers": 10
+    }
+  }
+EOT
+
+# Kubecost — free per-pod cost analysis dashboard
+# Needs minimum D4s Linux VM Size to enable
+kubecost_enabled = false
 ```
 
 For **Path A**: upload the tfvars file to a secure location (e.g. Azure Blob Storage with a SAS URL) and add the download URL as a `TFVARS_URL` GitHub secret (Settings → Secrets and variables → Actions → Secrets → New secret). The workflow downloads the file at deploy time and masks all values in logs. Alternatively, commit the file to the repo and set the `TFVARS_FILE` variable to its path instead.

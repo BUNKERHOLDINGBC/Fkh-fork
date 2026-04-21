@@ -681,6 +681,22 @@ public static class FunctionCatalog
                     DefaultValue = null
                 }
             }
+        },
+        new FunctionDefinition
+        {
+            Name = "StopFkh",
+            Description = "Stops the AKS cluster to save costs. All nodes are deallocated. Use 'startfkh' to restart. Admin only.",
+            Route = "StopFkh",
+            AdminOnly = true,
+            Parameters = new List<FunctionParameterDefinition>()
+        },
+        new FunctionDefinition
+        {
+            Name = "StartFkh",
+            Description = "Starts a previously stopped AKS cluster. Restores all nodes and workloads. Admin only.",
+            Route = "StartFkh",
+            AdminOnly = true,
+            Parameters = new List<FunctionParameterDefinition>()
         }
     };
 

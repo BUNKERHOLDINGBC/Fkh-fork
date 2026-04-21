@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using Azure.ResourceManager.ContainerService;
 using Fkh.Models;
 using Fkh.Services;
 using Microsoft.Azure.Functions.Worker.Http;
@@ -132,6 +133,11 @@ public abstract class FunctionBase
     {
         var (auth, errorResponse) = await AuthenticateAndAuthorizeAsync(req, logger, gitHub, operationName);
         if (errorResponse is not null) return errorResponse;
+
+        {
+            var clusterError = await CheckClusterRunningAsync(req, logger);
+            if (clusterError is not null) return clusterError;
+        }
 
         // ── Parse multipart/form-data ────────────────────────────────────────────
         var contentType = req.Headers.GetValues("Content-Type").FirstOrDefault() ?? "";
@@ -379,10 +385,17 @@ public abstract class FunctionBase
         ILogger logger,
         GitHubAuthService gitHub,
         string operationName,
-        Func<Dictionary<string, string>, Task<object>> aksOperation)
+        Func<Dictionary<string, string>, Task<object>> aksOperation,
+        bool skipClusterCheck = false)
     {
         var (auth, errorResponse) = await AuthenticateAndAuthorizeAsync(req, logger, gitHub, operationName);
         if (errorResponse is not null) return errorResponse;
+
+        if (!skipClusterCheck)
+        {
+            var clusterError = await CheckClusterRunningAsync(req, logger);
+            if (clusterError is not null) return clusterError;
+        }
 
         // ── Parse and validate request parameters ───────────────────────────────
         var parametersResult = await ParseAndValidateParametersAsync(req, auth!.Function, auth.IsAdmin);
@@ -407,6 +420,41 @@ public abstract class FunctionBase
     // ═══════════════════════════════════════════════════════════════════════════════
     // Shared pipeline helpers
     // ═══════════════════════════════════════════════════════════════════════════════
+
+    private static async Task<HttpResponseData?> CheckClusterRunningAsync(HttpRequestData req, ILogger logger)
+    {
+        try
+        {
+            var subscriptionId = Environment.GetEnvironmentVariable("AKS_SUBSCRIPTION_ID");
+            var resourceGroup = Environment.GetEnvironmentVariable("AKS_RESOURCE_GROUP");
+            var clusterName = Environment.GetEnvironmentVariable("AKS_CLUSTER_NAME");
+            var clientId = Environment.GetEnvironmentVariable("AZURE_CLIENT_ID");
+            if (subscriptionId is null || resourceGroup is null || clusterName is null || clientId is null)
+                return null; // Can't check — let the operation proceed
+
+#pragma warning disable CS0618
+            var credential = new Azure.Identity.ManagedIdentityCredential(clientId);
+#pragma warning restore CS0618
+            var armClient = new Azure.ResourceManager.ArmClient(credential);
+            var aksId = Azure.ResourceManager.ContainerService.ContainerServiceManagedClusterResource
+                .CreateResourceIdentifier(subscriptionId, resourceGroup, clusterName);
+            var cluster = armClient.GetContainerServiceManagedClusterResource(aksId);
+            var data = (await cluster.GetAsync()).Value.Data;
+            var powerState = data.PowerStateCode?.ToString();
+
+            if (string.Equals(powerState, "Stopped", StringComparison.OrdinalIgnoreCase))
+            {
+                logger.LogWarning("AKS cluster {Cluster} is stopped. Rejecting request.", clusterName);
+                return Respond(req, HttpStatusCode.ServiceUnavailable,
+                    "The cluster is currently stopped. Use 'fkh startfkh' to start it before running other commands.");
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Failed to check AKS cluster power state. Proceeding anyway.");
+        }
+        return null;
+    }
 
     private sealed class AuthResult
     {
