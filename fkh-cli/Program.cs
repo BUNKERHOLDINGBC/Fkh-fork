@@ -61,6 +61,7 @@ try
         settings.BackendUrl = cliBackendUrl;
     settings.User = FindArgValue(args, "ghUser");
     var wantsHelp = args.Length == 0 || args.Contains("-h") || args.Contains("--help");
+    var helpCommand = (args.Length >= 2 && wantsHelp && !args[0].StartsWith("-")) ? args[0] : null;
 
     // ── Check for client-side commands first (not in the server catalog) ──────
     var clientCommands = ClientCommands.All;
@@ -98,6 +99,25 @@ try
 
     if (wantsHelp)
     {
+        if (helpCommand is not null)
+        {
+            var func = catalog.Functions.FirstOrDefault(f =>
+                string.Equals(f.Name, helpCommand, StringComparison.OrdinalIgnoreCase));
+            if (func is not null)
+            {
+                PrintCommandUsage(func);
+                return 0;
+            }
+            var clientCmd = clientCommands.FirstOrDefault(c =>
+                string.Equals(c.Name, helpCommand, StringComparison.OrdinalIgnoreCase));
+            if (clientCmd is not null)
+            {
+                PrintClientCommandUsage(clientCmd);
+                return 0;
+            }
+            Console.Error.WriteLine($"{Ansi.Red}Unknown command: {helpCommand}{Ansi.Reset}");
+            Console.WriteLine();
+        }
         PrintUsage(catalog);
         return 0;
     }
@@ -583,6 +603,47 @@ static string ReadSecret()
     }
 
     return builder.ToString();
+}
+
+static void PrintCommandUsage(FunctionDefinition function)
+{
+    Console.WriteLine($"Usage: fkh {function.Name.ToLowerInvariant()} [options]");
+    Console.WriteLine();
+    Console.WriteLine($"  {function.Description}");
+    Console.WriteLine();
+    if (function.Parameters.Count > 0)
+    {
+        Console.WriteLine("Parameters:");
+        foreach (var parameter in function.Parameters)
+        {
+            var requiredText = parameter.Required ? "required" : "optional";
+            var defaultText = string.IsNullOrWhiteSpace(parameter.DefaultValue)
+                ? string.Empty
+                : $", default='{parameter.DefaultValue}'";
+            Console.WriteLine(
+                $"    --{parameter.Name} <{parameter.Type}> [{requiredText}{defaultText}]");
+            Console.WriteLine(
+                $"        {parameter.Description}");
+        }
+    }
+}
+
+static void PrintClientCommandUsage(ClientCommand cmd)
+{
+    Console.WriteLine($"Usage: fkh {cmd.Name.ToLowerInvariant()} [options]");
+    Console.WriteLine();
+    Console.WriteLine($"  {cmd.Description}");
+    Console.WriteLine();
+    if (cmd.Parameters.Count > 0)
+    {
+        Console.WriteLine("Parameters:");
+        foreach (var param in cmd.Parameters)
+        {
+            var requiredText = param.Required ? "required" : "optional";
+            Console.WriteLine($"    --{param.Name} <{param.Type}> [{requiredText}]");
+            Console.WriteLine($"        {param.Description}");
+        }
+    }
 }
 
 static void PrintUsage(FunctionCatalogResponse catalog)
