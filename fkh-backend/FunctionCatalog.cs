@@ -705,6 +705,47 @@ public static class FunctionCatalog
             Route = "StartFkh",
             AdminOnly = true,
             Parameters = new List<FunctionParameterDefinition>()
+        },
+        new FunctionDefinition
+        {
+            Name = "BackupTenantDatabase",
+            Description = "Backs up a tenant database from a running container and uploads it to blob storage. Updates the version manifest (all.json).",
+            Route = "BackupTenantDatabase",
+            Parameters = new List<FunctionParameterDefinition>
+            {
+                new()
+                {
+                    Name = "name",
+                    Type = "string",
+                    Description = "Name of the container in which the database is running.",
+                    Required = true,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "tenant",
+                    Type = "string",
+                    Description = "Tenant to back up. The database name is derived as '<containername>-<tenant>'.",
+                    Required = false,
+                    DefaultValue = "default"
+                },
+                new()
+                {
+                    Name = "backupName",
+                    Type = "string",
+                    Description = "Backup name in the storage account (used as the folder name in blob storage).",
+                    Required = true,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "backupVersion",
+                    Type = "string",
+                    Description = "Backup version in the storage account (used as the blob name).",
+                    Required = true,
+                    DefaultValue = null
+                }
+            }
         }
     };
 

@@ -1140,9 +1140,9 @@ sealed class UploadDatabaseCommand : ClientCommand
     public override string Description => "Uploads a .bak database file to blob storage. Updates a version manifest (all.json) with all versions and the latest. Admin only.";
     public override List<ClientCommandParameter> Parameters =>
     [
-        new() { Name = "name", Type = "string", Description = "Database name (used as the folder name in blob storage).", Required = true },
-        new() { Name = "version", Type = "string", Description = "Version label for this backup (used as the blob name).", Required = true },
-        new() { Name = "bakFile", Type = "file", Description = "Path to the .bak database backup file.", Required = true }
+        new() { Name = "bakFile", Type = "file", Description = "Path to the .bak database backup file.", Required = true },
+        new() { Name = "backupName", Type = "string", Description = "Backup name (used as the folder name in blob storage).", Required = true },
+        new() { Name = "backupVersion", Type = "string", Description = "Version label for this backup (used as the blob name).", Required = true }
     ];
 
     public override async Task<int> ExecuteAsync(string[] args, CliSettings settings, bool asJson)
@@ -1158,14 +1158,14 @@ sealed class UploadDatabaseCommand : ClientCommand
             return 1;
         }
 
-        if (!parameters.TryGetValue("name", out var name) || string.IsNullOrWhiteSpace(name))
+        if (!parameters.TryGetValue("backupName", out var name) || string.IsNullOrWhiteSpace(name))
         {
-            Console.Error.WriteLine($"{Ansi.Red}Missing required parameter --name{Ansi.Reset}");
+            Console.Error.WriteLine($"{Ansi.Red}Missing required parameter --backupName{Ansi.Reset}");
             return 1;
         }
-        if (!parameters.TryGetValue("version", out var version) || string.IsNullOrWhiteSpace(version))
+        if (!parameters.TryGetValue("backupVersion", out var version) || string.IsNullOrWhiteSpace(version))
         {
-            Console.Error.WriteLine($"{Ansi.Red}Missing required parameter --version{Ansi.Reset}");
+            Console.Error.WriteLine($"{Ansi.Red}Missing required parameter --backupVersion{Ansi.Reset}");
             return 1;
         }
         if (!parameters.TryGetValue("bakFile", out var bakFile) || string.IsNullOrWhiteSpace(bakFile))
