@@ -36,8 +36,12 @@ public class FkhCreateContainer : FkhServiceBase
         var useSpot = parameters.TryGetValue("spot", out var spotValue)
             && string.Equals(spotValue, "true", StringComparison.OrdinalIgnoreCase);
         var useDatabase = parameters.TryGetValue("useDatabase", out var udb) ? udb : null;
+        var tenantDatabase = parameters.TryGetValue("tenantDatabase", out var tdb) ? tdb : null;
         var moveAllAppsToDevScope = parameters.TryGetValue("moveAllAppsToDevScope", out var devScopeVal)
             && string.Equals(devScopeVal, "true", StringComparison.OrdinalIgnoreCase);
+        var multitenant = !string.IsNullOrWhiteSpace(tenantDatabase)
+            || (parameters.TryGetValue("multitenant", out var mtVal)
+                && string.Equals(mtVal, "true", StringComparison.OrdinalIgnoreCase));
 
         var imageTag = GetImageTag(artifactUrl);
         var fullImage = $"{AcrLoginServer}/{AcrRepository}:{imageTag}";
@@ -87,11 +91,42 @@ public class FkhCreateContainer : FkhServiceBase
         await EnsureDeploymentDoesNotExistAsync(client, deploymentName);
 
         // ── Check database does not exist, download backup, and restore via k8s exec ─
-        var sasUrl = !string.IsNullOrWhiteSpace(useDatabase)
-            ? await ResolveUseDatabaseAsync(useDatabase)
-            : await GetDatabaseBackupSasUrlAsync(imageTag);
-        await EnsureDatabaseDoesNotExistAsync(client, databaseName);
-        await RestoreDatabaseViaExecAsync(client, sasUrl, databaseName);
+        string? tenantDatabaseName = null;
+        if (multitenant)
+        {
+            tenantDatabaseName = $"{databaseName}-default";
+            string appSasUrl;
+            string tenantSasUrl;
+            if (!string.IsNullOrWhiteSpace(useDatabase))
+            {
+                appSasUrl = await ResolveUseDatabaseAsync(useDatabase);
+                tenantSasUrl = !string.IsNullOrWhiteSpace(tenantDatabase)
+                    ? await ResolveUseDatabaseAsync(tenantDatabase)
+                    : throw new InvalidOperationException("When using --useDatabase with --multitenant, --tenantDatabase must also be specified.");
+            }
+            else if (!string.IsNullOrWhiteSpace(tenantDatabase))
+            {
+                appSasUrl = await GetDatabaseBackupSasUrlAsync(imageTag, "-app");
+                tenantSasUrl = await ResolveUseDatabaseAsync(tenantDatabase);
+            }
+            else
+            {
+                appSasUrl = await GetDatabaseBackupSasUrlAsync(imageTag, "-app");
+                tenantSasUrl = await GetDatabaseBackupSasUrlAsync(imageTag, "-tenant");
+            }
+            await EnsureDatabaseDoesNotExistAsync(client, databaseName);
+            await EnsureDatabaseDoesNotExistAsync(client, tenantDatabaseName);
+            await RestoreDatabaseViaExecAsync(client, appSasUrl, databaseName);
+            await RestoreDatabaseViaExecAsync(client, tenantSasUrl, tenantDatabaseName);
+        }
+        else
+        {
+            var sasUrl = !string.IsNullOrWhiteSpace(useDatabase)
+                ? await ResolveUseDatabaseAsync(useDatabase)
+                : await GetDatabaseBackupSasUrlAsync(imageTag);
+            await EnsureDatabaseDoesNotExistAsync(client, databaseName);
+            await RestoreDatabaseViaExecAsync(client, sasUrl, databaseName);
+        }
 
         if (moveAllAppsToDevScope)
         {
@@ -108,7 +143,7 @@ public class FkhCreateContainer : FkhServiceBase
         var dnsLabel = appName;
         var publicDnsName = $"{dnsLabel}.{AksLocation}.cloudapp.azure.com";
 
-        await CreateDeploymentAsync(client, deploymentName, appName, fullImage, adminUsername, secretName, publicDnsName, databaseName, cpuRequest, memoryRequest, repo, project, useSpot);
+        await CreateDeploymentAsync(client, deploymentName, appName, fullImage, adminUsername, secretName, publicDnsName, databaseName, cpuRequest, memoryRequest, repo, project, multitenant, useSpot);
         await CreateLoadBalancerServiceAsync(client, serviceName, appName, dnsLabel);
 
         // Set auto-stop annotation if requested
@@ -134,6 +169,8 @@ public class FkhCreateContainer : FkhServiceBase
             Fqdn = publicDnsName,
             WebClient = $"{publicDnsName}/BC?tenant=default",
             Database = databaseName,
+            TenantDatabase = tenantDatabaseName,
+            Multitenant = multitenant,
             SqlDisk = diskInfo,
             AutoStop = autoStopInfo,
         };
@@ -252,7 +289,7 @@ public class FkhCreateContainer : FkhServiceBase
         return blobUriBuilder.ToUri().ToString();
     }
 
-    private async Task<string> GetDatabaseBackupSasUrlAsync(string imageTag)
+    private async Task<string> GetDatabaseBackupSasUrlAsync(string imageTag, string suffix = "")
     {
 #pragma warning disable CS0618
         var credential = new ManagedIdentityCredential(ClientId);
@@ -260,12 +297,13 @@ public class FkhCreateContainer : FkhServiceBase
         var blobServiceClient = new BlobServiceClient(
             new Uri($"https://{DbsStorageAccountName}.blob.core.windows.net"), credential);
         var containerClient = blobServiceClient.GetBlobContainerClient("cronus");
-        var blobClient = containerClient.GetBlobClient(imageTag);
+        var blobName = imageTag + suffix;
+        var blobClient = containerClient.GetBlobClient(blobName);
 
         if (!await blobClient.ExistsAsync())
         {
             throw new InvalidOperationException(
-                $"Database backup blob '{imageTag}' not found in container 'cronus' on storage account '{DbsStorageAccountName}'.");
+                $"Database backup blob '{blobName}' not found in container 'cronus' on storage account '{DbsStorageAccountName}'.");
         }
 
         // Generate a user-delegation SAS valid for 1 hour
@@ -275,7 +313,7 @@ public class FkhCreateContainer : FkhServiceBase
         var sasBuilder = new Azure.Storage.Sas.BlobSasBuilder
         {
             BlobContainerName = "cronus",
-            BlobName = imageTag,
+            BlobName = blobName,
             Resource = "b",
             ExpiresOn = DateTimeOffset.UtcNow.AddHours(1)
         };
@@ -286,7 +324,7 @@ public class FkhCreateContainer : FkhServiceBase
             Sas = sasBuilder.ToSasQueryParameters(delegationKey, blobServiceClient.AccountName)
         };
 
-        Logger.LogInformation("Generated SAS URL for blob '{BlobName}'.", imageTag);
+        Logger.LogInformation("Generated SAS URL for blob '{BlobName}'.", blobName);
         return blobUriBuilder.ToUri().ToString();
     }
 
@@ -420,7 +458,7 @@ public class FkhCreateContainer : FkhServiceBase
     private async Task CreateDeploymentAsync(
         Kubernetes client, string deploymentName, string appName, string fullImage,
         string adminUsername, string secretName, string publicDnsName, string databaseName,
-        string cpuRequest, string memoryRequest, string? repo, string? project, bool useSpot)
+        string cpuRequest, string memoryRequest, string? repo, string? project, bool multitenant, bool useSpot)
     {
         var annotations = new Dictionary<string, string>();
         if (!string.IsNullOrWhiteSpace(repo))
@@ -517,7 +555,7 @@ public class FkhCreateContainer : FkhServiceBase
                                 {
                                     new() { ContainerPort = 80 }, new() { ContainerPort = 443 }, new() { ContainerPort = 7047 }, new() { ContainerPort = 7048 }, new() { ContainerPort = 7049 },
                                 },
-                                Env = BuildEnvVars(adminUsername, secretName, publicDnsName, databaseName),
+                                Env = BuildEnvVars(adminUsername, secretName, publicDnsName, databaseName, multitenant),
                                 Resources = new V1ResourceRequirements
                                 {
                                     Requests = new Dictionary<string, ResourceQuantity>
@@ -536,9 +574,9 @@ public class FkhCreateContainer : FkhServiceBase
         await client.CreateNamespacedDeploymentAsync(deployment, Namespace);
     }
 
-    private List<V1EnvVar> BuildEnvVars(string adminUsername, string secretName, string publicDnsName, string databaseName)
+    private List<V1EnvVar> BuildEnvVars(string adminUsername, string secretName, string publicDnsName, string databaseName, bool multitenant)
     {
-        return new List<V1EnvVar>
+        var envVars = new List<V1EnvVar>
         {
             new() { Name = "accept_eula", Value = "Y" },
             new() { Name = "username", Value = adminUsername },
@@ -566,6 +604,13 @@ public class FkhCreateContainer : FkhServiceBase
             new() { Name = "databaseInstance", Value = "" },
             new() { Name = "databaseName", Value = databaseName },
         };
+
+        if (multitenant)
+        {
+            envVars.Add(new V1EnvVar { Name = "multitenant", Value = "Y" });
+        }
+
+        return envVars;
     }
 
     private async Task CreateLoadBalancerServiceAsync(Kubernetes client, string serviceName, string appName, string dnsLabel)

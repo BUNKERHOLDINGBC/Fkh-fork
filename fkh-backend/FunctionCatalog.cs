@@ -55,6 +55,14 @@ public static class FunctionCatalog
                 },
                 new()
                 {
+                    Name = "tenantDatabase",
+                    Type = "string",
+                    Description = "Tenant database to restore for multitenant containers. Can be a SAS URL to a .bak file, or 'name/version' referencing an uploaded database (use 'latest' for the most recent version). When specified, the container is automatically created as multitenant and this database is restored as containername-default.",
+                    Required = false,
+                    DefaultValue = null
+                },
+                new()
+                {
                     Name = "autostop",
                     Type = "string",
                     Description = "When to auto-stop the container. Use '<n>h' for hours from now (e.g. '4h') or a time of day in UTC (e.g. '18:00' or '6PM'). Leave empty for no auto-stop.",
@@ -95,17 +103,25 @@ public static class FunctionCatalog
                 },
                 new()
                 {
-                    Name = "spot",
+                    Name = "moveAllAppsToDevScope",
                     Type = "boolean",
-                    Description = "Place the container on a Spot (preemptible) VM for lower cost. The container may be evicted if Azure reclaims capacity.",
+                    Description = "Move all published apps to dev scope after database restore. Sets Published As to Dev and clears uninstalled app records.",
                     Required = false,
                     DefaultValue = "false"
                 },
                 new()
                 {
-                    Name = "moveAllAppsToDevScope",
+                    Name = "multitenant",
                     Type = "boolean",
-                    Description = "Move all published apps to dev scope after database restore. Sets Published As to Dev and clears uninstalled app records.",
+                    Description = "Create the container as multitenant. Restores the -app and -tenant database backups separately and mounts the tenant database as the default tenant.",
+                    Required = false,
+                    DefaultValue = "false"
+                },
+                new()
+                {
+                    Name = "spot",
+                    Type = "boolean",
+                    Description = "Place the container on a Spot (preemptible) VM for lower cost. The container may be evicted if Azure reclaims capacity.",
                     Required = false,
                     DefaultValue = "false"
                 }
