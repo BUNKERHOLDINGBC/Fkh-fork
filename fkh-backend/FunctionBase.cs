@@ -647,7 +647,8 @@ public abstract class FunctionBase
             var jsonString = JsonSerializer.Serialize(result, new JsonSerializerOptions
             {
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull,
+                Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
             });
             response.Headers.Add("Content-Type", "application/json; charset=utf-8");
             response.WriteString(jsonString);
