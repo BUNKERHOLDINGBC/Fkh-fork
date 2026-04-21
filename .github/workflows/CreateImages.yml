@@ -153,6 +153,7 @@ jobs:
           New-BcContainer -accept_eula -containerName bcserver -artifactUrl $env:ARTIFACT_URL -auth UserPassword -Credential $credential -multitenant -myScripts @( @{ "SetupTenant.ps1" = {
             $customConfigFile = Join-Path (Get-Item "C:\Program Files\Microsoft Dynamics NAV\*\Service").FullName "CustomSettings.config"
             [xml]$customConfig = [System.IO.File]::ReadAllText($customConfigFile)
+            $serverInstance = $customConfig.SelectSingleNode("//appSettings/add[@key='ServerInstance']").Value
             $multitenant = ($customConfig.SelectSingleNode("//appSettings/add[@key='Multitenant']").Value -eq "true")
             $databaseServer = $customConfig.SelectSingleNode("//appSettings/add[@key='DatabaseServer']").Value
             $databaseInstance = $customConfig.SelectSingleNode("//appSettings/add[@key='DatabaseInstance']").Value
@@ -162,9 +163,9 @@ jobs:
             if ("$databaseInstance" -ne "") {
                 $databaseServerInstance = "$databaseServer\$databaseInstance"
             }
+            Dismount-NavTenant -ServerInstance $ServerInstance -Tenant 'default' -Force | Out-Null
             Backup-SqlDatabase -ServerInstance $databaseServerInstance -database 'default' -BackupFile 'c:\run\my\tenant.bak'
             Backup-SqlDatabase -ServerInstance $databaseServerInstance -database $databaseName -BackupFile "c:\run\my\app.bak"
-            . c:\run\SetupTenant.ps1
           }})
           $storageAccount = $env:DBS_STORAGE_ACCOUNT
           $containerName = "cronus"
