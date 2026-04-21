@@ -26,7 +26,7 @@ Regular Contributor alone is not enough, since it can't manage role assignments.
 - Or the legacy **Global Administrator** role (broader than needed)
 
 **Additionally for Option 2 (Managed Identity)**:
-- **Contributor** on the subscription (or on the resource group you create) to create the identity resource
+- **Owner** or **Contributor** on the subscription (or on the resource group you create) to create the identity resource
 
 ---
 
