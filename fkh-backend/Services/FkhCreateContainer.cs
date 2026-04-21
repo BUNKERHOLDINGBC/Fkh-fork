@@ -6,6 +6,8 @@ using Fkh.Models;
 using k8s;
 using k8s.Models;
 using Microsoft.Extensions.Logging;
+using Microsoft.Graph;
+using Microsoft.Graph.Models;
 
 namespace Fkh.Services;
 
@@ -42,6 +44,14 @@ public class FkhCreateContainer : FkhServiceBase
         var multitenant = !string.IsNullOrWhiteSpace(tenantDatabase)
             || (parameters.TryGetValue("multitenant", out var mtVal)
                 && string.Equals(mtVal, "true", StringComparison.OrdinalIgnoreCase));
+
+        var authenticationEmail = parameters.TryGetValue("authenticationEmail", out var authEmail) ? authEmail : null;
+        var useAadAuth = !string.IsNullOrWhiteSpace(authenticationEmail);
+
+        if (useAadAuth && string.IsNullOrWhiteSpace(AadAppClientId))
+            throw new InvalidOperationException(
+                "AAD authentication is not configured. Set aad_app_client_id in your .tfvars file and redeploy. "
+                + "See docs/AadAuthentication.md for setup instructions.");
 
         var imageTag = GetImageTag(artifactUrl);
         var fullImage = $"{AcrLoginServer}/{AcrRepository}:{imageTag}";
@@ -143,7 +153,13 @@ public class FkhCreateContainer : FkhServiceBase
         var dnsLabel = appName;
         var publicDnsName = $"{dnsLabel}.{AksLocation}.cloudapp.azure.com";
 
-        await CreateDeploymentAsync(client, deploymentName, appName, fullImage, adminUsername, secretName, publicDnsName, databaseName, cpuRequest, memoryRequest, repo, project, multitenant, useSpot);
+        // ── Register AAD redirect URI if AAD auth is requested ───────────
+        if (useAadAuth)
+        {
+            await AddAadRedirectUriAsync($"https://{publicDnsName}/BC/SignIn");
+        }
+
+        await CreateDeploymentAsync(client, deploymentName, appName, fullImage, adminUsername, secretName, publicDnsName, databaseName, cpuRequest, memoryRequest, repo, project, multitenant, useSpot, authenticationEmail);
         await CreateLoadBalancerServiceAsync(client, serviceName, appName, dnsLabel);
 
         // Set auto-stop annotation if requested
@@ -167,10 +183,14 @@ public class FkhCreateContainer : FkhServiceBase
             Service = serviceName,
             Image = fullImage,
             Fqdn = publicDnsName,
-            WebClient = $"{publicDnsName}/BC?tenant=default",
+            WebClient = useAadAuth
+                ? $"https://{publicDnsName}/BC/SignIn?tenant=default"
+                : $"https://{publicDnsName}/BC?tenant=default",
             Database = databaseName,
             TenantDatabase = tenantDatabaseName,
             Multitenant = multitenant,
+            Auth = useAadAuth ? "AAD" : "NavUserPassword",
+            AuthenticationEmail = authenticationEmail,
             SqlDisk = diskInfo,
             AutoStop = autoStopInfo,
         };
@@ -458,7 +478,7 @@ public class FkhCreateContainer : FkhServiceBase
     private async Task CreateDeploymentAsync(
         Kubernetes client, string deploymentName, string appName, string fullImage,
         string adminUsername, string secretName, string publicDnsName, string databaseName,
-        string cpuRequest, string memoryRequest, string? repo, string? project, bool multitenant, bool useSpot)
+        string cpuRequest, string memoryRequest, string? repo, string? project, bool multitenant, bool useSpot, string? authenticationEmail)
     {
         var annotations = new Dictionary<string, string>();
         if (!string.IsNullOrWhiteSpace(repo))
@@ -555,7 +575,7 @@ public class FkhCreateContainer : FkhServiceBase
                                 {
                                     new() { ContainerPort = 80 }, new() { ContainerPort = 443 }, new() { ContainerPort = 7047 }, new() { ContainerPort = 7048 }, new() { ContainerPort = 7049 },
                                 },
-                                Env = BuildEnvVars(adminUsername, secretName, publicDnsName, databaseName, multitenant),
+                                Env = BuildEnvVars(adminUsername, secretName, publicDnsName, databaseName, multitenant, authenticationEmail),
                                 Resources = new V1ResourceRequirements
                                 {
                                     Requests = new Dictionary<string, ResourceQuantity>
@@ -574,7 +594,7 @@ public class FkhCreateContainer : FkhServiceBase
         await client.CreateNamespacedDeploymentAsync(deployment, Namespace);
     }
 
-    private List<V1EnvVar> BuildEnvVars(string adminUsername, string secretName, string publicDnsName, string databaseName, bool multitenant)
+    private List<V1EnvVar> BuildEnvVars(string adminUsername, string secretName, string publicDnsName, string databaseName, bool multitenant, string? authenticationEmail)
     {
         var envVars = new List<V1EnvVar>
         {
@@ -610,7 +630,61 @@ public class FkhCreateContainer : FkhServiceBase
             envVars.Add(new V1EnvVar { Name = "multitenant", Value = "Y" });
         }
 
+        if (!string.IsNullOrWhiteSpace(authenticationEmail))
+        {
+            envVars.Add(new V1EnvVar { Name = "authenticationEMail", Value = authenticationEmail });
+        }
+
         return envVars;
+    }
+
+    private async Task AddAadRedirectUriAsync(string redirectUri)
+    {
+        Logger.LogInformation("Adding AAD redirect URI: {RedirectUri}", redirectUri);
+
+#pragma warning disable CS0618
+        var credential = new ManagedIdentityCredential(ClientId);
+#pragma warning restore CS0618
+        var graphClient = new GraphServiceClient(credential);
+
+        // Find the application by client ID
+        var apps = await graphClient.Applications.GetAsync(r =>
+        {
+            r.QueryParameters.Filter = $"appId eq '{AadAppClientId}'";
+            r.QueryParameters.Select = new[] { "id", "web" };
+        });
+
+        var app = apps?.Value?.FirstOrDefault()
+            ?? throw new InvalidOperationException(
+                $"AAD App Registration with client ID '{AadAppClientId}' not found. "
+                + "Verify the aad_app_client_id value in your .tfvars file.");
+
+        var existingUris = app.Web?.RedirectUris ?? new List<string>();
+        if (existingUris.Contains(redirectUri, StringComparer.OrdinalIgnoreCase))
+        {
+            Logger.LogInformation("Redirect URI already registered.");
+            return;
+        }
+
+        var updatedUris = existingUris.ToList();
+        updatedUris.Add(redirectUri);
+
+        try
+        {
+            await graphClient.Applications[app.Id].PatchAsync(new Application
+            {
+                Web = new WebApplication { RedirectUris = updatedUris }
+            });
+        }
+        catch (Microsoft.Graph.Models.ODataErrors.ODataError ex) when (ex.ResponseStatusCode == 403)
+        {
+            throw new InvalidOperationException(
+                $"The managed identity does not have permission to update AAD App Registration '{AadAppClientId}'. "
+                + $"Add the managed identity (client ID: {ClientId}) as an owner of the App Registration. "
+                + "See docs/AadAuthentication.md for instructions.");
+        }
+
+        Logger.LogInformation("Redirect URI added successfully.");
     }
 
     private async Task CreateLoadBalancerServiceAsync(Kubernetes client, string serviceName, string appName, string dnsLabel)

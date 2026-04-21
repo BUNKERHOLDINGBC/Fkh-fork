@@ -45,7 +45,7 @@ sql_storage_size = "128Gi"
 # Note that values here are case sensitive
 github_org        = "my-company"
 github_repo       = "Fkh"             # your fork name
-github_team_name  = "FKH-members"
+github_team_name  = "Fkh-members"
 github_team_members = [
   "freddyk"
 ]

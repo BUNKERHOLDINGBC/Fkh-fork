@@ -23,6 +23,8 @@
     <PackageReference Include="Microsoft.IdentityModel.Protocols.OpenIdConnect" Version="8.17.0" />
     <!-- JWT signing for GitHub App authentication -->
     <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.17.0" />
+    <!-- Microsoft Graph SDK for AAD App Registration management -->
+    <PackageReference Include="Microsoft.Graph" Version="5.78.0" />
   </ItemGroup>
   <ItemGroup>
     <None Update="scripts\**">

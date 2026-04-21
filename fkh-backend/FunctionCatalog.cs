@@ -124,6 +124,14 @@ public static class FunctionCatalog
                     Description = "Place the container on a Spot (preemptible) VM for lower cost. The container may be evicted if Azure reclaims capacity.",
                     Required = false,
                     DefaultValue = "false"
+                },
+                new()
+                {
+                    Name = "authenticationEmail",
+                    Type = "string",
+                    Description = "Email address for Azure AD authentication. When set, the container uses AAD auth instead of NavUserPassword. Requires AAD App Registration setup — see docs/AadAuthentication.md.",
+                    Required = false,
+                    DefaultValue = null
                 }
             }
         },

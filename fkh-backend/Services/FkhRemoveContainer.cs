@@ -1,5 +1,8 @@
+using Azure.Identity;
 using k8s;
 using Microsoft.Extensions.Logging;
+using Microsoft.Graph;
+using Microsoft.Graph.Models;
 
 namespace Fkh.Services;
 
@@ -30,6 +33,13 @@ public class FkhRemoveContainer : FkhServiceBase
         // Drop databases via k8s exec (ignore if they don't exist)
         results.Add(await TryDropDatabaseAsync(client, $"{databaseName}-default"));
         results.Add(await TryDropDatabaseAsync(client, databaseName));
+
+        // Remove AAD redirect URI if AAD auth is configured
+        if (!string.IsNullOrWhiteSpace(AadAppClientId))
+        {
+            var redirectUri = $"https://{appName}.{AksLocation}.cloudapp.azure.com/BC/SignIn";
+            results.Add(await TryRemoveAadRedirectUriAsync(redirectUri));
+        }
 
         Logger.LogInformation("Container '{AppName}' removal complete.", appName);
         return new { Container = appName, Results = results };
@@ -66,6 +76,47 @@ public class FkhRemoveContainer : FkhServiceBase
         {
             Logger.LogWarning(ex, "Failed to drop database '{DatabaseName}'", databaseName);
             return $"Database drop failed: {ex.Message}";
+        }
+    }
+
+    private async Task<string> TryRemoveAadRedirectUriAsync(string redirectUri)
+    {
+        try
+        {
+#pragma warning disable CS0618
+            var credential = new ManagedIdentityCredential(ClientId);
+#pragma warning restore CS0618
+            var graphClient = new GraphServiceClient(credential);
+
+            var apps = await graphClient.Applications.GetAsync(r =>
+            {
+                r.QueryParameters.Filter = $"appId eq '{AadAppClientId}'";
+                r.QueryParameters.Select = new[] { "id", "web" };
+            });
+
+            var app = apps?.Value?.FirstOrDefault();
+            if (app is null)
+                return "AAD App Registration not found (skipped)";
+
+            var existingUris = app.Web?.RedirectUris ?? new List<string>();
+            var updatedUris = existingUris
+                .Where(u => !string.Equals(u, redirectUri, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+            if (updatedUris.Count == existingUris.Count)
+                return "AAD redirect URI not found (skipped)";
+
+            await graphClient.Applications[app.Id].PatchAsync(new Application
+            {
+                Web = new WebApplication { RedirectUris = updatedUris }
+            });
+
+            return "AAD redirect URI removed";
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to remove AAD redirect URI '{RedirectUri}'", redirectUri);
+            return $"AAD redirect URI removal failed: {ex.Message}";
         }
     }
 }
