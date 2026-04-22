@@ -275,6 +275,15 @@ try
             {
                 Console.WriteLine(FormatJsonAsText(body));
             }
+
+            // Launch SSMS after successful AllowSqlAccess (Windows only)
+            if (parsed.LaunchSsms
+                && string.Equals(parsed.Command, "AllowSqlAccess", StringComparison.OrdinalIgnoreCase)
+                && System.Runtime.InteropServices.RuntimeInformation.IsOSPlatform(System.Runtime.InteropServices.OSPlatform.Windows))
+            {
+                TryLaunchSsms(body, parsed.Parameters);
+            }
+
             return 0;
         }
 
@@ -341,6 +350,12 @@ static ParsedArgs ParseArgs(string[] args, FunctionCatalogResponse catalog)
         if (string.Equals(key, "nowait", StringComparison.OrdinalIgnoreCase))
         {
             parsed.NoWait = true;
+            continue;
+        }
+
+        if (string.Equals(key, "ssms", StringComparison.OrdinalIgnoreCase))
+        {
+            parsed.LaunchSsms = true;
             continue;
         }
 
@@ -564,6 +579,81 @@ static string? DetectPublicIp()
     catch
     {
         return null;
+    }
+}
+
+static void TryLaunchSsms(string responseBody, Dictionary<string, string> parameters)
+{
+    try
+    {
+        // Find SSMS executable
+        var programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+        var ssmsPath = Directory.EnumerateFiles(programFilesX86, "Ssms.exe", SearchOption.AllDirectories)
+            .FirstOrDefault(p => p.Contains(@"\Common7\IDE\", StringComparison.OrdinalIgnoreCase));
+
+        if (ssmsPath is null)
+        {
+            Console.WriteLine($"{Ansi.Yellow}SSMS not found under {programFilesX86}\\*\\Common7\\IDE\\Ssms.exe{Ansi.Reset}");
+            return;
+        }
+
+        // Extract SqlEndpoint from response
+        using var doc = JsonDocument.Parse(responseBody);
+        if (!doc.RootElement.TryGetProperty("sqlEndpoint", out var endpointProp)
+            && !doc.RootElement.TryGetProperty("SqlEndpoint", out endpointProp))
+        {
+            return;
+        }
+
+        var sqlEndpoint = endpointProp.GetString();
+        if (string.IsNullOrWhiteSpace(sqlEndpoint) || sqlEndpoint.StartsWith("("))
+        {
+            Console.WriteLine($"{Ansi.Yellow}No external IP assigned yet — skipping SSMS launch.{Ansi.Reset}");
+            return;
+        }
+
+        var hasPassword = parameters.TryGetValue("mySqlPassword", out var password) && !string.IsNullOrWhiteSpace(password);
+
+        // Extract github username from response
+        string? user = null;
+        if (doc.RootElement.TryGetProperty("user", out var userProp)
+            || doc.RootElement.TryGetProperty("User", out userProp))
+        {
+            user = userProp.GetString();
+        }
+
+        var psi = new ProcessStartInfo
+        {
+            FileName = ssmsPath,
+            UseShellExecute = false,
+        };
+
+        if (hasPassword && !string.IsNullOrWhiteSpace(user))
+        {
+            // Launch with github username and password
+            psi.ArgumentList.Add("-S");
+            psi.ArgumentList.Add(sqlEndpoint);
+            psi.ArgumentList.Add("-U");
+            psi.ArgumentList.Add(user);
+            psi.ArgumentList.Add("-P");
+            psi.ArgumentList.Add(password!);
+            Console.WriteLine($"{Ansi.Cyan}Launching SSMS → {sqlEndpoint} as {user}{Ansi.Reset}");
+        }
+        else
+        {
+            // No password — launch with sa
+            psi.ArgumentList.Add("-S");
+            psi.ArgumentList.Add(sqlEndpoint);
+            psi.ArgumentList.Add("-U");
+            psi.ArgumentList.Add("sa");
+            Console.WriteLine($"{Ansi.Cyan}Launching SSMS → {sqlEndpoint} as sa{Ansi.Reset}");
+        }
+
+        Process.Start(psi);
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"{Ansi.Yellow}Could not launch SSMS: {ex.Message}{Ansi.Reset}");
     }
 }
 
@@ -921,6 +1011,7 @@ sealed class ParsedArgs
     public string? Command { get; init; }
     public bool NoWait { get; set; }
     public bool AsJson { get; set; }
+    public bool LaunchSsms { get; set; }
     public string? OidcToken { get; set; }
     public string? Output { get; set; }
     public Dictionary<string, string> Parameters { get; } = new(StringComparer.OrdinalIgnoreCase);

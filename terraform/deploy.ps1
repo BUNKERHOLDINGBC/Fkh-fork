@@ -316,7 +316,8 @@ $bootstrapArgs = @(
     "-target=azurerm_federated_identity_credential.github_actions",
     "-target=azurerm_role_assignment.function_aks",
     "-target=azurerm_role_assignment.function_dbs_storage",
-    "-target=azurerm_role_assignment.function_log_analytics_reader"
+    "-target=azurerm_role_assignment.function_log_analytics_reader",
+    "-target=data.azuread_service_principal.msgraph"
 )
 if ($AutoApprove) { $bootstrapArgs += "-auto-approve" }
 
