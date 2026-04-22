@@ -259,7 +259,7 @@ variable "default_user_settings" {
 }
 
 variable "aad_app_client_id" {
-  description = "Client ID of a pre-created AAD App Registration for BC container AAD authentication. Leave empty to disable AAD auth. After deploying, add the Function's managed identity as an owner of this App Registration."
+  description = "Client ID of a pre-created AAD App Registration for BC container AAD authentication. Leave empty to disable AAD auth. Terraform will grant the managed identity Application.Read.All and add it as an owner of this App Registration."
   type        = string
   default     = ""
 }

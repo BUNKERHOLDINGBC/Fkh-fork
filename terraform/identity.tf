@@ -33,6 +33,36 @@ resource "azurerm_role_assignment" "function_log_analytics_reader" {
   principal_id         = azurerm_user_assigned_identity.function.principal_id
 }
 
+# ── Microsoft Graph permissions for AAD App management ─────────────────────────
+# When aad_app_client_id is set, the function needs to query and update
+# the AAD App Registration to add redirect URIs for containers.
+
+data "azuread_service_principal" "msgraph" {
+  count     = var.aad_app_client_id != "" ? 1 : 0
+  client_id = "00000003-0000-0000-c000-000000000000"
+}
+
+data "azuread_application" "aad_app" {
+  count     = var.aad_app_client_id != "" ? 1 : 0
+  client_id = var.aad_app_client_id
+}
+
+# Grant Application.Read.All so the managed identity can query the app registration
+resource "azuread_app_role_assignment" "function_graph_app_read" {
+  count               = var.aad_app_client_id != "" ? 1 : 0
+  app_role_id         = data.azuread_service_principal.msgraph[0].app_role_ids["Application.Read.All"]
+  principal_object_id = azurerm_user_assigned_identity.function.principal_id
+  resource_object_id  = data.azuread_service_principal.msgraph[0].object_id
+}
+
+# Add the managed identity as an owner of the AAD App Registration
+# so it can update redirect URIs
+resource "azuread_application_owner" "function_identity" {
+  count           = var.aad_app_client_id != "" ? 1 : 0
+  application_id  = data.azuread_application.aad_app[0].id
+  owner_object_id = azurerm_user_assigned_identity.function.principal_id
+}
+
 # ── Federated credential for GitHub Actions OIDC ──────────────────────────────
 # Allows the createImages workflow in the configured repo to authenticate
 # as the managed identity and push images to ACR.
