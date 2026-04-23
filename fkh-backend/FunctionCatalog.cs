@@ -754,6 +754,64 @@ public static class FunctionCatalog
                     DefaultValue = null
                 }
             }
+        },
+        new FunctionDefinition
+        {
+            Name = "CopyFileFromContainer",
+            Description = "Downloads a file from a running container. Supports wildcard paths. Returns the file content as base64.",
+            Route = "CopyFileFromContainer",
+            Parameters = new List<FunctionParameterDefinition>
+            {
+                new()
+                {
+                    Name = "name",
+                    Type = "string",
+                    Description = "Name of the container to download the file from.",
+                    Required = true,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "containerFilename",
+                    Type = "string",
+                    Description = "Path to the file inside the container (supports wildcards).",
+                    Required = true,
+                    DefaultValue = null
+                }
+            }
+        },
+        new FunctionDefinition
+        {
+            Name = "CopyFileToContainer",
+            Description = "Uploads a file to a running container.",
+            Route = "CopyFileToContainer",
+            Parameters = new List<FunctionParameterDefinition>
+            {
+                new()
+                {
+                    Name = "name",
+                    Type = "string",
+                    Description = "Name of the container to upload the file to.",
+                    Required = true,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "containerFilename",
+                    Type = "string",
+                    Description = "Destination path inside the container.",
+                    Required = true,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "file",
+                    Type = "file",
+                    Description = "The file to upload to the container.",
+                    Required = true,
+                    DefaultValue = null
+                }
+            }
         }
     };
 

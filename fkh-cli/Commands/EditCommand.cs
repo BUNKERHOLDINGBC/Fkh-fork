@@ -1,4 +1,7 @@
 using System.Diagnostics;
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
 
 sealed class EditCommand : ClientCommand
 {
@@ -11,7 +14,7 @@ sealed class EditCommand : ClientCommand
         new() { Name = "wait", Type = "flag", Description = "Block the process until the editor closes (default opens a new window).", Required = false }
     ];
 
-    public override Task<int> ExecuteAsync(string[] args, CliSettings settings, bool asJson)
+    public override async Task<int> ExecuteAsync(string[] args, CliSettings settings, bool asJson)
     {
         Dictionary<string, string> parameters;
         try
@@ -21,19 +24,19 @@ sealed class EditCommand : ClientCommand
         catch (InvalidOperationException ex)
         {
             Console.Error.WriteLine($"{Ansi.Red}{ex.Message}{Ansi.Reset}");
-            return Task.FromResult(1);
+            return 1;
         }
 
         if (!parameters.TryGetValue("name", out var containerName) || string.IsNullOrWhiteSpace(containerName))
         {
             Console.Error.WriteLine($"{Ansi.Red}Missing required parameter --name{Ansi.Reset}");
-            return Task.FromResult(1);
+            return 1;
         }
 
         if (!parameters.TryGetValue("containerFilename", out var filename) || string.IsNullOrWhiteSpace(filename))
         {
             Console.Error.WriteLine($"{Ansi.Red}Missing required parameter --containerFilename{Ansi.Reset}");
-            return Task.FromResult(1);
+            return 1;
         }
 
         // Default: re-invoke fkh edit in a new window (with --wait) so the current process returns immediately
@@ -49,59 +52,65 @@ sealed class EditCommand : ClientCommand
             }
             else
             {
-                return Task.FromResult(0);
+                return 0;
             }
         }
 
-        // Resolve container name to pod (same as server-side ResolveAppName)
-        // If name contains '-', treat as full name (admin); otherwise prefix with GitHub username
-        var appName = containerName.Contains('-')
-            ? SanitizeAppName(containerName)
-            : SanitizeAppName($"{GetGitHubUsername()}-{containerName}");
-
-        Console.WriteLine($"{Ansi.Dim}Looking up pod for container '{containerName}' (app={appName})...{Ansi.Reset}");
-
-        var podName = RunKubectl("get", "pods", "-n", "app", "-l", $"app={appName}", "-o", "jsonpath={.items[0].metadata.name}");
-        if (string.IsNullOrWhiteSpace(podName))
+        var token = GetToken(parameters, settings.User);
+        var backendUrl = settings.BackendUrl?.TrimEnd('/');
+        if (string.IsNullOrWhiteSpace(backendUrl))
         {
-            Console.Error.WriteLine($"{Ansi.Red}No pod found for container '{containerName}' (app={appName}).{Ansi.Reset}");
-            return Task.FromResult(1);
+            Console.Error.WriteLine($"{Ansi.Red}No backend URL configured.{Ansi.Reset}");
+            return 1;
         }
 
-        // If filename contains wildcards, resolve the actual path inside the container
-        if (filename.Contains('*'))
+        // Download file from container via backend
+        Console.WriteLine($"{Ansi.Dim}Downloading {filename} from container '{containerName}' via backend...{Ansi.Reset}");
+
+        string resolvedFilename;
+        byte[] fileBytes;
+        using (var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(10) })
         {
-            Console.WriteLine($"{Ansi.Dim}Resolving wildcard path: {filename}{Ansi.Reset}");
-            var resolved = RunKubectl("exec", podName, "-n", "app", "--", "pwsh", "-c",
-                $"(Resolve-Path '{filename}' -ErrorAction Stop).Path");
-            if (string.IsNullOrWhiteSpace(resolved))
+            var request = new HttpRequestMessage(HttpMethod.Post, $"{backendUrl}/CopyFileFromContainer");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            request.Content = new StringContent(
+                JsonSerializer.Serialize(new FunctionInvokeRequest
+                {
+                    Parameters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                    {
+                        ["name"] = containerName,
+                        ["containerFilename"] = filename
+                    }
+                }),
+                Encoding.UTF8, "application/json");
+
+            var response = await httpClient.SendAsync(request);
+            var body = await response.Content.ReadAsStringAsync();
+
+            if (!response.IsSuccessStatusCode)
             {
-                Console.Error.WriteLine($"{Ansi.Red}No file matched: {filename}{Ansi.Reset}");
-                return Task.FromResult(1);
+                Console.Error.WriteLine($"{Ansi.Red}Download failed ({(int)response.StatusCode}): {body}{Ansi.Reset}");
+                return 1;
             }
-            filename = resolved.Trim().Split('\n')[0].Trim();
-            Console.WriteLine($"{Ansi.Dim}Resolved to: {filename}{Ansi.Reset}");
+
+            using var doc = JsonDocument.Parse(body);
+            var fileContent = doc.RootElement.GetProperty("fileContent").GetString();
+            resolvedFilename = doc.RootElement.GetProperty("fileName").GetString() ?? Path.GetFileName(filename);
+
+            if (string.IsNullOrWhiteSpace(fileContent))
+            {
+                Console.Error.WriteLine($"{Ansi.Red}Backend returned empty file content.{Ansi.Reset}");
+                return 1;
+            }
+
+            fileBytes = Convert.FromBase64String(fileContent);
         }
 
-        // Create a temp file locally (use relative path — kubectl cp can't handle C: in both src and dest)
-        var tempFileName = $"fkh-edit-{Path.GetFileName(filename)}";
+        // Write to temp file
+        var tempFileName = $"fkh-edit-{resolvedFilename}";
         var tempDir = Path.GetTempPath();
         var localFile = Path.Combine(tempDir, tempFileName);
-
-        // Download file content via kubectl exec + PowerShell streaming
-        Console.WriteLine($"{Ansi.Dim}Downloading {filename} from {podName}...{Ansi.Reset}");
-        var downloadOk = DownloadFileFromPod(podName, filename, localFile);
-        if (!downloadOk)
-        {
-            Console.Error.WriteLine($"{Ansi.Red}Failed to download file from pod.{Ansi.Reset}");
-            return Task.FromResult(1);
-        }
-
-        if (!File.Exists(localFile))
-        {
-            Console.Error.WriteLine($"{Ansi.Red}File was not downloaded. Check that the path exists in the container.{Ansi.Reset}");
-            return Task.FromResult(1);
-        }
+        await File.WriteAllBytesAsync(localFile, fileBytes);
 
         var beforeHash = GetFileHash(localFile);
 
@@ -117,7 +126,7 @@ sealed class EditCommand : ClientCommand
         if (editorProcess is null)
         {
             Console.Error.WriteLine($"{Ansi.Red}Could not start editor ({editor}).{Ansi.Reset}");
-            return Task.FromResult(1);
+            return 1;
         }
         editorProcess.WaitForExit();
 
@@ -127,21 +136,46 @@ sealed class EditCommand : ClientCommand
         {
             Console.WriteLine($"{Ansi.Yellow}No changes detected — skipping upload.{Ansi.Reset}");
             File.Delete(localFile);
-            return Task.FromResult(0);
+            return 0;
         }
 
-        // Upload back to pod via kubectl exec + stdin streaming
-        Console.WriteLine($"{Ansi.Dim}Uploading changes to {filename} in {podName}...{Ansi.Reset}");
-        var uploadOk = UploadFileToPod(podName, filename, localFile);
-        if (!uploadOk)
+        // Upload back to container via backend
+        Console.WriteLine($"{Ansi.Dim}Uploading changes to {filename} in container '{containerName}' via backend...{Ansi.Reset}");
+
+        using (var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(10) })
         {
-            Console.Error.WriteLine($"{Ansi.Red}Failed to upload file back to pod.{Ansi.Reset}");
-            return Task.FromResult(1);
+            using var content = new MultipartFormDataContent();
+
+            var parametersJson = JsonSerializer.Serialize(new FunctionInvokeRequest
+            {
+                Parameters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["name"] = containerName,
+                    ["containerFilename"] = filename
+                }
+            });
+            content.Add(new StringContent(parametersJson, Encoding.UTF8, "application/json"), "parameters");
+
+            var updatedFileBytes = await File.ReadAllBytesAsync(localFile);
+            content.Add(new ByteArrayContent(updatedFileBytes), "file", resolvedFilename);
+
+            var request = new HttpRequestMessage(HttpMethod.Post, $"{backendUrl}/CopyFileToContainer");
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            request.Content = content;
+
+            var response = await httpClient.SendAsync(request);
+            var body = await response.Content.ReadAsStringAsync();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                Console.Error.WriteLine($"{Ansi.Red}Upload failed ({(int)response.StatusCode}): {body}{Ansi.Reset}");
+                return 1;
+            }
         }
 
         Console.WriteLine($"{Ansi.Cyan}File updated in container.{Ansi.Reset}");
         File.Delete(localFile);
-        return Task.FromResult(0);
+        return 0;
     }
 
     private static string GetFileHash(string path)

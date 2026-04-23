@@ -1,3 +1,7 @@
+using System.Net.Http.Headers;
+using System.Text;
+using System.Text.Json;
+
 sealed class CopyToContainerCommand : ClientCommand
 {
     public override string Name => "CopyToContainer";
@@ -9,7 +13,7 @@ sealed class CopyToContainerCommand : ClientCommand
         new() { Name = "containerFilename", Type = "string", Description = "Destination path inside the container.", Required = true }
     ];
 
-    public override Task<int> ExecuteAsync(string[] args, CliSettings settings, bool asJson)
+    public override async Task<int> ExecuteAsync(string[] args, CliSettings settings, bool asJson)
     {
         Dictionary<string, string> parameters;
         try
@@ -19,56 +23,75 @@ sealed class CopyToContainerCommand : ClientCommand
         catch (InvalidOperationException ex)
         {
             Console.Error.WriteLine($"{Ansi.Red}{ex.Message}{Ansi.Reset}");
-            return Task.FromResult(1);
+            return 1;
         }
 
         if (!parameters.TryGetValue("name", out var containerName) || string.IsNullOrWhiteSpace(containerName))
         {
             Console.Error.WriteLine($"{Ansi.Red}Missing required parameter --name{Ansi.Reset}");
-            return Task.FromResult(1);
+            return 1;
         }
 
         if (!parameters.TryGetValue("localFilename", out var localFile) || string.IsNullOrWhiteSpace(localFile))
         {
             Console.Error.WriteLine($"{Ansi.Red}Missing required parameter --localFilename{Ansi.Reset}");
-            return Task.FromResult(1);
+            return 1;
         }
 
         if (!File.Exists(localFile))
         {
             Console.Error.WriteLine($"{Ansi.Red}File not found: {localFile}{Ansi.Reset}");
-            return Task.FromResult(1);
+            return 1;
         }
 
         if (!parameters.TryGetValue("containerFilename", out var filename) || string.IsNullOrWhiteSpace(filename))
         {
             Console.Error.WriteLine($"{Ansi.Red}Missing required parameter --containerFilename{Ansi.Reset}");
-            return Task.FromResult(1);
+            return 1;
         }
 
-        // If name contains '-', treat as full name (admin); otherwise prefix with GitHub username
-        var appName = containerName.Contains('-')
-            ? SanitizeAppName(containerName)
-            : SanitizeAppName($"{GetGitHubUsername()}-{containerName}");
-
-        Console.WriteLine($"{Ansi.Dim}Looking up pod for container '{containerName}' (app={appName})...{Ansi.Reset}");
-
-        var podName = RunKubectl("get", "pods", "-n", "app", "-l", $"app={appName}", "-o", "jsonpath={.items[0].metadata.name}");
-        if (string.IsNullOrWhiteSpace(podName))
+        var token = GetToken(parameters, settings.User);
+        var backendUrl = settings.BackendUrl?.TrimEnd('/');
+        if (string.IsNullOrWhiteSpace(backendUrl))
         {
-            Console.Error.WriteLine($"{Ansi.Red}No pod found for container '{containerName}' (app={appName}).{Ansi.Reset}");
-            return Task.FromResult(1);
+            Console.Error.WriteLine($"{Ansi.Red}No backend URL configured.{Ansi.Reset}");
+            return 1;
         }
 
-        Console.WriteLine($"{Ansi.Dim}Uploading {localFile} to {filename} in {podName}...{Ansi.Reset}");
-        var ok = UploadFileToPod(podName, filename, localFile);
-        if (!ok)
+        Console.WriteLine($"{Ansi.Dim}Uploading {localFile} to {filename} in container '{containerName}' via backend...{Ansi.Reset}");
+
+        using var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
+        using var content = new MultipartFormDataContent();
+
+        // Add parameters as a JSON field
+        var parametersJson = JsonSerializer.Serialize(new FunctionInvokeRequest
         {
-            Console.Error.WriteLine($"{Ansi.Red}Failed to upload file to pod.{Ansi.Reset}");
-            return Task.FromResult(1);
+            Parameters = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["name"] = containerName,
+                ["containerFilename"] = filename
+            }
+        });
+        content.Add(new StringContent(parametersJson, Encoding.UTF8, "application/json"), "parameters");
+
+        // Add the file
+        var fileBytes = await File.ReadAllBytesAsync(localFile);
+        content.Add(new ByteArrayContent(fileBytes), "file", Path.GetFileName(localFile));
+
+        var request = new HttpRequestMessage(HttpMethod.Post, $"{backendUrl}/CopyFileToContainer");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Content = content;
+
+        var response = await httpClient.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        if (!response.IsSuccessStatusCode)
+        {
+            Console.Error.WriteLine($"{Ansi.Red}Upload failed ({(int)response.StatusCode}): {body}{Ansi.Reset}");
+            return 1;
         }
 
         Console.WriteLine($"{Ansi.Cyan}File copied to container.{Ansi.Reset}");
-        return Task.FromResult(0);
+        return 0;
     }
 }
