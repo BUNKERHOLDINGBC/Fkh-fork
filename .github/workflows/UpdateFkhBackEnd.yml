@@ -31,11 +31,12 @@ on:
   workflow_call:
     inputs:
       fkh-repo:
-        description: 'Owner/name of the Fkh fork (e.g. my-org/Fkh)'
-        required: true
+        description: 'Owner/name of the Fkh fork (e.g. Freddy-DK/Fkh)'
+        required: false
         type: string
+        default: 'Freddy-DK/Fkh'
       fkh-ref:
-        description: 'Git ref to checkout from the Fkh fork'
+        description: 'Git ref to checkout from the Fkh fork (e.g. main, a branch name, a tag or a commit SHA)'
         required: false
         type: string
         default: 'main'
