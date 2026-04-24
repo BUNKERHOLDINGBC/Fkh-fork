@@ -53,7 +53,7 @@ output "subscription_id" {
   value       = var.subscription_id
 }
 
-output "managed_identity_client_id" { {
+output "managed_identity_client_id" {
   description = "Client ID of the Function's Managed Identity."
   value       = azurerm_user_assigned_identity.function.client_id
 }
