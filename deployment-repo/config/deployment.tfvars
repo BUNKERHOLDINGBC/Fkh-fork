@@ -123,9 +123,9 @@ allowed_oidc_repos = [
 ]
 
 # GitHub App — triggers image-build workflows in this deployment repo
-github_app_id              = ""  # paste your App ID here
+github_app_id              = "1234567"  # paste your App ID here
 # github_app_private_key   = ""  # set as GitHub Secret: GH_APP_PRIVATE_KEY
-github_app_installation_id = ""  # paste your Installation ID here
+github_app_installation_id = "123456789"  # paste your Installation ID here
 
 
 #  _    _                   _____      _   _   _                 

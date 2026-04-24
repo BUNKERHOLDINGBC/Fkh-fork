@@ -5,9 +5,12 @@
 # It passes your deployment.tfvars (from this repo) and secrets to the
 # reusable workflow, which handles all Terraform and function publishing.
 #
+# ── Optional Inputs ─────────────────────────────────────────────────────────
+#   fkh-repo    - Owner/name of the Fkh fork (e.g. Freddy-DK/Fkh) (default: Freddy-DK/Fkh)
+#   fkh-ref     - Git ref to checkout from the Fkh fork (e.g. main, a branch name, a tag or a commit SHA) (default: main)
+#
 # ── Required GitHub Secrets ─────────────────────────────────────────────────
 #   AZURE_DEPLOY_CLIENT_ID        - Client ID of the deployment identity
-
 #   SQL_SA_PASSWORD                - SA password for the SQL Server in AKS
 #   GH_APP_PRIVATE_KEY             - PEM-encoded private key of the GitHub App
 # ============================================================================
@@ -18,44 +21,11 @@ on:
   workflow_dispatch:
 
 jobs:
-  check-version:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v6
-
-      - name: Check template freshness
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $PSNativeCommandUseErrorActionPreference = $false
-          $outdated = @()
-          foreach ($file in @('DeployFullStack.yml','UpdateBackend.yml','CreateImages.yml','CheckForUpdates.yml')) {
-            try {
-              $remote = gh api "repos/Freddy-DK/Fkh/contents/deployment-repo/.github/workflows/$file" --jq '.content' 2>$null
-              if ($LASTEXITCODE -ne 0 -or -not $remote) { continue }
-              $remote = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($remote)).TrimEnd()
-            } catch { continue }
-            $localPath = ".github/workflows/$file"
-            if (Test-Path $localPath) {
-              $local = (Get-Content $localPath -Raw).TrimEnd()
-            } else {
-              $local = ''
-            }
-            if ($remote -ne $local) {
-              $outdated += $file
-            }
-          }
-          if ($outdated.Count -gt 0) {
-            $list = ($outdated | ForEach-Object { "  - $_" }) -join "`n"
-            Write-Host "::warning::The following workflow files differ from the templates in Freddy-DK/Fkh:`n$list`nConsider syncing from deployment-repo/ in your Fkh fork."
-          }
-
   deploy:
-    needs: check-version
     uses: Freddy-DK/Fkh/.github/workflows/DeployFkhFullStack.yml@main
-    with:
-      fkh-repo: Freddy-DK/Fkh
+    permissions:
+      id-token: write
+      contents: read
     secrets:
       AZURE_DEPLOY_CLIENT_ID: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
       SQL_SA_PASSWORD: ${{ secrets.SQL_SA_PASSWORD }}

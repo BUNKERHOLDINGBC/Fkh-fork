@@ -18,7 +18,7 @@
 #   See docs/AzureSetup-PathA.md for both options.
 #
 # ── Inputs ──────────────────────────────────────────────────────────────────
-#   fkh-repo   - Owner/name of the Fkh fork (e.g. my-org/Fkh)
+#   fkh-repo   - Owner/name of the Fkh fork (default: Freddy-DK/Fkh)
 #   fkh-ref    - Git ref to checkout from the Fkh fork (default: main)
 #
 # ── Secrets (passed by the caller workflow) ─────────────────────────────────
