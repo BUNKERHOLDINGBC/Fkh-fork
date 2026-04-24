@@ -283,7 +283,7 @@ jobs:
       # ── Sync GitHub Actions secrets ───────────────────────────────────────
       - name: Generate GitHub App token for secret sync
         id: app-token
-        uses: actions/create-github-app-token@v2
+        uses: actions/create-github-app-token@v3
         with:
           app-id: ${{ steps.parse.outputs.github_app_id }}
           private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
@@ -302,3 +302,67 @@ jobs:
           gh secret set DBS_STORAGE_ACCOUNT   --repo "$REPO" --body "$(terraform output -raw dbs_storage_account_name)"
 
           echo "GitHub Actions secrets synced to $REPO"
+
+      # ── Deployment summary ─────────────────────────────────────────────────
+      - name: Deployment summary
+        shell: pwsh
+        run: |
+          $functionUrl   = terraform output -raw function_url
+          $clusterName   = terraform output -raw cluster_name
+          $resourceGroup = terraform output -raw resource_group_name
+          $acrName       = terraform output -raw acr_name
+          $location      = terraform output -raw location
+
+          $tfvarsFile = "${{ steps.tfvars.outputs.tfvars_file }}"
+          $memberTeams = @()
+          $adminTeams  = @()
+          $inMembers = $false
+          $inAdmins  = $false
+          foreach ($line in Get-Content $tfvarsFile) {
+            if ($line -match '^\s*allowed_org_teams\s*=') { $inMembers = $true; continue }
+            if ($line -match '^\s*admin_org_teams\s*=')   { $inAdmins  = $true; continue }
+            if ($inMembers -and $line -match '^\s*\]')     { $inMembers = $false; continue }
+            if ($inAdmins  -and $line -match '^\s*\]')     { $inAdmins  = $false; continue }
+            if (($inMembers -or $inAdmins) -and $line -match 'org\s*=\s*"([^"]+)".*team\s*=\s*"([^"]+)"') {
+              $entry = "$($Matches[1])/$($Matches[2])"
+              if ($inMembers) { $memberTeams += $entry }
+              if ($inAdmins)  { $adminTeams  += $entry }
+            }
+          }
+
+          Write-Host ""
+          Write-Host "============================================================"
+          Write-Host "  Fkh Deployment Complete"
+          Write-Host "============================================================"
+          Write-Host ""
+          Write-Host "Backend URL:      $functionUrl"
+          Write-Host "AKS Cluster:      $clusterName"
+          Write-Host "Resource Group:   $resourceGroup"
+          Write-Host "ACR:              $acrName"
+          Write-Host "Location:         $location"
+          Write-Host ""
+          Write-Host "------------------------------------------------------------"
+          Write-Host "  GitHub Teams — Member access (can provision containers)"
+          Write-Host "------------------------------------------------------------"
+          if ($memberTeams.Count -eq 0) {
+            Write-Host "  (none configured)"
+          } else {
+            foreach ($t in $memberTeams) { Write-Host "  - $t" }
+          }
+          Write-Host ""
+          Write-Host "------------------------------------------------------------"
+          Write-Host "  GitHub Teams — Admin access"
+          Write-Host "------------------------------------------------------------"
+          if ($adminTeams.Count -eq 0) {
+            Write-Host "  (none configured)"
+          } else {
+            foreach ($t in $adminTeams) { Write-Host "  - $t" }
+          }
+          Write-Host ""
+          Write-Host "Populate these teams with your users at:"
+          foreach ($t in ($memberTeams + $adminTeams) | Sort-Object -Unique) {
+            $org, $team = $t -split '/', 2
+            Write-Host "  https://github.com/orgs/$org/teams/$team/members"
+          }
+          Write-Host ""
+          Write-Host "============================================================"
