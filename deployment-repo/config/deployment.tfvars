@@ -16,7 +16,8 @@
 #
 # Deployment name — a short identifier for this Fkh deployment.
 # Used as a prefix for all Azure resource names (e.g. fkh-contoso-aks, fkh-contoso-backend).
-fkhDeploymentName = "myOrg"
+# Needs to be lower case, letters and numbers only
+fkhDeploymentName = "myorg"
 
 
 #                                   _____      _   _   _                 

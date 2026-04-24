@@ -120,6 +120,9 @@ jobs:
           $tenantId       = Get-TfVar "tenant_id" $varFile
           $location       = Get-TfVar "location" $varFile
           $deploymentName = Get-TfVar "fkhDeploymentName" $varFile
+          if ($deploymentName -cnotmatch '^[a-z0-9]+$') {
+            throw "fkhDeploymentName ('$deploymentName') must contain only lowercase letters and numbers. Uppercase, hyphens, and special characters are not allowed (Azure storage accounts require this)."
+          }
           $githubAppId    = Get-TfVar "github_app_id" $varFile
 
           $stateRg        = "fkh-$deploymentName-state"
