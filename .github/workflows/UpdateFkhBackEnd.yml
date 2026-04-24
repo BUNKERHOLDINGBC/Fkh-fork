@@ -79,19 +79,6 @@ jobs:
           if (-not (Test-Path $tfvarsFile)) {
             throw "tfvars file not found at config/deployment.tfvars in the deployment repo."
           }
-          # Mask all non-empty, non-comment lines and all quoted string values
-          foreach ($line in Get-Content $tfvarsFile) {
-            $trimmed = $line.Trim()
-            if ($trimmed -and -not $trimmed.StartsWith('#')) {
-              Write-Host "::add-mask::$trimmed"
-            }
-            if ($line -match '=\s*"([^"]+)"') {
-              $val = $Matches[1]
-              if ($val.Length -ge 4) {
-                Write-Host "::add-mask::$val"
-              }
-            }
-          }
           "tfvars_file=$tfvarsFile" >> $env:GITHUB_OUTPUT
 
       # ── Parse tfvars ──────────────────────────────────────────────────────

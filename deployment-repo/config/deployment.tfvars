@@ -115,7 +115,6 @@ allowed_org_teams = [
 admin_org_teams = [
   { org = "my-company",    team = "Fkh-admins" }
 ]
-]
 
 # Repositories — GitHub repos allowed to call Fkh via OIDC from GitHub Actions
 # Please note that the AUTH token provided must be the ID token
