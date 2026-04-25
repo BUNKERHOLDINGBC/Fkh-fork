@@ -630,17 +630,17 @@ public class FkhCreateContainer : FkhServiceBase
             envVars.Add(new V1EnvVar { Name = "multitenant", Value = "Y" });
         }
 
-        if (!string.IsNullOrWhiteSpace(authenticationEmail))
-        {
-            envVars.Add(new V1EnvVar { Name = "authenticationEMail", Value = authenticationEmail });
-        }
-
         if (!string.IsNullOrWhiteSpace(aadAppClientId))
         {
+            var appIdUri = $"api://{aadAppClientId}";
+            var redirectUri = $"https://{publicDnsName}/BC/SignIn";
+            envVars.Add(new V1EnvVar { Name = "authenticationEMail", Value = authenticationEmail! });
             envVars.Add(new V1EnvVar { Name = "AadAppId", Value = aadAppClientId });
-            envVars.Add(new V1EnvVar { Name = "AadAppRedirectUri", Value = $"https://{publicDnsName}/BC/SignIn" });
-            if (!string.IsNullOrWhiteSpace(AadTenantId))
-                envVars.Add(new V1EnvVar { Name = "AadTenantId", Value = AadTenantId });
+            envVars.Add(new V1EnvVar { Name = "appIdUri", Value = appIdUri });
+            envVars.Add(new V1EnvVar { Name = "auth", Value = "AAD" });
+            envVars.Add(new V1EnvVar { Name = "AadTenantId", Value = AadTenantId });
+            envVars.Add(new V1EnvVar { Name = "aadtenant", Value = AadTenantId });
+            envVars.Add(new V1EnvVar { Name = "federationloginendpoint", Value = $"https://login.microsoftonline.com/{AadTenantId}/wsfed?wa=wsignin1.0%26wtrealm={Uri.EscapeDataString(appIdUri)}%26wreply={Uri.EscapeDataString(redirectUri)}" });
         }
 
         return envVars;
@@ -666,8 +666,36 @@ public class FkhCreateContainer : FkhServiceBase
                 {
                     EnableIdTokenIssuance = true
                 }
+            },
+            RequiredResourceAccess = new List<RequiredResourceAccess>
+            {
+                // Dynamics 365 Business Central — API.ReadWrite.All (Application)
+                new RequiredResourceAccess
+                {
+                    ResourceAppId = "996def3d-b36c-4153-8607-a6fd3c01b89f",
+                    ResourceAccess = new List<ResourceAccess>
+                    {
+                        new ResourceAccess { Id = Guid.Parse("a42b0b75-311e-488d-b67e-8fe84f924341"), Type = "Role" }
+                    }
+                },
+                // Microsoft Graph — EWS.AccessAsUser.All + User.Read (Delegated)
+                new RequiredResourceAccess
+                {
+                    ResourceAppId = "00000003-0000-0000-c000-000000000000",
+                    ResourceAccess = new List<ResourceAccess>
+                    {
+                        new ResourceAccess { Id = Guid.Parse("9769c687-087d-48ac-9cb3-c37dde652038"), Type = "Scope" },
+                        new ResourceAccess { Id = Guid.Parse("e1fe6dd8-ba31-4d61-89e7-88639da4683d"), Type = "Scope" }
+                    }
+                }
             }
         }) ?? throw new InvalidOperationException("Failed to create AAD App Registration — Graph API returned null.");
+
+        // Set Application ID URI to api://<appId>
+        await graphClient.Applications[app.Id].PatchAsync(new Application
+        {
+            IdentifierUris = new List<string> { $"api://{app.AppId}" }
+        });
 
         Logger.LogInformation("AAD App Registration created: {DisplayName} (appId: {AppId}, objectId: {ObjectId})", app.DisplayName, app.AppId, app.Id);
         return (app.Id!, app.AppId!);

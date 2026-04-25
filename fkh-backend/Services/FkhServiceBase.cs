@@ -25,7 +25,7 @@ public abstract class FkhServiceBase
     protected readonly string ContactEmail;
     protected readonly string DbsStorageAccountName;
     protected readonly string? LogAnalyticsWorkspaceId;
-    protected readonly string? AadTenantId;
+    protected readonly string AadTenantId;
     protected readonly ILogger Logger;
 
     protected const string Namespace = "app";
@@ -54,7 +54,8 @@ public abstract class FkhServiceBase
         DbsStorageAccountName = Environment.GetEnvironmentVariable("DBS_STORAGE_ACCOUNT_NAME")
             ?? throw new InvalidOperationException("DBS_STORAGE_ACCOUNT_NAME is not configured.");
         LogAnalyticsWorkspaceId = Environment.GetEnvironmentVariable("LOG_ANALYTICS_WORKSPACE_ID");
-        AadTenantId = Environment.GetEnvironmentVariable("AAD_TENANT_ID");
+        AadTenantId = Environment.GetEnvironmentVariable("AAD_TENANT_ID")
+            ?? throw new InvalidOperationException("AAD_TENANT_ID is not configured.");
     }
 
     protected string AcrLoginServer => $"{AcrName}.azurecr.io";
