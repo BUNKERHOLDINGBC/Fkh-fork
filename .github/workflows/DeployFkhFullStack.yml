@@ -331,32 +331,28 @@ jobs:
             }
           }
 
-          # Annotations (visible on the workflow summary page)
-          Write-Host "::notice title=Backend URL::$functionUrl"
-          Write-Host "::notice title=AKS Cluster::$clusterName (resource group: $resourceGroup, location: $location)"
-          Write-Host "::notice title=Container Registry::$acrName"
-
           $memberList = if ($memberTeams.Count -eq 0) { '(none configured)' } else { $memberTeams -join ', ' }
           $adminList  = if ($adminTeams.Count -eq 0)  { '(none configured)' } else { $adminTeams -join ', ' }
-          Write-Host "::notice title=Member Teams (can provision containers)::$memberList"
-          Write-Host "::notice title=Admin Teams::$adminList"
 
           $teamUrls = @()
           foreach ($t in ($memberTeams + $adminTeams) | Sort-Object -Unique) {
             $org, $team = $t -split '/', 2
             $teamUrls += "https://github.com/orgs/$org/teams/$team/members"
           }
-          if ($teamUrls.Count -gt 0) {
-            Write-Host "::notice title=Populate teams with members at::$($teamUrls -join ' | ')"
-          }
 
           # Job summary (rendered as Markdown on the run summary page)
           $summary = @"
           ## Fkh Deployment Complete
 
+          ### Backend URL (copy)
+
+          ```
+          $functionUrl
+          ```
+
           | Resource | Value |
           |----------|-------|
-          | **Backend URL** | ``$functionUrl`` |
+          | **Backend URL** | [$functionUrl]($functionUrl) |
           | **AKS Cluster** | ``$clusterName`` |
           | **Resource Group** | ``$resourceGroup`` |
           | **Container Registry** | ``$acrName`` |
