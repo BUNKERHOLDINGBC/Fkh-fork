@@ -16,6 +16,12 @@ variable "location" {
   default     = "westeurope"
 }
 
+variable "state_location" {
+  description = "Azure region for the Terraform state resource group and storage account. Leave empty to use 'location'. This variable is consumed by the deploy scripts; Terraform itself does not reference it."
+  type        = string
+  default     = ""
+}
+
 variable "fkhDeploymentName" {
   description = "Short identifier for this Fkh deployment. Used as a prefix for all Azure resource names (e.g. fkh-<name>-aks)."
   type        = string

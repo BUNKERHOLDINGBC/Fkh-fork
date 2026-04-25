@@ -4,25 +4,21 @@ sealed class CreateDeploymentRepoCommand : ClientCommand
     public override string Description => "Creates a private GitHub repo with deployment workflow templates for your Fkh fork.";
     public override List<ClientCommandParameter> Parameters =>
     [
-        new() { Name = "owner",   Type = "string", Description = "GitHub org or user that owns the Fkh fork and will own the deployment repo", Required = true },
-        new() { Name = "fkhRepo", Type = "string", Description = "Name of the Fkh fork (default: Fkh)", Required = false },
-        new() { Name = "name",    Type = "string", Description = "Name for the new private deployment repo (default: fkh-deploy)", Required = false },
+        new() { Name = "deploymentRepo", Type = "string", Description = "Owner/name of the deployment repo to create (e.g. myorg/fkh-deploy)", Required = true },
+        new() { Name = "fkhRepo",        Type = "string", Description = "Owner/name of the Fkh fork to use (default: Freddy-DK/Fkh)", Required = false },
     ];
 
     public override async Task<int> ExecuteAsync(string[] args, CliSettings settings, bool asJson)
     {
         var parameters = ParseClientArgs(args);
 
-        if (!parameters.TryGetValue("owner", out var owner) || string.IsNullOrWhiteSpace(owner))
+        if (!parameters.TryGetValue("deploymentRepo", out var deployFullRepo) || string.IsNullOrWhiteSpace(deployFullRepo))
         {
-            Console.Error.WriteLine($"{Ansi.Red}--owner is required.{Ansi.Reset}");
+            Console.Error.WriteLine($"{Ansi.Red}--deploymentRepo is required (e.g. myorg/fkh-deploy).{Ansi.Reset}");
             return 1;
         }
 
-        var fkhRepo = parameters.TryGetValue("fkhRepo", out var fr) && !string.IsNullOrWhiteSpace(fr) ? fr : "Fkh";
-        var repoName = parameters.TryGetValue("name", out var rn) && !string.IsNullOrWhiteSpace(rn) ? rn : "fkh-deploy";
-        var fkhFullRepo = $"{owner}/{fkhRepo}";
-        var deployFullRepo = $"{owner}/{repoName}";
+        var fkhFullRepo = parameters.TryGetValue("fkhRepo", out var fr) && !string.IsNullOrWhiteSpace(fr) ? fr : "Freddy-DK/Fkh";
 
         Console.WriteLine($"Creating private deployment repo: {deployFullRepo}");
         Console.WriteLine($"Using Fkh fork: {fkhFullRepo}");
@@ -65,7 +61,6 @@ sealed class CreateDeploymentRepoCommand : ClientCommand
                 "deployment-repo/.github/workflows/DeployFullStack.yml",
                 "deployment-repo/.github/workflows/UpdateBackend.yml",
                 "deployment-repo/.github/workflows/CreateImages.yml",
-                "deployment-repo/.github/workflows/CheckForUpdates.yml",
                 "deployment-repo/config/deployment.tfvars",
                 "deployment-repo/README.md",
             };
@@ -80,8 +75,9 @@ sealed class CreateDeploymentRepoCommand : ClientCommand
                     continue;
                 }
 
-                // 5. Replace placeholder
-                content = content.Replace("{{FKH_REPO}}", fkhFullRepo);
+                // 5. Replace Freddy-DK/Fkh with actual fkhRepo in .yml files
+                if (templatePath.EndsWith(".yml", StringComparison.OrdinalIgnoreCase))
+                    content = content.Replace("Freddy-DK/Fkh", fkhFullRepo);
 
                 // Strip the "deployment-repo/" prefix to get the target path
                 var relativePath = templatePath["deployment-repo/".Length..];
@@ -122,12 +118,15 @@ sealed class CreateDeploymentRepoCommand : ClientCommand
             Console.WriteLine($"  https://github.com/{deployFullRepo}");
             Console.WriteLine();
             Console.WriteLine("Next steps:");
-            Console.WriteLine($"  1. Edit config/deployment.tfvars in {deployFullRepo} with your settings");
-            Console.WriteLine("  2. Add these GitHub Secrets in the deployment repo:");
+            Console.WriteLine($"  1. Setup Azure Identity: https://github.com/{fkhFullRepo}/blob/main/Installation/Step2-AzureIdentity.md");
+            Console.WriteLine($"  2. Setup GitHub App: https://github.com/{fkhFullRepo}/blob/main/Installation/Step3-GitHubApp.md");
+            Console.WriteLine($"  3. Setup GitHub Teams: https://github.com/{fkhFullRepo}/blob/main/Installation/Step4-GitHubTeams.md");
+            Console.WriteLine($"  4. Edit config/deployment.tfvars in {deployFullRepo}: https://github.com/{fkhFullRepo}/blob/main/Installation/Step5-ConfigureEnvironment.md");
+            Console.WriteLine("  5. Add these GitHub Secrets in the deployment repo:");
             Console.WriteLine("     - AZURE_DEPLOY_CLIENT_ID");
             Console.WriteLine("     - SQL_SA_PASSWORD");
             Console.WriteLine("     - GH_APP_PRIVATE_KEY");
-            Console.WriteLine("  3. Run the 'Deploy Full Stack' workflow from the Actions tab");
+            Console.WriteLine("  6. Run the 'Deploy Full Stack' workflow from the Actions tab");
         }
         finally
         {
