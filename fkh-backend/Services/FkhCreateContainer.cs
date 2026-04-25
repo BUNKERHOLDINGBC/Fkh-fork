@@ -636,10 +636,9 @@ public class FkhCreateContainer : FkhServiceBase
             var appIdUri = $"api://{aadAppClientId}";
             var redirectUri = $"https://{publicDnsName}/BC/SignIn";
             envVars.Add(new V1EnvVar { Name = "authenticationEMail", Value = authenticationEmail! });
-            envVars.Add(new V1EnvVar { Name = "AadAppId", Value = aadAppClientId });
+            envVars.Add(new V1EnvVar { Name = "aadAppId", Value = aadAppClientId });
             envVars.Add(new V1EnvVar { Name = "appIdUri", Value = appIdUri });
             envVars.Add(new V1EnvVar { Name = "auth", Value = "AAD" });
-            envVars.Add(new V1EnvVar { Name = "AadTenantId", Value = AadTenantId });
             envVars.Add(new V1EnvVar { Name = "aadtenant", Value = AadTenantId });
             envVars.Add(new V1EnvVar { Name = "federationloginendpoint", Value = $"https://login.microsoftonline.com/{AadTenantId}/wsfed?wa=wsignin1.0%26wtrealm={Uri.EscapeDataString(appIdUri)}%26wreply={Uri.EscapeDataString(redirectUri)}" });
         }
