@@ -349,14 +349,8 @@ jobs:
             }
           }
 
-          $memberList = if ($memberTeams.Count -eq 0) { '(none configured)' } else { $memberTeams -join ', ' }
-          $adminList  = if ($adminTeams.Count -eq 0)  { '(none configured)' } else { $adminTeams -join ', ' }
-
-          $teamUrls = @()
-          foreach ($t in ($memberTeams + $adminTeams) | Sort-Object -Unique) {
-            $org, $team = $t -split '/', 2
-            $teamUrls += "https://github.com/orgs/$org/teams/$team/members"
-          }
+          $memberList = if ($memberTeams.Count -eq 0) { '(none configured)' } else { ($memberTeams | ForEach-Object { $org, $team = $_ -split '/', 2; "[$_](https://github.com/orgs/$org/teams/$team/members)" }) -join ', ' }
+          $adminList  = if ($adminTeams.Count -eq 0)  { '(none configured)' } else { ($adminTeams | ForEach-Object { $org, $team = $_ -split '/', 2; "[$_](https://github.com/orgs/$org/teams/$team/members)" }) -join ', ' }
 
           # Job summary (rendered as Markdown on the run summary page)
           $summary = @"
@@ -370,7 +364,7 @@ jobs:
 
           | Resource | Value |
           |----------|-------|
-          | **Backend URL** | [$functionUrl]($functionUrl) |
+          | **Backend URL** | ``$functionUrl`` |
           | **AKS Cluster** | ``$clusterName`` |
           | **Resource Group** | ``$resourceGroup`` |
           | **Container Registry** | ``$acrName`` |
@@ -384,12 +378,6 @@ jobs:
           | **Admins** | $adminList |
 
           "@
-          if ($teamUrls.Count -gt 0) {
-            $summary += "`n### Populate teams with members`n`n"
-            foreach ($url in $teamUrls) {
-              $summary += "- $url`n"
-            }
-          }
           $summary >> $env:GITHUB_STEP_SUMMARY
 
           Write-Host ""
