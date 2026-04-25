@@ -367,6 +367,7 @@ static class ClientCommands
         new EditCommand(),
         new CopyFromContainerCommand(),
         new CopyToContainerCommand(),
-        new CreateDeploymentRepoCommand()
+        new CreateDeploymentRepoCommand(),
+        new UpdateDeploymentRepoCommand()
     ];
 }
