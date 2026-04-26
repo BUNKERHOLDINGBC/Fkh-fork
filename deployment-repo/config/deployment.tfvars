@@ -88,7 +88,7 @@ sql_storage_size = "128Gi"
 contact_email_for_letsencrypt = "admin@example.com"
 
 # AAD container authentication — allows users to sign in with Microsoft 365 accounts
-# Requires the deployment identity to have the Privileged Role Administrator directory role in Entra ID.
+# Requires the deployment identity to have the Application.ReadWrite.OwnedBy Microsoft Graph permission.
 # See Installation/Step2-AzureIdentity.md for details.
 enable_aad_container_auth = false
 aad_auth_is_multitenant  = false

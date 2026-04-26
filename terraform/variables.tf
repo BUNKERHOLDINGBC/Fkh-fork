@@ -232,7 +232,7 @@ variable "default_user_settings" {
 }
 
 variable "enable_aad_container_auth" {
-  description = "Grant the Function identity the Application.ReadWrite.OwnedBy Graph permission so containers can use AAD authentication. Requires the deployment identity to have the Privileged Role Administrator directory role in Entra ID."
+  description = "Grant the Function identity the Application.ReadWrite.OwnedBy Graph permission so containers can use AAD authentication. Requires the deployment identity to have the Application.ReadWrite.OwnedBy Microsoft Graph permission."
   type        = bool
   default     = false
 }

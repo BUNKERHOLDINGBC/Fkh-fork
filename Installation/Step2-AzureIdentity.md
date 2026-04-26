@@ -35,16 +35,16 @@ enable_aad_container_auth = true
 
 This feature is disabled by default.
 
-When AAD container authentication is enabled, Terraform grants the `Application.ReadWrite.OwnedBy` Microsoft Graph permission to the Function App managed identity that is created during deployment. To grant that permission, the deployment identity you create in this step must have the **Privileged Role Administrator** directory role in Entra ID.
+When AAD container authentication is enabled, Terraform grants the `Application.ReadWrite.OwnedBy` Microsoft Graph permission to the Function App managed identity that is created during deployment. To grant that permission, the deployment identity you create in this step must have the **`Application.ReadWrite.OwnedBy`** Microsoft Graph permission.
 
 Use this rule:
 
 | If `enable_aad_container_auth` is... | Then... |
 |---|---|
-| `false` | Skip the optional Entra ID directory role step. No Entra ID admin involvement is required for Managed Identity deployments. |
+| `false` | Skip the optional Microsoft Graph permission step. No Entra ID admin involvement is required for Managed Identity deployments. |
 | `true` | Complete step A.5 or B.4 before running the deployment. |
 
-You can enable AAD container authentication later by changing the setting, granting the directory role, and re-running the deployment workflow.
+You can enable AAD container authentication later by changing the setting, granting the Graph permission, and re-running the deployment workflow.
 
 ---
 
@@ -121,25 +121,33 @@ The deployment identity needs two roles on the target Azure subscription.
 
 Fkh uses this permission to assign non-privileged roles such as `AcrPull` and `Storage Blob Data Contributor`.
 
-### A.5 — Optional: grant Entra ID directory role
+### A.5 — Optional: grant Microsoft Graph permission
 
-> **Performed by:** Entra ID Privileged Role Admin
+> **Performed by:** Entra ID administrator with permission to grant application consent
 
 Skip this section unless you will set `enable_aad_container_auth = true`.
 
-1. In the Azure Portal, open **Microsoft Entra ID**.
-2. Go to **Roles and administrators**.
-3. Search for **Privileged Role Administrator**.
-4. Open the role.
-5. Select **Add assignments**.
-6. Select **Select members**.
-7. Search for the Managed Identity, for example `fkh-deploy-identity`.
-8. Select the identity, then select **Select**.
-9. Select **Next**.
-10. Choose an **Active** assignment.
-11. Select **Assign**.
+Managed Identities do not have an **API permissions** blade in the portal. Use the Azure CLI to grant the permission.
 
-This role allows the deployment identity to grant Microsoft Graph application permissions during Terraform runs. Azure subscription access is still controlled separately by the roles assigned in A.4.
+1. Sign in if you have not already:
+
+   ```pwsh
+   az login
+   ```
+
+2. Grant the permission (replace `fkh-deploy-identity` with the name of your Managed Identity from A.2):
+
+   ```pwsh
+   $miId = az ad sp list --display-name "fkh-deploy-identity" --query "[0].id" -o tsv
+   $graphId = az ad sp list --filter "appId eq '00000003-0000-0000-c000-000000000000'" --query "[0].id" -o tsv
+   $roleId = az ad sp list --filter "appId eq '00000003-0000-0000-c000-000000000000'" --query "[0].appRoles[?value=='Application.ReadWrite.OwnedBy'].id | [0]" -o tsv
+
+   az rest --method POST `
+       --uri "https://graph.microsoft.com/v1.0/servicePrincipals/$miId/appRoleAssignments" `
+       --body "{\"principalId\":\"$miId\",\"resourceId\":\"$graphId\",\"appRoleId\":\"$roleId\"}"
+   ```
+
+This permission allows the deployment identity to grant the `Application.ReadWrite.OwnedBy` Graph permission to the Function App during Terraform runs. Azure subscription access is still controlled separately by the roles assigned in A.4.
 
 ### A.6 — Save your values
 
@@ -219,23 +227,20 @@ The Entra ID admin should provide the App Registration name or Client ID to the 
 
 Fkh uses this permission to assign non-privileged roles such as `AcrPull` and `Storage Blob Data Contributor`.
 
-### B.4 — Optional: grant Entra ID directory role
+### B.4 — Optional: grant Microsoft Graph permission
 
-> **Performed by:** Entra ID Privileged Role Admin
+> **Performed by:** Entra ID administrator with permission to grant application consent
 
 Skip this section unless you will set `enable_aad_container_auth = true`.
 
-1. In the Azure Portal, open **Microsoft Entra ID**.
-2. Go to **Roles and administrators**.
-3. Search for **Privileged Role Administrator**.
-4. Open the role.
-5. Select **Add assignments**.
-6. Select **Select members**.
-7. Search for the App Registration, for example `fkh-deploy`.
-8. Select it, then select **Select**.
-9. Select **Next**.
-10. Choose an **Active** assignment.
-11. Select **Assign**.
+1. Open the App Registration from B.1.
+2. Go to **API permissions**.
+3. Select **Add a permission**.
+4. Select **Microsoft Graph**.
+5. Select **Application permissions**.
+6. Search for `Application.ReadWrite.OwnedBy`.
+7. Check the permission and select **Add permissions**.
+8. Select **Grant admin consent for [your tenant]** and confirm.
 
 Because the Entra ID admin creates the App Registration in B.1, they can usually complete this optional step at the same time.
 
@@ -260,7 +265,7 @@ You can now continue to [Step 3 — Create the GitHub App](Step3-GitHubApp.md).
 | Create identity | Azure Subscription Owner | Entra ID Admin |
 | Add federated credential | Azure Subscription Owner | Entra ID Admin |
 | Assign Azure subscription roles | Azure Subscription Owner | Azure Subscription Owner |
-| Grant Entra ID directory role | Optional; only for AAD container authentication | Optional; only for AAD container authentication |
+| Grant Microsoft Graph permission | Optional; only for AAD container authentication | Optional; only for AAD container authentication |
 | Values to save | Client ID, Subscription ID, Tenant ID | Client ID, Subscription ID, Tenant ID |
 
 ---

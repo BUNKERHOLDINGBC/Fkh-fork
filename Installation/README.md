@@ -52,17 +52,17 @@ They are responsible for:
 
 > **Optional fork:** fork Fkh only if you want to modify or contribute to the Fkh source code. You can then point the deployment workflows at your fork while testing changes.
 
-### Entra ID Privileged Role Administrator
+### Entra ID administrator (application consent)
 
 This person can grant Microsoft Graph application permissions to a Managed Identity or App Registration.
 
 They are responsible for:
 
-- Granting the deployment identity the **Privileged Role Administrator** directory role, but only if you enable AAD container authentication.
+- Granting the deployment identity the **`Application.ReadWrite.OwnedBy`** Microsoft Graph permission, but only if you enable AAD container authentication.
 
-> **Why this may be needed:** when AAD container authentication is enabled, the Fkh backend creates a dedicated Entra ID App Registration for each container. The Function App managed identity needs the `Application.ReadWrite.OwnedBy` Microsoft Graph permission to create and manage only the app registrations it owns. Terraform can grant that permission during deployment, but only if the deployment identity has the required Entra ID directory role.
+> **Why this may be needed:** when AAD container authentication is enabled, the Fkh backend creates a dedicated Entra ID App Registration for each container. The Function App managed identity needs the `Application.ReadWrite.OwnedBy` Microsoft Graph permission to create and manage only the app registrations it owns. Terraform can grant that permission during deployment, but only if the deployment identity already has `Application.ReadWrite.OwnedBy`.
 
-> **Who can usually do this:** someone with **Privileged Role Administrator**, **Global Administrator**, or a role with equivalent permission in your Entra ID tenant. The exact role depends on your tenant configuration.
+> **Who can usually do this:** someone with **Application Administrator**, **Cloud Application Administrator**, **Global Administrator**, or a role with equivalent permission in your Entra ID tenant. The exact role depends on your tenant configuration.
 
 ## Role summary
 
@@ -70,7 +70,7 @@ They are responsible for:
 |---|---|---|
 | Azure Subscription Owner | Azure | **Owner** on the target subscription |
 | GitHub Organization Admin | GitHub | Ability to create repos, GitHub Apps, teams, secrets, and variables |
-| Entra ID Privileged Role Admin | Microsoft Entra ID | **Privileged Role Administrator** directory role, required only for AAD container authentication |
+| Entra ID Admin (app consent) | Microsoft Entra ID | Permission to grant application consent, required only for AAD container authentication |
 
 > **Planning tip:** if these roles are held by different people, schedule a short coordination session before beginning. Step 2 is the main point where Azure and Entra ID responsibilities may overlap.
 

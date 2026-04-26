@@ -38,7 +38,7 @@ resource "azurerm_role_assignment" "function_log_analytics_reader" {
 # uses AAD authentication, and deletes it when the container is removed.
 # Application.ReadWrite.OwnedBy lets it manage only apps it created.
 # Gated by var.enable_aad_container_auth — requires the deployment identity to
-# have the Privileged Role Administrator directory role in Entra ID.
+# have the Application.ReadWrite.OwnedBy Microsoft Graph permission.
 
 data "azuread_service_principal" "msgraph" {
   count     = var.enable_aad_container_auth ? 1 : 0
