@@ -65,10 +65,15 @@ sealed class UpdateDeploymentRepoCommand : ClientCommand
                 var relativePath = templatePath["deployment-repo/".Length..];
 
                 // Never overwrite deployment.tfvars
+                // Never overwrite an existing deployment.tfvars, but do create it if missing
                 if (relativePath.Equals("config/deployment.tfvars", StringComparison.OrdinalIgnoreCase))
                 {
-                    Console.WriteLine($"  {relativePath} (skipped — not overwritten)");
-                    continue;
+                    var existingPath = Path.Combine(tempDir, relativePath.Replace('/', Path.DirectorySeparatorChar));
+                    if (File.Exists(existingPath))
+                    {
+                        Console.WriteLine($"  {relativePath} (skipped — not overwritten)");
+                        continue;
+                    }
                 }
 
                 var content = await FetchFileFromGitHubAsync(fkhFullRepo, templatePath);
