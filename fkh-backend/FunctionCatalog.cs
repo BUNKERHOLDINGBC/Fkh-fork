@@ -865,7 +865,7 @@ public static class FunctionCatalog
         new FunctionDefinition
         {
             Name = "GetUser",
-            Description = "Returns user information and permission sets from a running Business Central container. Filters by exact username (case-insensitive).",
+            Description = "Returns users and their permission sets from a running Business Central container. Optionally filters by username (exact match, case-insensitive).",
             Route = "GetUser",
             Parameters = new List<FunctionParameterDefinition>
             {
@@ -889,8 +889,8 @@ public static class FunctionCatalog
                 {
                     Name = "username",
                     Type = "string",
-                    Description = "Username to look up (exact match, case-insensitive).",
-                    Required = true,
+                    Description = "Username to look up (exact match, case-insensitive). If omitted, returns all users.",
+                    Required = false,
                     DefaultValue = null
                 }
             }
