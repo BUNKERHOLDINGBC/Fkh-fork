@@ -147,7 +147,7 @@ Managed Identities do not have an **API permissions** blade in the portal. Use t
        --body "{\"principalId\":\"$miId\",\"resourceId\":\"$graphId\",\"appRoleId\":\"$roleId\"}"
    ```
 
-This permission allows the deployment identity to grant the `Application.ReadWrite.OwnedBy` Graph permission to the Function App during Terraform runs. Azure subscription access is still controlled separately by the roles assigned in A.4.
+This permission allows the deployment identity to grant the `Application.ReadWrite.OwnedBy` Graph permission to the Function App during Terraform runs and is not available through the Azure Portal UI. Azure subscription access is still controlled separately by the roles assigned in A.4.
 
 ### A.6 — Save your values
 
