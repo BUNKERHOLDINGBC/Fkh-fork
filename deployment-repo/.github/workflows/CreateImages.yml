@@ -26,6 +26,9 @@ on:
 jobs:
   create:
     uses: Freddy-DK/Fkh/.github/workflows/CreateImages.yml@main
+    permissions:
+      id-token: write
+      contents: read
     with:
       artifactUrls: ${{ inputs.artifactUrls }}
     secrets:
