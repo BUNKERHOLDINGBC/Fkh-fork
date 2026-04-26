@@ -35,7 +35,7 @@ public class FkhGetAppInfo : FkhServiceBase
 $ErrorActionPreference = 'Stop'
 . 'c:\run\prompt.ps1'
 Get-NAVAppInfo -ServerInstance bc -TenantSpecificProperties -Tenant '{tenant}' |
-    Select-Object AppId, Name, Publisher, Version, ExtensionType, Scope, IsInstalled, IsPublished, SyncState, NeedsUpgrade |
+    Select-Object @{{N='AppId';E={{$_.AppId.Value.ToString()}}}}, Name, Publisher, @{{N='Version';E={{$_.Version.ToString()}}}}, ExtensionType, Scope, IsInstalled, IsPublished, SyncState, NeedsUpgrade |
     ConvertTo-Json -Depth 5
 ";
 
