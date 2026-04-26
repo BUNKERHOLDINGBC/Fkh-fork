@@ -861,6 +861,39 @@ public static class FunctionCatalog
                     DefaultValue = null
                 }
             }
+        },
+        new FunctionDefinition
+        {
+            Name = "GetUser",
+            Description = "Returns user information and permission sets from a running Business Central container. Filters by exact username (case-insensitive).",
+            Route = "GetUser",
+            Parameters = new List<FunctionParameterDefinition>
+            {
+                new()
+                {
+                    Name = "name",
+                    Type = "string",
+                    Description = "Name of the container to query.",
+                    Required = true,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "tenant",
+                    Type = "string",
+                    Description = "Tenant to query for user info.",
+                    Required = false,
+                    DefaultValue = "default"
+                },
+                new()
+                {
+                    Name = "username",
+                    Type = "string",
+                    Description = "Username to look up (exact match, case-insensitive).",
+                    Required = true,
+                    DefaultValue = null
+                }
+            }
         }
     };
 

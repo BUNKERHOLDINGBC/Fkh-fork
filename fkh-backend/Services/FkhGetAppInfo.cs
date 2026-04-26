@@ -18,6 +18,11 @@ public class FkhGetAppInfo : FkhServiceBase
         var filterAppPublisher = parameters.TryGetValue("appPublisher", out var ap) ? ap : null;
         var filterAppId = parameters.TryGetValue("appId", out var ai) ? ai : null;
 
+        if (filterAppId != null && (filterAppId.Contains('*') || filterAppId.Contains('?')))
+        {
+            throw new ArgumentException("Wildcards are not supported in the appId filter. Please specify an exact app ID (GUID).");
+        }
+
         Logger.LogInformation(
             "User '{User}' getting app info from container '{Container}' (tenant={Tenant}).",
             githubUsername, appName, tenant);
