@@ -162,6 +162,11 @@ public class FkhListContainers : FkhServiceBase
             string? repo = deployment.Metadata.Annotations?.TryGetValue("fkh/repo", out var r) == true && !string.IsNullOrEmpty(r) ? r : null;
             string? proj = deployment.Metadata.Annotations?.TryGetValue("fkh/project", out var p) == true && !string.IsNullOrEmpty(p) ? p : null;
 
+            // Container env vars – extract database, multitenant, auth info
+            var envVars = container?.Env;
+            var databaseNameEnv = envVars?.FirstOrDefault(e => e.Name == "databaseName")?.Value;
+            var isMultitenant = string.Equals(envVars?.FirstOrDefault(e => e.Name == "multitenant")?.Value, "Y", StringComparison.OrdinalIgnoreCase);
+
             // Web client URL from service FQDN
             string? webClientUrl = null;
             if (serviceMap.TryGetValue(appLabel, out var svc))
@@ -175,11 +180,6 @@ public class FkhListContainers : FkhServiceBase
                         : $"https://{fqdn}/BC/";
                 }
             }
-
-            // Container env vars – extract database, multitenant, auth info
-            var envVars = container?.Env;
-            var databaseNameEnv = envVars?.FirstOrDefault(e => e.Name == "databaseName")?.Value;
-            var isMultitenant = string.Equals(envVars?.FirstOrDefault(e => e.Name == "multitenant")?.Value, "Y", StringComparison.OrdinalIgnoreCase);
             var tenantDatabaseEnv = isMultitenant && !string.IsNullOrWhiteSpace(databaseNameEnv) ? $"{databaseNameEnv}-default" : null;
             var authEnv = envVars?.FirstOrDefault(e => e.Name == "auth")?.Value;
             var authenticationEmailEnv = envVars?.FirstOrDefault(e => e.Name == "authenticationEMail")?.Value;
