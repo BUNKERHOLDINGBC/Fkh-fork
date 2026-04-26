@@ -27,7 +27,8 @@ Fkh is a platform for managing Business Central containers on Azure Kubernetes S
 ### CLI (`fkh-cli/`)
 - .NET console app, entry point: `Program.cs` (top-level statements)
 - **Generic catalog-driven**: fetches function catalog from backend, matches `args[0]` to a function name, parses `--key "value"` args, POSTs to the function route
-- Handles file-type parameters (multipart upload), retry loops (HTTP 202), JSON output (`--asJson`), `--nowait`
+- Handles file-type parameters (multipart upload), retry loops (HTTP 202), `--nowait`
+- **Output**: Backend always returns JSON. By default the CLI formats it as human-readable text (`FormatJsonAsText`). When `--asJson` is specified, the raw JSON is pretty-printed instead
 - Auth: OIDC token > GH_TOKEN env var > `gh auth token` CLI
 - Backend URL: `--backendUrl` > `FKH_BACKEND_URL` env var > `~/.fkh/settings.json` > `fkh.settings.json` next to exe
 - **Client-side commands** (`ClientCommand.cs`, `Commands/`): commands that run locally, not via backend catalog. Examples: `CopyFromContainer`, `CopyToContainer`, `DownloadDatabase`, `UploadDatabase`, `Edit`, `Open`, `Status`, `CreateDeploymentRepo`, `UpdateDeploymentRepo`, `PoorMansTerminal`
