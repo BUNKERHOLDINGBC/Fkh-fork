@@ -169,9 +169,20 @@ public class FkhListContainers : FkhServiceBase
                 var dnsLabel = svc.Metadata.Annotations?.TryGetValue("service.beta.kubernetes.io/azure-dns-label-name", out var label) == true ? label : null;
                 if (dnsLabel != null)
                 {
-                    webClientUrl = $"https://{dnsLabel}.{AksLocation}.cloudapp.azure.com/BC/";
+                    var fqdn = $"{dnsLabel}.{AksLocation}.cloudapp.azure.com";
+                    webClientUrl = isMultitenant
+                        ? $"https://{fqdn}/BC/?tenant=default"
+                        : $"https://{fqdn}/BC/";
                 }
             }
+
+            // Container env vars – extract database, multitenant, auth info
+            var envVars = container?.Env;
+            var databaseNameEnv = envVars?.FirstOrDefault(e => e.Name == "databaseName")?.Value;
+            var isMultitenant = string.Equals(envVars?.FirstOrDefault(e => e.Name == "multitenant")?.Value, "Y", StringComparison.OrdinalIgnoreCase);
+            var tenantDatabaseEnv = isMultitenant && !string.IsNullOrWhiteSpace(databaseNameEnv) ? $"{databaseNameEnv}-default" : null;
+            var authEnv = envVars?.FirstOrDefault(e => e.Name == "auth")?.Value;
+            var authenticationEmailEnv = envVars?.FirstOrDefault(e => e.Name == "authenticationEMail")?.Value;
 
             // Memory metrics
             string? memoryStr = null;
@@ -205,6 +216,11 @@ public class FkhListContainers : FkhServiceBase
                 Repo = repo,
                 Project = proj,
                 WebClient = webClientUrl,
+                Database = databaseNameEnv,
+                TenantDatabase = tenantDatabaseEnv,
+                Multitenant = isMultitenant,
+                Auth = authEnv,
+                AuthenticationEmail = authenticationEmailEnv,
                 Memory = memoryStr,
             });
         }
