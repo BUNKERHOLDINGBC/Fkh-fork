@@ -624,7 +624,7 @@ public class FkhCreateContainer : FkhServiceBase
                 }
             },
             new() { Name = "databaseUsername", Value = "sa" },
-            new() { Name = "databaseServer", Value = $"mssql-service.{Namespace}.svc.cluster.local" },
+            new() { Name = "databaseServer", Value = "mssql-service" },
             new() { Name = "databaseInstance", Value = "" },
             new() { Name = "databaseName", Value = databaseName },
         };
