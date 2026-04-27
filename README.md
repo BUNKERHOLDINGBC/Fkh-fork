@@ -1,12 +1,5 @@
 # Freddy's Kubernetes Helper (Fkh)
 
-## WORK IN PROGRESS
-
-This project is work in progress and today, we do not review pull requests
-from contributors, nor do we put much focus on issues on this repository.
-
-Once we ship version 1 of this tool, it is ready for mainstream.
-
 ## License
 
 This project is licensed under the [MIT License with Commons Clause](LICENSE).
