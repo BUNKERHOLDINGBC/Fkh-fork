@@ -20,10 +20,6 @@ sealed class CreateDeploymentRepoCommand : ClientCommand
 
         var fkhFullRepo = parameters.TryGetValue("fkhRepo", out var fr) && !string.IsNullOrWhiteSpace(fr) ? fr : "Freddy-DK/Fkh";
 
-        Console.WriteLine($"Creating private deployment repo: {deployFullRepo}");
-        Console.WriteLine($"Using Fkh fork: {fkhFullRepo}");
-        Console.WriteLine();
-
         // 1. Verify gh is authenticated
         var (ghExit, _, ghErr) = RunProcess("gh", ["auth", "status"]);
         if (ghExit != 0)
@@ -33,7 +29,32 @@ sealed class CreateDeploymentRepoCommand : ClientCommand
             return 1;
         }
 
-        // 2. Create private repo
+        // 2. Resolve GitHub user account
+        var (userExit, ghUser, _) = RunProcess("gh", ["api", "user", "--jq", ".login"]);
+        ghUser = ghUser?.Trim();
+        if (userExit != 0 || string.IsNullOrWhiteSpace(ghUser))
+        {
+            Console.Error.WriteLine($"{Ansi.Red}Failed to determine GitHub user. Ensure 'gh auth login' is complete.{Ansi.Reset}");
+            return 1;
+        }
+
+        // 3. Confirm before proceeding
+        Console.WriteLine();
+        Console.WriteLine($"  Action:          Create private deployment repo");
+        Console.WriteLine($"  Deployment repo: {deployFullRepo}");
+        Console.WriteLine($"  Fkh fork:        {fkhFullRepo}");
+        Console.WriteLine($"  GitHub account:  {ghUser}");
+        Console.WriteLine();
+        Console.Write("Do you want to proceed? [y/N] ");
+        var answer = Console.ReadLine()?.Trim();
+        if (!string.Equals(answer, "y", StringComparison.OrdinalIgnoreCase) && !string.Equals(answer, "yes", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.WriteLine("Aborted.");
+            return 1;
+        }
+        Console.WriteLine();
+
+        // 4. Create private repo
         Console.WriteLine($"Creating private repo {deployFullRepo}...");
         var (createExit, createOut, createErr) = RunProcess("gh", ["repo", "create", deployFullRepo, "--private", "--confirm"]);
         if (createExit != 0)
@@ -43,12 +64,12 @@ sealed class CreateDeploymentRepoCommand : ClientCommand
         }
         Console.WriteLine($"  Created: {createOut.Trim()}");
 
-        // 3. Populate the repo with template files
+        // 5. Populate the repo with template files
         var result = await UpdateDeploymentRepoCommand.UpdateDeploymentRepoAsync(deployFullRepo, fkhFullRepo, "Initial deployment repo from Fkh template", quiet: true);
         if (result != 0)
             return result;
 
-        // 4. Print next steps
+        // 6. Print next steps
         Console.WriteLine();
         Console.WriteLine($"{Ansi.Cyan}Deployment repo created successfully!{Ansi.Reset}");
         Console.WriteLine($"  https://github.com/{deployFullRepo}");

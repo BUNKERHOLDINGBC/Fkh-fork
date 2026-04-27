@@ -20,6 +20,40 @@ sealed class UpdateDeploymentRepoCommand : ClientCommand
 
         var fkhFullRepo = parameters.TryGetValue("fkhRepo", out var fr) && !string.IsNullOrWhiteSpace(fr) ? fr : "Freddy-DK/Fkh";
 
+        // Verify gh is authenticated
+        var (ghExit, _, ghErr) = RunProcess("gh", ["auth", "status"]);
+        if (ghExit != 0)
+        {
+            Console.Error.WriteLine($"{Ansi.Red}GitHub CLI is not authenticated. Run 'gh auth login' first.{Ansi.Reset}");
+            Console.Error.WriteLine(ghErr);
+            return 1;
+        }
+
+        // Resolve GitHub user account
+        var (userExit, ghUser, _) = RunProcess("gh", ["api", "user", "--jq", ".login"]);
+        ghUser = ghUser?.Trim();
+        if (userExit != 0 || string.IsNullOrWhiteSpace(ghUser))
+        {
+            Console.Error.WriteLine($"{Ansi.Red}Failed to determine GitHub user. Ensure 'gh auth login' is complete.{Ansi.Reset}");
+            return 1;
+        }
+
+        // Confirm before proceeding
+        Console.WriteLine();
+        Console.WriteLine($"  Action:          Update deployment repo");
+        Console.WriteLine($"  Deployment repo: {deployFullRepo}");
+        Console.WriteLine($"  Fkh fork:        {fkhFullRepo}");
+        Console.WriteLine($"  GitHub account:  {ghUser}");
+        Console.WriteLine();
+        Console.Write("Do you want to proceed? [y/N] ");
+        var answer = Console.ReadLine()?.Trim();
+        if (!string.Equals(answer, "y", StringComparison.OrdinalIgnoreCase) && !string.Equals(answer, "yes", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.WriteLine("Aborted.");
+            return 1;
+        }
+        Console.WriteLine();
+
         return await UpdateDeploymentRepoAsync(deployFullRepo, fkhFullRepo, "Update deployment repo from Fkh template");
     }
 
