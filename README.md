@@ -24,7 +24,7 @@ collaboration — see the [Support Service Agreement](Support%20Service%20Agreem
 
 ## What is Freddy's Kubernetes Helper (Fkh)
 
-Fkh lets authorised GitHub users provision Business Central containers and perform developer tasks on demand — directly from VS Code, a CLI, or GitHub Actions workflows.
+Fkh lets authorised GitHub users work with Business Central containers and perform developer tasks on demand — directly from VS Code, a CLI, or GitHub Actions workflows.
 
 A GitHub-authenticated Azure Function acts as the provisioning gate; Terraform manages all Azure and Kubernetes infrastructure.
 
