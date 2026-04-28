@@ -231,23 +231,14 @@ This permission allows the Function to create and delete per-container AAD app r
 >
 > Complete this step after the first deployment (which creates the Function managed identity).
 
-1. In the Azure Portal, open **Managed Identities**.
-2. Find the Function identity (named `fkh-<deploymentName>-identity`).
-3. On the **Overview** page, copy the **Principal ID**.
-4. Go back to **App registrations** and open the deployer app registration from B.1.
-5. Go to **Certificates & secrets** → **Federated credentials**.
-6. Select **Add credential**.
-7. For **Federated credential scenario**, select **Other issuer**.
-8. Enter the following values:
-
-| Field | Value |
-|---|---|
-| Issuer | `https://login.microsoftonline.com/<your-tenant-id>/v2.0` |
-| Subject identifier | The **Principal ID** copied in step 3 |
-| Name | `fkh-function-graph` |
-| Audience | `api://AzureADTokenExchange` |
-
-9. Select **Add**.
+1. Open the deployer App Registration from B.1.
+2. Go to **Certificates & secrets** → **Federated credentials**.
+3. Select **Add credential**.
+4. For **Federated credential scenario**, select **Managed Identity**.
+5. Under **Select managed identity**, select the Function identity named `fkh-<deploymentName>-identity`. The **Issuer** and **Subject identifier** are filled in automatically.
+6. Set **Name** to `fkh-<deploymentName>-backend`.
+7. Leave **Audience** as the default (`api://AzureADTokenExchange`).
+8. Select **Add**.
 
 Once this credential is in place, containers created with `authenticationEmail` will use AAD authentication. No redeployment is needed.
 

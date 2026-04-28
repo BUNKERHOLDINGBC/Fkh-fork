@@ -80,6 +80,11 @@ resource "azurerm_kubernetes_cluster" "this" {
     vm_size                      = var.linux_vm_size
     os_sku                       = "Ubuntu"
     temporary_name_for_rotation  = "linuxtmp"
+
+    upgrade_settings {
+      max_surge                = "10%"
+      drain_timeout_in_minutes = 30
+    }
   }
 
   network_profile {
@@ -113,6 +118,11 @@ resource "azurerm_kubernetes_cluster_node_pool" "win" {
   max_count                    = var.windows_max_node_count
   auto_scaling_enabled         = true
 
+  upgrade_settings {
+    max_surge                = "10%"
+    drain_timeout_in_minutes = 30
+  }
+
   lifecycle {
     ignore_changes = [node_count]
   }
@@ -136,6 +146,10 @@ resource "azurerm_kubernetes_cluster_node_pool" "winspot" {
   priority              = "Spot"
   eviction_policy       = "Delete"
   spot_max_price        = -1  # pay up to on-demand price
+
+  upgrade_settings {
+    drain_timeout_in_minutes = 30
+  }
 
   node_labels = {
     "kubernetes.azure.com/scalesetpriority" = "spot"
