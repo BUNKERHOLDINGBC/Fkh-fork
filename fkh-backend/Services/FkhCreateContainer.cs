@@ -659,10 +659,7 @@ public class FkhCreateContainer : FkhServiceBase
         var signInAudience = multitenant ? "AzureADMultipleOrgs" : "AzureADMyOrg";
         Logger.LogInformation("Creating AAD App Registration for container '{AppName}' with redirect URI: {RedirectUri} (signInAudience: {Audience})", appName, redirectUri, signInAudience);
 
-#pragma warning disable CS0618
-        var credential = new ManagedIdentityCredential(ClientId);
-#pragma warning restore CS0618
-        var graphClient = new GraphServiceClient(credential);
+        var graphClient = new GraphServiceClient(CreateGraphCredential());
 
         var app = await graphClient.Applications.PostAsync(new Application
         {

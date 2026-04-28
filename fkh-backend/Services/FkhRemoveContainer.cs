@@ -94,10 +94,7 @@ public class FkhRemoveContainer : FkhServiceBase
     {
         try
         {
-#pragma warning disable CS0618
-            var credential = new ManagedIdentityCredential(ClientId);
-#pragma warning restore CS0618
-            var graphClient = new GraphServiceClient(credential);
+            var graphClient = new GraphServiceClient(CreateGraphCredential());
 
             await graphClient.Applications[objectId].DeleteAsync();
             Logger.LogInformation("AAD App Registration {ObjectId} deleted.", objectId);

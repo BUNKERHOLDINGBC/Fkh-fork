@@ -1,3 +1,4 @@
+using Azure.Core;
 using Azure.Identity;
 using Azure.ResourceManager;
 using Azure.ResourceManager.ContainerService;
@@ -26,6 +27,7 @@ public abstract class FkhServiceBase
     protected readonly string DbsStorageAccountName;
     protected readonly string? LogAnalyticsWorkspaceId;
     protected readonly string AadTenantId;
+    protected readonly string? AadGraphClientId;
     protected readonly ILogger Logger;
 
     protected const string Namespace = "app";
@@ -56,6 +58,27 @@ public abstract class FkhServiceBase
         LogAnalyticsWorkspaceId = Environment.GetEnvironmentVariable("LOG_ANALYTICS_WORKSPACE_ID");
         AadTenantId = Environment.GetEnvironmentVariable("AAD_TENANT_ID")
             ?? throw new InvalidOperationException("AAD_TENANT_ID is not configured.");
+        AadGraphClientId = Environment.GetEnvironmentVariable("AAD_GRAPH_CLIENT_ID");
+    }
+
+    /// <summary>
+    /// Creates a credential that authenticates as the deployer's app registration
+    /// via workload identity federation, for Microsoft Graph operations.
+    /// </summary>
+    protected TokenCredential CreateGraphCredential()
+    {
+        if (string.IsNullOrEmpty(AadGraphClientId))
+            throw new InvalidOperationException(
+                "AAD_GRAPH_CLIENT_ID is not configured. Set enable_aad_container_auth = true in deployment.tfvars.");
+
+#pragma warning disable CS0618
+        var miCredential = new ManagedIdentityCredential(ClientId);
+#pragma warning restore CS0618
+        return new ClientAssertionCredential(
+            AadTenantId,
+            AadGraphClientId,
+            async (ct) => (await miCredential.GetTokenAsync(
+                new TokenRequestContext(new[] { "api://AzureADTokenExchange" }), ct)).Token);
     }
 
     protected string AcrLoginServer => $"{AcrName}.azurecr.io";

@@ -21,8 +21,9 @@ Both options work with the same GitHub workflows. Choose the option that best fi
 |---|---|---|
 | Lives in | Azure resource group | Microsoft Entra ID |
 | Created by | Azure Subscription Owner | Entra ID Administrator |
-| Entra ID admin required immediately? | No, unless you enable AAD container authentication | Yes |
-| Best when | Your organization restricts App Registration creation, or you prefer Azure Resource Manager resources | Your organization already standardizes on App Registrations |
+| Entra ID admin required immediately? | No | Yes |
+| AAD container authentication | Not supported (requires Option B) | Supported |
+| Best when | Your organization restricts App Registration creation, or you prefer Azure Resource Manager resources | Your organization already standardizes on App Registrations, or you need AAD container authentication |
 | Cleanup | Delete the identity resource or resource group | Delete the App Registration |
 
 ## AAD container authentication note
@@ -35,16 +36,16 @@ enable_aad_container_auth = true
 
 This feature is disabled by default.
 
-When AAD container authentication is enabled, Terraform grants the `Application.ReadWrite.OwnedBy` Microsoft Graph permission to the Function App managed identity that is created during deployment. To grant that permission, the deployment identity you create in this step must have the **`Application.ReadWrite.OwnedBy`** Microsoft Graph permission.
+When enabled, the Function App authenticates to Microsoft Graph as the deployer's app registration via workload identity federation. This requires an **App Registration** deployer (Option B). Managed Identity deployers (Option A) do not support AAD container authentication.
 
 Use this rule:
 
 | If `enable_aad_container_auth` is... | Then... |
 |---|---|
 | `false` | Skip the optional Microsoft Graph permission step. No Entra ID admin involvement is required for Managed Identity deployments. |
-| `true` | Complete step A.5 or B.4 before running the deployment. |
+| `true` | Use Option B (App Registration). Complete step B.4.1 before the first deployment and B.4.2 after. |
 
-You can enable AAD container authentication later by changing the setting, granting the Graph permission, and re-running the deployment workflow.
+You can enable AAD container authentication later by switching to an App Registration deployer (if not already), completing step B.4, changing the setting, and re-running the deployment workflow.
 
 ---
 
@@ -121,35 +122,7 @@ The deployment identity needs two roles on the target Azure subscription.
 
 Fkh uses this permission to assign non-privileged roles such as `AcrPull` and `Storage Blob Data Contributor`.
 
-### A.5 — Optional: grant Microsoft Graph permission
-
-> **Performed by:** Entra ID administrator with permission to grant application consent
-
-Skip this section unless you will set `enable_aad_container_auth = true`.
-
-Managed Identities do not have an **API permissions** blade in the portal. Use the Azure CLI to grant the permission.
-
-1. Sign in if you have not already:
-
-   ```pwsh
-   az login
-   ```
-
-2. Grant the permission (replace `fkh-deploy-identity` with the name of your Managed Identity from A.2):
-
-   ```pwsh
-   $miId = az ad sp list --display-name "fkh-deploy-identity" --query "[0].id" -o tsv
-   $graphId = az ad sp list --filter "appId eq '00000003-0000-0000-c000-000000000000'" --query "[0].id" -o tsv
-   $roleId = az ad sp list --filter "appId eq '00000003-0000-0000-c000-000000000000'" --query "[0].appRoles[?value=='Application.ReadWrite.OwnedBy'].id | [0]" -o tsv
-
-   az rest --method POST `
-       --uri "https://graph.microsoft.com/v1.0/servicePrincipals/$miId/appRoleAssignments" `
-       --body "{\"principalId\":\"$miId\",\"resourceId\":\"$graphId\",\"appRoleId\":\"$roleId\"}"
-   ```
-
-This permission allows the deployment identity to grant the `Application.ReadWrite.OwnedBy` Graph permission to the Function App during Terraform runs and is not available through the Azure Portal UI. Azure subscription access is still controlled separately by the roles assigned in A.4.
-
-### A.6 — Save your values
+### A.5 — Save your values
 
 Record the following values for Step 5:
 
@@ -158,6 +131,8 @@ Record the following values for Step 5:
 | Client ID | Managed Identity → **Overview** |
 | Subscription ID | Azure Portal → **Subscriptions** → target subscription |
 | Tenant ID | Azure Portal → **Microsoft Entra ID** → **Overview** |
+
+> **Note:** AAD container authentication (`enable_aad_container_auth = true`) is not supported with a Managed Identity deployer. If you need this feature, use Option B (App Registration) instead.
 
 You can now continue to [Step 3 — Create the GitHub App](Step3-GitHubApp.md).
 
@@ -227,11 +202,17 @@ The Entra ID admin should provide the App Registration name or Client ID to the 
 
 Fkh uses this permission to assign non-privileged roles such as `AcrPull` and `Storage Blob Data Contributor`.
 
-### B.4 — Optional: grant Microsoft Graph permission
+### B.4 — Optional: enable AAD container authentication
 
 > **Performed by:** Entra ID administrator with permission to grant application consent
 
 Skip this section unless you will set `enable_aad_container_auth = true`.
+
+This step has two parts: granting the Graph permission and adding a federated credential. The Graph permission can be done before the first deployment. The federated credential requires the Function managed identity to exist, so it can only be completed after the first deployment.
+
+#### B.4.1 — Grant Microsoft Graph permission
+
+> **Performed by:** Entra ID administrator with permission to grant application consent
 
 1. Open the App Registration from B.1.
 2. Go to **API permissions**.
@@ -242,7 +223,33 @@ Skip this section unless you will set `enable_aad_container_auth = true`.
 7. Check the permission and select **Add permissions**.
 8. Select **Grant admin consent for [your tenant]** and confirm.
 
-Because the Entra ID admin creates the App Registration in B.1, they can usually complete this optional step at the same time.
+This permission allows the Function to create and delete per-container AAD app registrations through the deployer's identity.
+
+#### B.4.2 — Add the federated credential for the Function managed identity
+
+> **Performed by:** Any owner of the deployer app registration, or an Entra ID administrator (Application Administrator, Cloud Application Administrator, or Global Administrator)
+>
+> Complete this step after the first deployment (which creates the Function managed identity).
+
+1. In the Azure Portal, open **Managed Identities**.
+2. Find the Function identity (named `fkh-<deploymentName>-identity`).
+3. On the **Overview** page, copy the **Principal ID**.
+4. Go back to **App registrations** and open the deployer app registration from B.1.
+5. Go to **Certificates & secrets** → **Federated credentials**.
+6. Select **Add credential**.
+7. For **Federated credential scenario**, select **Other issuer**.
+8. Enter the following values:
+
+| Field | Value |
+|---|---|
+| Issuer | `https://login.microsoftonline.com/<your-tenant-id>/v2.0` |
+| Subject identifier | The **Principal ID** copied in step 3 |
+| Name | `fkh-function-graph` |
+| Audience | `api://AzureADTokenExchange` |
+
+9. Select **Add**.
+
+Once this credential is in place, containers created with `authenticationEmail` will use AAD authentication. No redeployment is needed.
 
 ### B.5 — Save your values
 
@@ -265,7 +272,7 @@ You can now continue to [Step 3 — Create the GitHub App](Step3-GitHubApp.md).
 | Create identity | Azure Subscription Owner | Entra ID Admin |
 | Add federated credential | Azure Subscription Owner | Entra ID Admin |
 | Assign Azure subscription roles | Azure Subscription Owner | Azure Subscription Owner |
-| Grant Microsoft Graph permission | Optional; only for AAD container authentication | Optional; only for AAD container authentication |
+| Grant Microsoft Graph permission | N/A (AAD container auth requires Option B) | Optional; B.4.1 before first deploy, B.4.2 after |
 | Values to save | Client ID, Subscription ID, Tenant ID | Client ID, Subscription ID, Tenant ID |
 
 ---

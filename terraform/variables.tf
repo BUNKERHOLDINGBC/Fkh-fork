@@ -232,7 +232,7 @@ variable "default_user_settings" {
 }
 
 variable "enable_aad_container_auth" {
-  description = "Grant the Function identity the Application.ReadWrite.OwnedBy Graph permission so containers can use AAD authentication. Requires the deployment identity to have the Application.ReadWrite.OwnedBy Microsoft Graph permission."
+  description = "Enable per-container AAD authentication. Passes the deployer's client ID to the Function so it can authenticate to Microsoft Graph via workload identity federation. Requires the deployer to be an App Registration (Option B) with Application.ReadWrite.OwnedBy and a federated credential trusting the Function MI (see Step 2, B.4)."
   type        = bool
   default     = false
 }

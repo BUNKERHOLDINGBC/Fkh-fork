@@ -88,7 +88,9 @@ sql_storage_size = "128Gi"
 contact_email_for_letsencrypt = "admin@example.com"
 
 # AAD container authentication — allows users to sign in with Microsoft 365 accounts
-# Requires the deployment identity to have the Application.ReadWrite.OwnedBy Microsoft Graph permission.
+# Requires an App Registration deployer (Option B in Step 2) with:
+#   1. Application.ReadWrite.OwnedBy Microsoft Graph permission (granted with admin consent)
+#   2. A federated credential trusting the Function managed identity (added after first deploy)
 # See Installation/Step2-AzureIdentity.md for details.
 enable_aad_container_auth = false
 aad_auth_is_multitenant  = false

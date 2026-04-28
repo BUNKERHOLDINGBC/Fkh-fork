@@ -33,24 +33,16 @@ resource "azurerm_role_assignment" "function_log_analytics_reader" {
   principal_id         = azurerm_user_assigned_identity.function.principal_id
 }
 
-# ── Microsoft Graph permissions for per-container AAD App management ───────────
+# ── Graph access for per-container AAD App management ─────────────────────────
 # The function creates a dedicated AAD App Registration for each container that
 # uses AAD authentication, and deletes it when the container is removed.
-# Application.ReadWrite.OwnedBy lets it manage only apps it created.
-# Gated by var.enable_aad_container_auth — requires the deployment identity to
-# have the Application.ReadWrite.OwnedBy Microsoft Graph permission.
+# The Function MI authenticates as the deployer's app registration via workload
+# identity federation — the federated credential on the deployer is created
+# manually (see Installation/Step2-AzureIdentity.md, section B.4).
+# The deployer's Application.ReadWrite.OwnedBy permission covers create/delete
+# because apps created through it are owned by the deployer.
 
-data "azuread_service_principal" "msgraph" {
-  count     = var.enable_aad_container_auth ? 1 : 0
-  client_id = "00000003-0000-0000-c000-000000000000"
-}
-
-resource "azuread_app_role_assignment" "function_graph_app_owned" {
-  count               = var.enable_aad_container_auth ? 1 : 0
-  app_role_id         = data.azuread_service_principal.msgraph[0].app_role_ids["Application.ReadWrite.OwnedBy"]
-  principal_object_id = azurerm_user_assigned_identity.function.principal_id
-  resource_object_id  = data.azuread_service_principal.msgraph[0].object_id
-}
+data "azuread_client_config" "current" {}
 
 # ── Federated credential for GitHub Actions OIDC ──────────────────────────────
 # Allows the createImages workflow in the configured repo to authenticate
