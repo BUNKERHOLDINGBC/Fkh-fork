@@ -22,8 +22,8 @@
 #   fkh-ref    - Git ref to checkout from the Fkh fork (default: main)
 #
 # ── Secrets (passed by the caller workflow) ─────────────────────────────────
-#   AZURE_DEPLOY_CLIENT_ID, SQL_SA_PASSWORD, GH_APP_PRIVATE_KEY
-#   (tenant_id and subscription_id are read from config/deployment.tfvars)
+#   SQL_SA_PASSWORD, GH_APP_PRIVATE_KEY
+#   (azure_deploy_client_id, tenant_id and subscription_id are read from config/deployment.tfvars)
 # ============================================================================
 
 name: Deploy Fkh Full Stack
@@ -42,8 +42,6 @@ on:
         type: string
         default: 'main'
     secrets:
-      AZURE_DEPLOY_CLIENT_ID:
-        required: true
       SQL_SA_PASSWORD:
         required: true
       GH_APP_PRIVATE_KEY:
@@ -57,7 +55,6 @@ env:
   TF_VAR_sql_sa_password: ${{ secrets.SQL_SA_PASSWORD }}
   TF_VAR_github_app_private_key: ${{ secrets.GH_APP_PRIVATE_KEY }}
   TF_VAR_create_images_repo: ${{ github.repository }}
-  ARM_CLIENT_ID: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
   ARM_USE_OIDC: true
 
 jobs:
@@ -106,6 +103,7 @@ jobs:
 
           $subscriptionId = Get-TfVar "subscription_id" $varFile
           $tenantId       = Get-TfVar "tenant_id" $varFile
+          $deployClientId = Get-TfVar "azure_deploy_client_id" $varFile
           $location       = Get-TfVar "location" $varFile
           $deploymentName = Get-TfVar "fkhDeploymentName" $varFile
           if ($deploymentName -cnotmatch '^[a-z0-9]+$') {
@@ -126,12 +124,14 @@ jobs:
           "state_key=$stateKey"           >> $env:GITHUB_OUTPUT
           "subscription_id=$subscriptionId" >> $env:GITHUB_OUTPUT
           "tenant_id=$tenantId"           >> $env:GITHUB_OUTPUT
+          "deploy_client_id=$deployClientId" >> $env:GITHUB_OUTPUT
           "location=$location"            >> $env:GITHUB_OUTPUT
           "state_location=$stateLocation"  >> $env:GITHUB_OUTPUT
           "deployment_name=$deploymentName" >> $env:GITHUB_OUTPUT
           "github_app_id=$githubAppId"    >> $env:GITHUB_OUTPUT
 
           # Set ARM env vars for Terraform OIDC (used by all subsequent steps)
+          "ARM_CLIENT_ID=$deployClientId"       >> $env:GITHUB_ENV
           "ARM_TENANT_ID=$tenantId"             >> $env:GITHUB_ENV
           "ARM_SUBSCRIPTION_ID=$subscriptionId" >> $env:GITHUB_ENV
 
@@ -152,7 +152,7 @@ jobs:
       - name: Azure CLI login (OIDC)
         uses: azure/login@v3
         with:
-          client-id: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
+          client-id: ${{ steps.parse.outputs.deploy_client_id }}
           tenant-id: ${{ steps.parse.outputs.tenant_id }}
           subscription-id: ${{ steps.parse.outputs.subscription_id }}
 
@@ -189,7 +189,7 @@ jobs:
           STATE_ACCOUNT_ID=$(az storage account show --name "${{ steps.parse.outputs.state_account }}" --resource-group "${{ steps.parse.outputs.state_rg }}" --query id -o tsv)
           az role assignment create \
             --role "Storage Blob Data Contributor" \
-            --assignee "${{ secrets.AZURE_DEPLOY_CLIENT_ID }}" \
+            --assignee "${{ steps.parse.outputs.deploy_client_id }}" \
             --scope "$STATE_ACCOUNT_ID" \
             --output none 2>/dev/null || true
 

@@ -10,9 +10,11 @@
 #   fkh-ref     - Git ref to checkout from the Fkh fork (e.g. main, a branch name, a tag or a commit SHA) (default: main)
 #
 # ── Required GitHub Secrets ─────────────────────────────────────────────────
-#   AZURE_DEPLOY_CLIENT_ID        - Client ID of the deployment identity
 #   SQL_SA_PASSWORD                - SA password for the SQL Server in AKS
 #   GH_APP_PRIVATE_KEY             - PEM-encoded private key of the GitHub App
+#
+# The deployment identity client ID (azure_deploy_client_id) is read from
+# config/deployment.tfvars — it is not a secret.
 #
 # ============================================================================
 
@@ -28,6 +30,5 @@ jobs:
       id-token: write
       contents: read
     secrets:
-      AZURE_DEPLOY_CLIENT_ID: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}
       SQL_SA_PASSWORD: ${{ secrets.SQL_SA_PASSWORD }}
       GH_APP_PRIVATE_KEY: ${{ secrets.GH_APP_PRIVATE_KEY }}

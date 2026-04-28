@@ -37,9 +37,10 @@ Go to **Settings > Secrets and variables > Actions** and add:
 
 | Secret | Description |
 |---|---|
-| `AZURE_DEPLOY_CLIENT_ID` | Client ID of your deployment identity (App Registration or Managed Identity) |
 | `SQL_SA_PASSWORD` | SA password for the SQL Server deployed in AKS |
 | `GH_APP_PRIVATE_KEY` | PEM-encoded private key of the GitHub App |
+
+> The deployment identity client ID (`azure_deploy_client_id`) is configured in `config/deployment.tfvars` — it is not a secret.
 
 ### 6. Deploy
 

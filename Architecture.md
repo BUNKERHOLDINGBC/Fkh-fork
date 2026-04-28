@@ -422,7 +422,7 @@ Whichever option you choose, configure:
   - `Contributor` — create and manage all resources
   - `User Access Administrator` — create role assignments for managed identities
 
-This identity's credentials are stored as a GitHub Actions secret (`AZURE_DEPLOY_CLIENT_ID`). The `tenant_id` and `subscription_id` are read from `config/deployment.tfvars`.
+This identity's client ID is stored in `config/deployment.tfvars` as `azure_deploy_client_id`. The `tenant_id` and `subscription_id` are also read from the same file.
 
 ### GitHub App
 
@@ -457,11 +457,10 @@ These are synced from Terraform outputs for the `CreateImages` workflow:
 
 | Secret | Purpose |
 |--------|---------|
-| `AZURE_DEPLOY_CLIENT_ID` | Deploy identity client ID (App Registration or Managed Identity) |
 | `SQL_SA_PASSWORD` | SQL Server SA password |
 | `GH_APP_PRIVATE_KEY` | GitHub App PEM private key |
 
-> `tenant_id` and `subscription_id` are read from `config/deployment.tfvars` — no secrets needed.
+> The deployment identity client ID (`azure_deploy_client_id`) is in `config/deployment.tfvars` — it is not a secret.
 
 #### Secrets for client publishing (`DeployFkhClients`)
 

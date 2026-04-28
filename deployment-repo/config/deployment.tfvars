@@ -4,6 +4,7 @@
 #
 # Never commit secrets (sql_sa_password, github_app_private_key) to source control.
 # Set them as GitHub Secrets in this repository instead.
+# The azure_deploy_client_id is safe to commit — it is not a secret.
 
 #  _____             _                                  _     _   _                      
 # |  __ \           | |                                | |   | \ | |                     
@@ -32,9 +33,10 @@ fkhDeploymentName = "myorg"
 # (AKS cluster, Function App, Container Registry, storage, etc.) will be created.
 # Get these from the Azure Portal or by running:
 #   az account show --query '{subscription_id:id, tenant_id:tenantId}' -o table
-subscription_id = "00000000-0000-0000-0000-000000000000"
-tenant_id       = "00000000-0000-0000-0000-000000000000"
-location        = "westeurope"   # Azure region (e.g. westeurope, eastus, swedencentral)
+subscription_id         = "00000000-0000-0000-0000-000000000000"
+tenant_id               = "00000000-0000-0000-0000-000000000000"
+azure_deploy_client_id  = "00000000-0000-0000-0000-000000000000"  # Client ID of your deployment identity (App Registration or Managed Identity) from Step 2
+location                = "westeurope"   # Azure region (e.g. westeurope, eastus, swedencentral)
 state_location  = ""             # Azure region for the Terraform state resource group and storage account. Leave empty to use 'location'.
 
 

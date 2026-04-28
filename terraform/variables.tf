@@ -10,6 +10,12 @@ variable "tenant_id" {
   type        = string
 }
 
+variable "azure_deploy_client_id" {
+  description = "Client ID of the deployment identity (App Registration or Managed Identity). Used by deploy workflows for OIDC login — not consumed by Terraform resources."
+  type        = string
+  default     = ""
+}
+
 variable "location" {
   description = "Azure region for all resources."
   type        = string

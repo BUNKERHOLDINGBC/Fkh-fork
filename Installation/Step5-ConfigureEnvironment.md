@@ -11,7 +11,6 @@ All work in this step happens in the private deployment repository you created i
 | Item | Stored in | Contains secrets? |
 |---|---|---|
 | Deployment settings | `config/deployment.tfvars` | No |
-| Azure deployment Client ID | GitHub Secret | Yes |
 | SQL Server SA password | GitHub Secret | Yes |
 | GitHub App private key | GitHub Secret | Yes |
 
@@ -39,16 +38,18 @@ Use lowercase letters and numbers only. Uppercase letters, hyphens, and other sp
 ### Azure settings
 
 ```hcl
-subscription_id = "00000000-0000-0000-0000-000000000000"
-tenant_id       = "00000000-0000-0000-0000-000000000000"
-location        = "westeurope"
-state_location  = ""
+subscription_id        = "00000000-0000-0000-0000-000000000000"
+tenant_id              = "00000000-0000-0000-0000-000000000000"
+azure_deploy_client_id = "00000000-0000-0000-0000-000000000000"
+location               = "westeurope"
+state_location         = ""
 ```
 
 | Setting | What to enter | Where to find it |
 |---|---|---|
 | `subscription_id` | Azure subscription ID | Azure Portal → **Subscriptions** → target subscription → **Subscription ID** |
 | `tenant_id` | Entra ID tenant ID | Azure Portal → **Microsoft Entra ID** → **Overview** → **Tenant ID** |
+| `azure_deploy_client_id` | Client ID of the deployment identity from Step 2 | Managed Identity: Azure Portal → MI → **Overview** → **Client ID**. App Registration: Azure Portal → **App registrations** → app → **Overview** → **Application (client) ID** |
 | `location` | Azure region for Fkh resources | Choose a region close to your users, for example `westeurope`, `eastus`, or `swedencentral` |
 | `state_location` | Azure region for the Terraform state resource group and storage account | Leave empty to use the same region as `location`. Set explicitly only if your organization requires Terraform state to live in a different region. |
 
@@ -196,17 +197,6 @@ Settings → Secrets and variables → Actions → New repository secret
 
 Create the following repository secrets.
 
-### AZURE_DEPLOY_CLIENT_ID
-
-Value: the Client ID of the deployment identity from Step 2.
-
-| Identity type | Where to find the Client ID |
-|---|---|
-| Managed Identity | Azure Portal → Managed Identity → **Overview** → **Client ID** |
-| App Registration | Azure Portal → **App registrations** → app → **Overview** → **Application (client) ID** |
-
-> `tenant_id` and `subscription_id` do not need to be stored as secrets. They are read from `config/deployment.tfvars`.
-
 ### SQL_SA_PASSWORD
 
 Value: the SA password for the SQL Server that runs in AKS.
@@ -236,9 +226,10 @@ After completing this step, your deployment repository should contain:
 | Item | Location | Source |
 |---|---|---|
 | Completed configuration file | `config/deployment.tfvars` | Values collected in Steps 1–4 |
-| `AZURE_DEPLOY_CLIENT_ID` | GitHub Secret | Deployment identity from Step 2 |
 | `SQL_SA_PASSWORD` | GitHub Secret | Password you choose |
 | `GH_APP_PRIVATE_KEY` | GitHub Secret | GitHub App private key from Step 3 |
+
+> The deployment identity client ID (`azure_deploy_client_id`) and Azure IDs (`tenant_id`, `subscription_id`) are all in `config/deployment.tfvars` — no secrets needed for these.
 
 You are ready to deploy.
 

@@ -9,7 +9,10 @@
 #   fkh-ref     - Git ref to checkout from the Fkh fork (e.g. main, a branch name, a tag or a commit SHA) (default: main)
 #
 # ── Required GitHub Secrets ─────────────────────────────────────────────────
-#   AZURE_DEPLOY_CLIENT_ID        - Client ID of the deployment identity
+#   (none)
+#
+# The deployment identity client ID (azure_deploy_client_id) is read from
+# config/deployment.tfvars — it is not a secret.
 #
 # ============================================================================
 
@@ -24,5 +27,3 @@ jobs:
     permissions:
       id-token: write
       contents: read
-    secrets:
-      AZURE_DEPLOY_CLIENT_ID: ${{ secrets.AZURE_DEPLOY_CLIENT_ID }}

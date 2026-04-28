@@ -80,7 +80,6 @@ sealed class CreateDeploymentRepoCommand : ClientCommand
         Console.WriteLine($"  3. Setup GitHub Teams: https://github.com/{fkhFullRepo}/blob/main/Installation/Step4-GitHubTeams.md");
         Console.WriteLine($"  4. Edit config/deployment.tfvars in {deployFullRepo}: https://github.com/{fkhFullRepo}/blob/main/Installation/Step5-ConfigureEnvironment.md");
         Console.WriteLine("  5. Add these GitHub Secrets in the deployment repo:");
-        Console.WriteLine("     - AZURE_DEPLOY_CLIENT_ID");
         Console.WriteLine("     - SQL_SA_PASSWORD");
         Console.WriteLine("     - GH_APP_PRIVATE_KEY");
         Console.WriteLine("  6. Run the 'Deploy Full Stack' workflow from the Actions tab");
