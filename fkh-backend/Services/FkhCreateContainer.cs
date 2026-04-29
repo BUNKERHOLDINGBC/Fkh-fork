@@ -675,15 +675,6 @@ public class FkhCreateContainer : FkhServiceBase
             },
             RequiredResourceAccess = new List<RequiredResourceAccess>
             {
-                // Dynamics 365 Business Central — API.ReadWrite.All (Application)
-                new RequiredResourceAccess
-                {
-                    ResourceAppId = "996def3d-b36c-4153-8607-a6fd3c01b89f",
-                    ResourceAccess = new List<ResourceAccess>
-                    {
-                        new ResourceAccess { Id = Guid.Parse("a42b0b75-311e-488d-b67e-8fe84f924341"), Type = "Role" }
-                    }
-                },
                 // Microsoft Graph — EWS.AccessAsUser.All + User.Read (Delegated)
                 new RequiredResourceAccess
                 {
