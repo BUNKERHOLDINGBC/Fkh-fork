@@ -61,7 +61,7 @@ The Fkh backend dispatches image builds to whichever repository ran the most rec
 Workflow templates and other supporting files in this deployment repository can be refreshed from the upstream Fkh repository (or your fork) using the Fkh CLI.
 
 ```pwsh
-fkh updatedeploymentrepo --deploymentRepo org/repo [--fkhRepo fkhForkOrg/fkhForkRepo]
+fkh updatedeploymentrepo --deploymentRepo org/repo [--fkhRepo fkhForkOrg/fkhForkRepo[@branch]]
 ```
 
 Examples:
@@ -69,13 +69,16 @@ Examples:
 ```pwsh
 fkh updatedeploymentrepo --deploymentRepo my-company/fkh-deploy-contoso
 fkh updatedeploymentrepo --deploymentRepo my-company/fkh-deploy-contoso --fkhRepo my-company/Fkh
+fkh updatedeploymentrepo --deploymentRepo my-company/fkh-deploy-contoso --fkhRepo my-company/Fkh@dev
 ```
+
+The optional `@branch` suffix controls which branch of the Fkh fork is used for fetching templates and for the reusable workflow references in the caller workflows. When omitted it defaults to `main`. This is useful for testing Fkh changes on a feature branch without affecting other deployments.
 
 What it does:
 
 - Clones the deployment repository to a temporary folder.
-- Fetches every file from the `deployment-repo/` folder of the Fkh repository (or fork) and writes it into the deployment repo, creating any missing folders.
-- In `.yml` files, rewrites the default `Freddy-DK/Fkh` reference to your `--fkhRepo` value when one is provided.
+- Fetches every file from the `deployment-repo/` folder of the Fkh repository (or fork) at the specified branch and writes it into the deployment repo, creating any missing folders.
+- In `.yml` files, rewrites the default `Freddy-DK/Fkh` reference and `@main` branch reference to your `--fkhRepo` value when one is provided.
 - **Never overwrites `config/deployment.tfvars`** — your environment-specific configuration is preserved.
 - Commits and pushes the changes using your `gh` user identity.
 

@@ -5,7 +5,7 @@ sealed class UpdateDeploymentRepoCommand : ClientCommand
     public override List<ClientCommandParameter> Parameters =>
     [
         new() { Name = "deploymentRepo", Type = "string", Description = "Owner/name of the deployment repo to update (e.g. myorg/fkh-deploy)", Required = true },
-        new() { Name = "fkhRepo",        Type = "string", Description = "Owner/name of the Fkh fork to use (default: Freddy-DK/Fkh)", Required = false },
+        new() { Name = "fkhRepo",        Type = "string", Description = "Owner/name of the Fkh fork, optionally with @branch (e.g. myorg/Fkh@dev). Default: Freddy-DK/Fkh@main", Required = false },
     ];
 
     public override async Task<int> ExecuteAsync(string[] args, CliSettings settings, bool asJson)
@@ -23,6 +23,7 @@ sealed class UpdateDeploymentRepoCommand : ClientCommand
         }
 
         var fkhFullRepo = parameters.TryGetValue("fkhRepo", out var fr) && !string.IsNullOrWhiteSpace(fr) ? fr : "Freddy-DK/Fkh";
+        var (fkhRepo, fkhBranch) = ParseFkhRepo(fkhFullRepo);
 
         // Verify gh is authenticated
         var (ghExit, _, ghErr) = RunProcess("gh", ["auth", "status"]);
@@ -46,7 +47,8 @@ sealed class UpdateDeploymentRepoCommand : ClientCommand
         Console.WriteLine();
         Console.WriteLine($"  Action:          Update deployment repo");
         Console.WriteLine($"  Deployment repo: {deployFullRepo}");
-        Console.WriteLine($"  Fkh fork:        {fkhFullRepo}");
+        Console.WriteLine($"  Fkh fork:        {fkhRepo}");
+        Console.WriteLine($"  Fkh branch:      {fkhBranch}");
         Console.WriteLine($"  GitHub account:  {ghUser}");
         Console.WriteLine();
         Console.Write("Do you want to proceed? [y/N] ");
@@ -58,14 +60,14 @@ sealed class UpdateDeploymentRepoCommand : ClientCommand
         }
         Console.WriteLine();
 
-        return await UpdateDeploymentRepoAsync(deployFullRepo, fkhFullRepo, "Update deployment repo from Fkh template");
+        return await UpdateDeploymentRepoAsync(deployFullRepo, fkhRepo, fkhBranch, "Update deployment repo from Fkh template");
     }
 
     /// <summary>
     /// Clones the deployment repo, fetches template files from the Fkh fork,
     /// writes them (skipping deployment.tfvars), commits and pushes.
     /// </summary>
-    internal static async Task<int> UpdateDeploymentRepoAsync(string deployFullRepo, string fkhFullRepo, string commitMessage, bool quiet = false)
+    internal static async Task<int> UpdateDeploymentRepoAsync(string deployFullRepo, string fkhRepo, string fkhBranch, string commitMessage, bool quiet = false)
     {
         // 1. Verify gh is authenticated
         var (ghExit, _, ghErr) = RunProcess("gh", ["auth", "status"]);
@@ -89,11 +91,11 @@ sealed class UpdateDeploymentRepoCommand : ClientCommand
         try
         {
             // 3. Enumerate and fetch all files from deployment-repo/ in the Fkh fork
-            Console.WriteLine($"Fetching template files from {fkhFullRepo}...");
-            var templateFiles = EnumerateGitHubDirectory(fkhFullRepo, "deployment-repo");
+            Console.WriteLine($"Fetching template files from {fkhRepo}@{fkhBranch}...");
+            var templateFiles = EnumerateGitHubDirectory(fkhRepo, "deployment-repo", fkhBranch);
             if (templateFiles.Count == 0)
             {
-                Console.Error.WriteLine($"{Ansi.Red}No template files found in {fkhFullRepo}/deployment-repo.{Ansi.Reset}");
+                Console.Error.WriteLine($"{Ansi.Red}No template files found in {fkhRepo}/deployment-repo.{Ansi.Reset}");
                 return 1;
             }
 
@@ -114,16 +116,19 @@ sealed class UpdateDeploymentRepoCommand : ClientCommand
                     }
                 }
 
-                var content = await FetchFileFromGitHubAsync(fkhFullRepo, templatePath);
+                var content = await FetchFileFromGitHubAsync(fkhRepo, templatePath, fkhBranch);
                 if (content is null)
                 {
                     Console.Error.WriteLine($"{Ansi.Yellow}  Warning: Could not fetch {templatePath} — skipping.{Ansi.Reset}");
                     continue;
                 }
 
-                // Replace Freddy-DK/Fkh with actual fkhRepo in .yml files
+                // Replace Freddy-DK/Fkh with actual fkhRepo and @main with actual branch in .yml files
                 if (templatePath.EndsWith(".yml", StringComparison.OrdinalIgnoreCase))
-                    content = content.Replace("Freddy-DK/Fkh", fkhFullRepo);
+                {
+                    content = content.Replace("Freddy-DK/Fkh", fkhRepo);
+                    content = content.Replace("@main", $"@{fkhBranch}");
+                }
 
                 var targetPath = Path.Combine(tempDir, relativePath.Replace('/', Path.DirectorySeparatorChar));
                 var targetDir = Path.GetDirectoryName(targetPath)!;
@@ -178,10 +183,10 @@ sealed class UpdateDeploymentRepoCommand : ClientCommand
         return 0;
     }
 
-    internal static Task<string?> FetchFileFromGitHubAsync(string repo, string path)
+    internal static Task<string?> FetchFileFromGitHubAsync(string repo, string path, string branch = "main")
     {
         // Use gh api to fetch file content (base64 encoded)
-        var (exit, stdout, _) = RunProcess("gh", ["api", $"repos/{repo}/contents/{path}", "--jq", ".content"]);
+        var (exit, stdout, _) = RunProcess("gh", ["api", $"repos/{repo}/contents/{path}?ref={branch}", "--jq", ".content"]);
         if (exit != 0 || string.IsNullOrWhiteSpace(stdout))
             return Task.FromResult<string?>(null);
 
@@ -198,10 +203,18 @@ sealed class UpdateDeploymentRepoCommand : ClientCommand
         }
     }
 
-    internal static List<string> EnumerateGitHubDirectory(string repo, string dirPath)
+    internal static (string repo, string branch) ParseFkhRepo(string fkhFullRepo)
+    {
+        var atIndex = fkhFullRepo.IndexOf('@');
+        if (atIndex >= 0)
+            return (fkhFullRepo[..atIndex], fkhFullRepo[(atIndex + 1)..]);
+        return (fkhFullRepo, "main");
+    }
+
+    internal static List<string> EnumerateGitHubDirectory(string repo, string dirPath, string branch = "main")
     {
         var files = new List<string>();
-        var (exit, stdout, _) = RunProcess("gh", ["api", $"repos/{repo}/contents/{dirPath}", "--jq", ".[] | .type + \"\\t\" + .path"]);
+        var (exit, stdout, _) = RunProcess("gh", ["api", $"repos/{repo}/contents/{dirPath}?ref={branch}", "--jq", ".[] | .type + \"\\t\" + .path"]);
         if (exit != 0 || string.IsNullOrWhiteSpace(stdout))
             return files;
 
@@ -213,7 +226,7 @@ sealed class UpdateDeploymentRepoCommand : ClientCommand
             if (type == "file")
                 files.Add(path);
             else if (type == "dir")
-                files.AddRange(EnumerateGitHubDirectory(repo, path));
+                files.AddRange(EnumerateGitHubDirectory(repo, path, branch));
         }
         return files;
     }

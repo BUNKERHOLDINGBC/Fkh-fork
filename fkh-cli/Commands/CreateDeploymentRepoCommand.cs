@@ -5,7 +5,7 @@ sealed class CreateDeploymentRepoCommand : ClientCommand
     public override List<ClientCommandParameter> Parameters =>
     [
         new() { Name = "deploymentRepo", Type = "string", Description = "Owner/name of the deployment repo to create (e.g. myorg/fkh-deploy)", Required = true },
-        new() { Name = "fkhRepo",        Type = "string", Description = "Owner/name of the Fkh fork to use (default: Freddy-DK/Fkh)", Required = false },
+        new() { Name = "fkhRepo",        Type = "string", Description = "Owner/name of the Fkh fork, optionally with @branch (e.g. myorg/Fkh@dev). Default: Freddy-DK/Fkh@main", Required = false },
     ];
 
     public override async Task<int> ExecuteAsync(string[] args, CliSettings settings, bool asJson)
@@ -23,6 +23,7 @@ sealed class CreateDeploymentRepoCommand : ClientCommand
         }
 
         var fkhFullRepo = parameters.TryGetValue("fkhRepo", out var fr) && !string.IsNullOrWhiteSpace(fr) ? fr : "Freddy-DK/Fkh";
+        var (fkhRepo, fkhBranch) = UpdateDeploymentRepoCommand.ParseFkhRepo(fkhFullRepo);
 
         // 1. Verify gh is authenticated
         var (ghExit, _, ghErr) = RunProcess("gh", ["auth", "status"]);
@@ -46,7 +47,8 @@ sealed class CreateDeploymentRepoCommand : ClientCommand
         Console.WriteLine();
         Console.WriteLine($"  Action:          Create private deployment repo");
         Console.WriteLine($"  Deployment repo: {deployFullRepo}");
-        Console.WriteLine($"  Fkh fork:        {fkhFullRepo}");
+        Console.WriteLine($"  Fkh fork:        {fkhRepo}");
+        Console.WriteLine($"  Fkh branch:      {fkhBranch}");
         Console.WriteLine($"  GitHub account:  {ghUser}");
         Console.WriteLine();
         Console.Write("Do you want to proceed? [y/N] ");
@@ -69,7 +71,7 @@ sealed class CreateDeploymentRepoCommand : ClientCommand
         Console.WriteLine($"  Created: {createOut.Trim()}");
 
         // 5. Populate the repo with template files
-        var result = await UpdateDeploymentRepoCommand.UpdateDeploymentRepoAsync(deployFullRepo, fkhFullRepo, "Initial deployment repo from Fkh template", quiet: true);
+        var result = await UpdateDeploymentRepoCommand.UpdateDeploymentRepoAsync(deployFullRepo, fkhRepo, fkhBranch, "Initial deployment repo from Fkh template", quiet: true);
         if (result != 0)
             return result;
 
@@ -79,10 +81,10 @@ sealed class CreateDeploymentRepoCommand : ClientCommand
         Console.WriteLine($"  https://github.com/{deployFullRepo}");
         Console.WriteLine();
         Console.WriteLine("Next steps:");
-        Console.WriteLine($"  1. Setup Azure Identity: https://github.com/{fkhFullRepo}/blob/main/Installation/Step2-AzureIdentity.md");
-        Console.WriteLine($"  2. Setup GitHub App: https://github.com/{fkhFullRepo}/blob/main/Installation/Step3-GitHubApp.md");
-        Console.WriteLine($"  3. Setup GitHub Teams: https://github.com/{fkhFullRepo}/blob/main/Installation/Step4-GitHubTeams.md");
-        Console.WriteLine($"  4. Edit config/deployment.tfvars in {deployFullRepo}: https://github.com/{fkhFullRepo}/blob/main/Installation/Step5-ConfigureEnvironment.md");
+        Console.WriteLine($"  1. Setup Azure Identity: https://github.com/{fkhRepo}/blob/{fkhBranch}/Installation/Step2-AzureIdentity.md");
+        Console.WriteLine($"  2. Setup GitHub App: https://github.com/{fkhRepo}/blob/{fkhBranch}/Installation/Step3-GitHubApp.md");
+        Console.WriteLine($"  3. Setup GitHub Teams: https://github.com/{fkhRepo}/blob/{fkhBranch}/Installation/Step4-GitHubTeams.md");
+        Console.WriteLine($"  4. Edit config/deployment.tfvars in {deployFullRepo}: https://github.com/{fkhRepo}/blob/{fkhBranch}/Installation/Step5-ConfigureEnvironment.md");
         Console.WriteLine("  5. Add these GitHub Secrets in the deployment repo:");
         Console.WriteLine("     - SQL_SA_PASSWORD");
         Console.WriteLine("     - GH_APP_PRIVATE_KEY");
