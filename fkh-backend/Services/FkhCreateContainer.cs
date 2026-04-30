@@ -627,6 +627,14 @@ public class FkhCreateContainer : FkhServiceBase
             new() { Name = "databaseServer", Value = "mssql-service" },
             new() { Name = "databaseInstance", Value = "" },
             new() { Name = "databaseName", Value = databaseName },
+            new()
+            {
+                Name = "encryptionPassword",
+                ValueFrom = new V1EnvVarSource
+                {
+                    SecretKeyRef = new V1SecretKeySelector { Name = "encryption-secret", Key = "encryptionPassword" }
+                }
+            },
         };
 
         if (multitenant)

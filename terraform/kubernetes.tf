@@ -48,6 +48,28 @@ resource "kubernetes_secret" "mssql" {
 }
 
 # ============================================================================
+# Random encryption password (generated once, lives for the cluster lifetime)
+# ============================================================================
+
+resource "random_password" "encryption" {
+  length  = 32
+  special = true
+}
+
+resource "kubernetes_secret" "encryption" {
+  metadata {
+    name      = "encryption-secret"
+    namespace = kubernetes_namespace.workload.metadata[0].name
+  }
+
+  data = {
+    "encryptionPassword" = random_password.encryption.result
+  }
+
+  type = "Opaque"
+}
+
+# ============================================================================
 # PersistentVolumeClaim for SQL Server data (Premium SSD, 128Gi)
 # ============================================================================
 
