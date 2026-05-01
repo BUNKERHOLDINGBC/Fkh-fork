@@ -66,6 +66,9 @@ public class FkhScaleContainer : FkhServiceBase
         await EnsureWindowsNodeReadyAsync(client, useSpot);
         await CleanupPlaceholderPodAsync(client, useSpot);
 
+        // Generate a fresh container blob SAS URL and inject it as an env var
+        await InjectContainerBlobContainerEnvAsync(client, appName, deploymentName);
+
         var result = await ScaleAsync(parameters, 1);
 
         parameters.TryGetValue("autostop", out var autoStopValue);
@@ -186,5 +189,36 @@ public class FkhScaleContainer : FkhServiceBase
         var action = replicas == 0 ? "Stopped" : "Started";
         Logger.LogInformation("{Action} deployment '{Deployment}'.", action, deploymentName);
         return new ScaleResult(appName, deploymentName, replicas);
+    }
+
+    private async Task InjectContainerBlobContainerEnvAsync(Kubernetes client, string appName, string deploymentName)
+    {
+        try
+        {
+            var sasUrl = await GenerateContainerBlobSasUrlAsync(appName);
+
+            // Patch the deployment to add/update the ContainerBlobContainer env var with a fresh SAS
+            var deployment = await client.ReadNamespacedDeploymentAsync(deploymentName, Namespace);
+            var container = deployment.Spec.Template.Spec.Containers[0];
+            container.Env ??= new List<V1EnvVar>();
+
+            var existing = container.Env.FirstOrDefault(e => e.Name == "ContainerBlobContainer");
+            if (existing != null)
+            {
+                existing.Value = sasUrl;
+                existing.ValueFrom = null;
+            }
+            else
+            {
+                container.Env.Add(new V1EnvVar { Name = "ContainerBlobContainer", Value = sasUrl });
+            }
+
+            await client.ReplaceNamespacedDeploymentAsync(deployment, deploymentName, Namespace);
+            Logger.LogInformation("Injected ContainerBlobContainer env var for container '{AppName}'.", appName);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to inject ContainerBlobContainer env var for container '{AppName}'.", appName);
+        }
     }
 }

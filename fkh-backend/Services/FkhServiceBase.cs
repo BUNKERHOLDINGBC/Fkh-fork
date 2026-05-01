@@ -1,4 +1,6 @@
 using Azure.Core;
+using Azure.Storage.Blobs;
+using Azure.Storage.Sas;
 using Azure.Identity;
 using Azure.ResourceManager;
 using Azure.ResourceManager.ContainerService;
@@ -34,11 +36,13 @@ public abstract class FkhServiceBase
 
     protected const string Namespace = "app";
     protected const string AcrRepository = "businesscentral";
-    protected const string FoldersValue = @"c:\run\my=https://github.com/Freddy-DK/ContainerScripts/archive/refs/heads/main.zip\ContainerScripts-main";
+    protected readonly string FoldersValue;
 
     protected FkhServiceBase(ILogger logger)
     {
         Logger = logger;
+        var websiteHostname = Environment.GetEnvironmentVariable("WEBSITE_HOSTNAME") ?? "localhost";
+        FoldersValue = $@"c:\run\my=https://{websiteHostname}/api/containerscripts\ContainerScripts";
         SubscriptionId = Environment.GetEnvironmentVariable("AKS_SUBSCRIPTION_ID")
             ?? throw new InvalidOperationException("AKS_SUBSCRIPTION_ID is not configured.");
         ResourceGroup = Environment.GetEnvironmentVariable("AKS_RESOURCE_GROUP")
@@ -364,6 +368,43 @@ public abstract class FkhServiceBase
         }
 
         return new ExecResult(stdoutTask.Result, stderr);
+    }
+
+    protected const string ContainerFilesBlobContainer = "containerfiles";
+
+    /// <summary>
+    /// Generates a container-level SAS URL scoped to the {appName}/ prefix within the 'containerfiles' blob container.
+    /// Creates the blob container if it doesn't exist. Grants Read, Create, and Write permissions.
+    /// </summary>
+    protected async Task<string> GenerateContainerBlobSasUrlAsync(string appName)
+    {
+#pragma warning disable CS0618
+        var credential = new ManagedIdentityCredential(ClientId);
+#pragma warning restore CS0618
+        var blobServiceClient = new BlobServiceClient(
+            new Uri($"https://{DbsStorageAccountName}.blob.core.windows.net"), credential);
+
+        var blobContainerClient = blobServiceClient.GetBlobContainerClient(ContainerFilesBlobContainer);
+        await blobContainerClient.CreateIfNotExistsAsync();
+
+        var delegationKey = await blobServiceClient.GetUserDelegationKeyAsync(
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(24));
+
+        var sasBuilder = new BlobSasBuilder
+        {
+            BlobContainerName = ContainerFilesBlobContainer,
+            Resource = "c",
+            ExpiresOn = DateTimeOffset.UtcNow.AddHours(24)
+        };
+        sasBuilder.SetPermissions(BlobSasPermissions.Read | BlobSasPermissions.Create | BlobSasPermissions.Write);
+
+        var containerUri = blobContainerClient.Uri;
+        var blobUriBuilder = new BlobUriBuilder(containerUri)
+        {
+            Sas = sasBuilder.ToSasQueryParameters(delegationKey, blobServiceClient.AccountName)
+        };
+        // Return the URL including the appName prefix so scripts can access blobs directly under it
+        return $"{blobUriBuilder.ToUri().ToString().Split('?')[0]}/{appName}?{blobUriBuilder.ToUri().Query.TrimStart('?')}";
     }
 
     protected const string AutoStopAnnotation = "fkh/auto-stop-at";

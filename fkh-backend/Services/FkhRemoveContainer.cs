@@ -1,4 +1,5 @@
 using Azure.Identity;
+using Azure.Storage.Blobs;
 using k8s;
 using Microsoft.Extensions.Logging;
 using Microsoft.Graph;
@@ -51,6 +52,9 @@ public class FkhRemoveContainer : FkhServiceBase
         {
             results.Add(await TryDeleteAadAppRegistrationAsync(aadAppObjectId));
         }
+
+        // Delete all blobs for this container from storage
+        results.Add(await TryDeleteContainerBlobsAsync(appName));
 
         Logger.LogInformation("Container '{AppName}' removal complete.", appName);
         return new { Container = appName, Results = results };
@@ -108,6 +112,32 @@ public class FkhRemoveContainer : FkhServiceBase
         {
             Logger.LogWarning(ex, "Failed to delete AAD App Registration '{ObjectId}'", objectId);
             return $"AAD App Registration deletion failed: {ex.Message}";
+        }
+    }
+
+    private async Task<string> TryDeleteContainerBlobsAsync(string appName)
+    {
+        try
+        {
+#pragma warning disable CS0618
+            var credential = new ManagedIdentityCredential(ClientId);
+#pragma warning restore CS0618
+            var blobServiceClient = new BlobServiceClient(
+                new Uri($"https://{DbsStorageAccountName}.blob.core.windows.net"), credential);
+
+            var blobContainerClient = blobServiceClient.GetBlobContainerClient(ContainerFilesBlobContainer);
+            var deleted = 0;
+            await foreach (var blob in blobContainerClient.GetBlobsAsync(prefix: $"{appName}/"))
+            {
+                await blobContainerClient.DeleteBlobAsync(blob.Name);
+                deleted++;
+            }
+            return deleted > 0 ? $"Container blobs deleted ({deleted})" : "No container blobs found (skipped)";
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to delete container blobs for '{AppName}'", appName);
+            return $"Container blobs deletion failed: {ex.Message}";
         }
     }
 }
