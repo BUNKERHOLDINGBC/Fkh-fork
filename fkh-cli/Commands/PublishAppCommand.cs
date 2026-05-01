@@ -124,6 +124,7 @@ sealed class PublishAppCommand : ClientCommand
 
         // ── Step 4: Poll for the result file ─────────────────────────────────────
         var pollScript = $"if (Test-Path '{ResultPath}') {{ Get-Content '{ResultPath}' -Raw }} else {{ Write-Host 'PENDING' }}";
+        var wroteProgress = false;
 
         while (true)
         {
@@ -149,12 +150,15 @@ sealed class PublishAppCommand : ClientCommand
             if (output == "PENDING")
             {
                 if (!asJson)
+                {
                     Console.Write(".");
+                    wroteProgress = true;
+                }
                 continue;
             }
 
             // Result file exists — parse it
-            if (!asJson && Console.CursorLeft > 0)
+            if (!asJson && wroteProgress)
                 Console.WriteLine();
 
             // The result file contains "OK|<json>" or "ERROR|<message>"
