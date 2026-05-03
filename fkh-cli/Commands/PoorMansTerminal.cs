@@ -5,15 +5,15 @@ using System.Text.Json;
 sealed class PoorMansTerminal
 {
     private readonly string _backendUrl;
-    private readonly string _token;
+    private readonly TokenProvider _tokenProvider;
     private readonly string _containerName;
     private readonly int _width;
     private string _currentPath = "C:\\";
 
-    public PoorMansTerminal(string backendUrl, string token, string containerName, int width = 220)
+    public PoorMansTerminal(string backendUrl, TokenProvider tokenProvider, string containerName, int width = 220)
     {
         _backendUrl = backendUrl.TrimEnd('/');
-        _token = token;
+        _tokenProvider = tokenProvider;
         _containerName = containerName;
         _width = width;
     }
@@ -90,9 +90,10 @@ sealed class PoorMansTerminal
     {
         try
         {
+            var token = await _tokenProvider.GetTokenAsync();
             using var httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
             var request = new HttpRequestMessage(HttpMethod.Post, $"{_backendUrl}/InvokeScript");
-            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", _token);
+            request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
             request.Content = new StringContent(
                 JsonSerializer.Serialize(new FunctionInvokeRequest
                 {

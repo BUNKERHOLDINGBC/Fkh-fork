@@ -14,7 +14,7 @@ sealed class UpdateDeploymentRepoCommand : ClientCommand
 
         // If --ghUser was specified, resolve that user's token so all gh CLI calls use the correct account
         if (!string.IsNullOrWhiteSpace(settings.User))
-            Environment.SetEnvironmentVariable("GH_TOKEN", GetToken(parameters, settings.User));
+            Environment.SetEnvironmentVariable("GH_TOKEN", CreateTokenProvider(parameters, settings).GetToken());
 
         if (!parameters.TryGetValue("deploymentRepo", out var deployFullRepo) || string.IsNullOrWhiteSpace(deployFullRepo))
         {

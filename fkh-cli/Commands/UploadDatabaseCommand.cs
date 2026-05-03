@@ -48,13 +48,10 @@ sealed class UploadDatabaseCommand : ClientCommand
             return 1;
         }
 
-        var token = GetToken(parameters, settings.User);
-        var backendUrl = settings.BackendUrl?.TrimEnd('/');
-        if (string.IsNullOrWhiteSpace(backendUrl))
-        {
-            Console.Error.WriteLine($"{Ansi.Red}No backend URL configured.{Ansi.Reset}");
+        var token = CreateTokenProvider(parameters, settings).GetToken();
+        var backendUrl = ValidateBackendUrl(settings.BackendUrl);
+        if (backendUrl is null)
             return 1;
-        }
 
         // Step 1: Get SAS URL from backend (admin-only endpoint, not in catalog)
         if (!asJson)

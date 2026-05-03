@@ -22,14 +22,20 @@ Configuration (checked in order):
     }
 
 Authentication (checked in order):
-  1. --oidcToken <token>   GitHub Actions OIDC token (passed on command line)
-  2. OIDC_TOKEN            GitHub Actions OIDC token (environment variable)
-  3. GH_TOKEN              GitHub personal access token
-  4. gh auth token         GitHub CLI (interactive fallback)
+  1. --useOIDC             Fetch OIDC token from GitHub Actions environment
+                           (uses ACTIONS_ID_TOKEN_REQUEST_URL/TOKEN, auto-refreshes)
+  2. --oidcToken <token>   GitHub Actions OIDC token (passed on command line)
+  3. OIDC_TOKEN            GitHub Actions OIDC token (environment variable)
+  4. GH_TOKEN              GitHub personal access token
+  5. gh auth token         GitHub CLI (interactive fallback)
                            Use --ghUser <user> to target a specific GitHub account
+
+Note: --useOIDC and --oidcToken are exclusive — when either is specified, no other
+      auth methods are tried.
 """;
 
 var asJson = args.Contains("--asJson", StringComparer.OrdinalIgnoreCase);
+var useOidc = args.Contains("--useOIDC", StringComparer.OrdinalIgnoreCase);
 
 try
 {
@@ -54,6 +60,7 @@ try
     if (!string.IsNullOrWhiteSpace(cliBackendUrl))
         settings.BackendUrl = cliBackendUrl;
     settings.User = FindArgValue(args, "ghUser");
+    settings.UseOidc = useOidc;
     var wantsHelp = args.Length == 0 || args.Contains("-h") || args.Contains("--help");
     var helpCommand = (args.Length >= 2 && wantsHelp && !args[0].StartsWith("-")) ? args[0] : null;
 
@@ -152,7 +159,8 @@ try
     }
 
     var endpoint = ResolveEndpoint(function.Route, settings);
-    var token = parsed.OidcToken ?? GetGitHubToken(settings.User);
+    var tokenProvider = new TokenProvider(useOidc: settings.UseOidc, explicitOidcToken: parsed.OidcToken, ghUser: settings.User);
+    var token = await tokenProvider.GetTokenAsync();
 
     // Send the client's timezone so the server can resolve time-of-day autostop values
     parsed.Parameters["_timezone"] = Environment.GetEnvironmentVariable("FKH_TIMEZONE") is string tz && !string.IsNullOrWhiteSpace(tz)
@@ -258,6 +266,8 @@ try
                 }
                 Console.WriteLine($"{Ansi.Dim}Retrying in {retrySeconds} seconds... (Ctrl+C to cancel){Ansi.Reset}");
                 await Task.Delay(TimeSpan.FromSeconds(retrySeconds), cts.Token);
+                // Refresh token (OIDC tokens are short-lived)
+                token = await tokenProvider.GetTokenAsync();
                 continue;
             }
         }
@@ -360,6 +370,11 @@ static ParsedArgs ParseArgs(string[] args, FunctionCatalogResponse catalog)
         if (string.Equals(key, "asJson", StringComparison.OrdinalIgnoreCase))
         {
             parsed.AsJson = true;
+            continue;
+        }
+
+        if (string.Equals(key, "useOIDC", StringComparison.OrdinalIgnoreCase))
+        {
             continue;
         }
 
@@ -616,6 +631,7 @@ static void PrintCommonOptions()
     Console.WriteLine("Common options:");
     Console.WriteLine("    --backendUrl <url>  Override the backend URL");
     Console.WriteLine("    --ghUser <user>     GitHub user account for gh auth token");
+    Console.WriteLine("    --useOIDC           Fetch OIDC token from GitHub Actions (auto-refreshes)");
     Console.WriteLine("    --oidcToken <token>  Use a GitHub Actions OIDC token");
     Console.WriteLine("    --nowait            Don't wait for completion");
     Console.WriteLine("    --asJson            Output the result as JSON");
@@ -737,56 +753,6 @@ static string? FindArgValue(string[] args, string name)
             return args[i + 1];
     }
     return null;
-}
-
-static string GetGitHubToken(string? user = null)
-{
-    var token = Environment.GetEnvironmentVariable("OIDC_TOKEN");
-    if (!string.IsNullOrWhiteSpace(token))
-    {
-        return token;
-    }
-
-    token = Environment.GetEnvironmentVariable("GH_TOKEN");
-    if (!string.IsNullOrWhiteSpace(token))
-    {
-        return token;
-    }
-
-    var psi = new ProcessStartInfo
-    {
-        FileName = "gh",
-        ArgumentList = { "auth", "token" },
-        RedirectStandardOutput = true,
-        RedirectStandardError = true,
-        UseShellExecute = false,
-        CreateNoWindow = true
-    };
-    if (!string.IsNullOrWhiteSpace(user))
-    {
-        psi.ArgumentList.Add("-u");
-        psi.ArgumentList.Add(user);
-    }
-
-    using var process = Process.Start(psi) ?? throw new InvalidOperationException("Could not start 'gh'.");
-    var stdout = process.StandardOutput.ReadToEnd();
-    var stderr = process.StandardError.ReadToEnd();
-    process.WaitForExit();
-
-    if (process.ExitCode != 0)
-    {
-        throw new InvalidOperationException(
-            "Could not get GitHub token from 'gh auth token'. Run 'gh auth login' first. " +
-            (string.IsNullOrWhiteSpace(stderr) ? string.Empty : $"Details: {stderr.Trim()}"));
-    }
-
-    token = stdout.Trim();
-    if (string.IsNullOrWhiteSpace(token))
-    {
-        throw new InvalidOperationException("'gh auth token' returned an empty token.");
-    }
-
-    return token;
 }
 
 static string? TryGetMessage(string responseBody)
@@ -971,6 +937,7 @@ sealed class CliSettings
 {
     public string? BackendUrl { get; set; }
     public string? User { get; set; }
+    public bool UseOidc { get; set; }
 }
 
 sealed class FunctionCatalogResponse

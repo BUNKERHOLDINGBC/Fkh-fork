@@ -32,6 +32,7 @@ abstract class ClientCommand
             if (string.Equals(key, "asJson", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(key, "nowait", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(key, "wait", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(key, "useOIDC", StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(key, "poormansterminal", StringComparison.OrdinalIgnoreCase))
                 continue;
 
@@ -57,51 +58,40 @@ abstract class ClientCommand
         return parameters;
     }
 
-    protected static string GetToken(Dictionary<string, string> parameters, string? user = null)
+    /// <summary>
+    /// Creates a TokenProvider for client commands, respecting the --useOIDC setting.
+    /// </summary>
+    protected static TokenProvider CreateTokenProvider(Dictionary<string, string> parameters, CliSettings settings)
     {
+        string? explicitOidcToken = null;
         if (parameters.TryGetValue("oidcToken", out var oidc) && !string.IsNullOrWhiteSpace(oidc))
         {
+            explicitOidcToken = oidc;
             parameters.Remove("oidcToken");
-            return oidc;
         }
-        return GetGitHubTokenStatic(user);
+        return new TokenProvider(useOidc: settings.UseOidc, explicitOidcToken: explicitOidcToken, ghUser: settings.User);
     }
 
-    private static string GetGitHubTokenStatic(string? user = null)
+    /// <summary>
+    /// Validates and returns the trimmed backend URL, or writes an error and returns null.
+    /// </summary>
+    protected static string? ValidateBackendUrl(string? backendUrl)
     {
-        var token = Environment.GetEnvironmentVariable("OIDC_TOKEN");
-        if (!string.IsNullOrWhiteSpace(token)) return token;
-
-        token = Environment.GetEnvironmentVariable("GH_TOKEN");
-        if (!string.IsNullOrWhiteSpace(token)) return token;
-
-        var psi = new ProcessStartInfo
+        var url = backendUrl?.TrimEnd('/');
+        if (string.IsNullOrWhiteSpace(url))
         {
-            FileName = "gh",
-            ArgumentList = { "auth", "token" },
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        };
-        if (!string.IsNullOrWhiteSpace(user))
-        {
-            psi.ArgumentList.Add("-u");
-            psi.ArgumentList.Add(user);
+            Console.Error.WriteLine($"{Ansi.Red}No backend URL configured. Set FKH_BACKEND_URL, create ~/.fkh/settings.json, or pass --backendUrl.{Ansi.Reset}");
+            return null;
         }
 
-        using var process = Process.Start(psi) ?? throw new InvalidOperationException("Could not start 'gh'.");
-        var stdout = process.StandardOutput.ReadToEnd();
-        process.WaitForExit();
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            || (uri.Scheme != "http" && uri.Scheme != "https"))
+        {
+            Console.Error.WriteLine($"{Ansi.Red}Invalid backend URL: '{url}'. Must be an absolute http/https URL (e.g. https://fkh-myorg-backend.azurewebsites.net/api).{Ansi.Reset}");
+            return null;
+        }
 
-        if (process.ExitCode != 0)
-            throw new InvalidOperationException("Could not get GitHub token from 'gh auth token'. Run 'gh auth login' first.");
-
-        token = stdout.Trim();
-        if (string.IsNullOrWhiteSpace(token))
-            throw new InvalidOperationException("'gh auth token' returned an empty token.");
-
-        return token;
+        return url;
     }
 
     // ── Shared K8s / process helpers ─────────────────────────────────────────

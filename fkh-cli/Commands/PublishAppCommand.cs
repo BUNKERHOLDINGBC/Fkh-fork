@@ -56,17 +56,16 @@ sealed class PublishAppCommand : ClientCommand
             && string.Equals(ds, "true", StringComparison.OrdinalIgnoreCase);
         var noWait = args.Any(a => string.Equals(a, "--nowait", StringComparison.OrdinalIgnoreCase));
 
-        var backendUrl = settings.BackendUrl?.TrimEnd('/');
-        if (string.IsNullOrWhiteSpace(backendUrl))
-        {
-            Console.Error.WriteLine($"{Ansi.Red}No backend URL configured.{Ansi.Reset}");
+        var backendUrl = ValidateBackendUrl(settings.BackendUrl);
+        if (backendUrl is null)
             return 1;
-        }
 
+        TokenProvider tokenProvider;
         string token;
         try
         {
-            token = GetToken(parameters, settings.User);
+            tokenProvider = CreateTokenProvider(parameters, settings);
+            token = await tokenProvider.GetTokenAsync();
         }
         catch (Exception ex)
         {
@@ -166,6 +165,9 @@ sealed class PublishAppCommand : ClientCommand
         while (true)
         {
             await Task.Delay(5_000);
+
+            // Refresh token before each poll (OIDC tokens are short-lived)
+            token = await tokenProvider.GetTokenAsync();
 
             var pollResult = await InvokeScriptAsync(httpClient, backendUrl, token, containerName, pollScript);
 

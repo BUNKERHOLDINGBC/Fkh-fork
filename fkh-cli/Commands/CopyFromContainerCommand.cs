@@ -44,13 +44,10 @@ sealed class CopyFromContainerCommand : ClientCommand
             return 1;
         }
 
-        var token = GetToken(parameters, settings.User);
-        var backendUrl = settings.BackendUrl?.TrimEnd('/');
-        if (string.IsNullOrWhiteSpace(backendUrl))
-        {
-            Console.Error.WriteLine($"{Ansi.Red}No backend URL configured.{Ansi.Reset}");
+        var token = CreateTokenProvider(parameters, settings).GetToken();
+        var backendUrl = ValidateBackendUrl(settings.BackendUrl);
+        if (backendUrl is null)
             return 1;
-        }
 
         Console.WriteLine($"{Ansi.Dim}Downloading {filename} from container '{containerName}' via backend...{Ansi.Reset}");
 

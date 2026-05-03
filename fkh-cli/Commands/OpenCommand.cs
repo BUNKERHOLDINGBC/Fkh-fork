@@ -55,16 +55,16 @@ sealed class OpenCommand : ClientCommand
                 Console.Error.WriteLine($"{Ansi.Yellow}Could not open a new terminal window — running inline.{Ansi.Reset}");
             }
 
-            var backendUrl = settings.BackendUrl?.TrimEnd('/');
-            if (string.IsNullOrWhiteSpace(backendUrl))
+            var backendUrl = ValidateBackendUrl(settings.BackendUrl);
+            if (backendUrl is null)
             {
                 var reason = poorMansTerminal ? "--poormansterminal requested" : "kubectl not found";
-                Console.Error.WriteLine($"{Ansi.Red}{reason} but no backend URL configured. Set a backend URL in settings or FKH_BACKEND_URL.{Ansi.Reset}");
+                Console.Error.WriteLine($"{Ansi.Red}{reason} — cannot fall back to backend.{Ansi.Reset}");
                 return 1;
             }
 
-            string token;
-            try { token = GetToken(parameters, settings.User); }
+            TokenProvider tokenProvider;
+            try { tokenProvider = CreateTokenProvider(parameters, settings); }
             catch (Exception ex)
             {
                 Console.Error.WriteLine($"{Ansi.Red}{ex.Message}{Ansi.Reset}");
@@ -74,7 +74,7 @@ sealed class OpenCommand : ClientCommand
             int width;
             try { width = Console.WindowWidth; } catch { width = 220; }
 
-            return await new PoorMansTerminal(backendUrl, token, containerName, width).RunAsync();
+            return await new PoorMansTerminal(backendUrl, tokenProvider, containerName, width).RunAsync();
         }
 
         // Resolve container name to app label (same as server-side ResolveAppName)

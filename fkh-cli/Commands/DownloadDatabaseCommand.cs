@@ -43,13 +43,10 @@ sealed class DownloadDatabaseCommand : ClientCommand
 
         parameters.TryGetValue("output", out var outputPath);
 
-        var token = GetToken(parameters, settings.User);
-        var backendUrl = settings.BackendUrl?.TrimEnd('/');
-        if (string.IsNullOrWhiteSpace(backendUrl))
-        {
-            Console.Error.WriteLine($"{Ansi.Red}No backend URL configured.{Ansi.Reset}");
+        var token = CreateTokenProvider(parameters, settings).GetToken();
+        var backendUrl = ValidateBackendUrl(settings.BackendUrl);
+        if (backendUrl is null)
             return 1;
-        }
 
         // Step 1: Get read-only SAS URL from backend
         if (!asJson)
