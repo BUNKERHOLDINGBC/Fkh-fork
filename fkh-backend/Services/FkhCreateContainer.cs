@@ -46,6 +46,7 @@ public class FkhCreateContainer : FkhServiceBase
             || (parameters.TryGetValue("multitenant", out var mtVal)
                 && string.Equals(mtVal, "true", StringComparison.OrdinalIgnoreCase));
 
+        var licenseFileUrl = parameters.TryGetValue("licenseFileUrl", out var lfUrl) ? lfUrl : null;
         var authenticationEmail = parameters.TryGetValue("authenticationEmail", out var authEmail) ? authEmail : null;
         var useAadAuth = !string.IsNullOrWhiteSpace(authenticationEmail);
         var aadAuthIsMultitenant = string.Equals(
@@ -161,7 +162,7 @@ public class FkhCreateContainer : FkhServiceBase
             (aadAppObjectId, aadAppClientId) = await CreateAadAppRegistrationAsync(appName, redirectUri, aadAuthIsMultitenant);
         }
 
-        await CreateDeploymentAsync(client, deploymentName, appName, fullImage, adminUsername, secretName, publicDnsName, databaseName, cpuRequest, memoryRequest, repo, project, multitenant, useSpot, authenticationEmail, aadAppClientId, aadAppObjectId, aadAuthIsMultitenant, moveAllAppsToDevScope);
+        await CreateDeploymentAsync(client, deploymentName, appName, fullImage, adminUsername, secretName, publicDnsName, databaseName, cpuRequest, memoryRequest, repo, project, multitenant, useSpot, licenseFileUrl, authenticationEmail, aadAppClientId, aadAppObjectId, aadAuthIsMultitenant, moveAllAppsToDevScope);
         await CreateLoadBalancerServiceAsync(client, serviceName, appName, dnsLabel);
 
         // Set auto-stop annotation if requested
@@ -480,7 +481,7 @@ public class FkhCreateContainer : FkhServiceBase
     private async Task CreateDeploymentAsync(
         Kubernetes client, string deploymentName, string appName, string fullImage,
         string adminUsername, string secretName, string publicDnsName, string databaseName,
-        string cpuRequest, string memoryRequest, string? repo, string? project, bool multitenant, bool useSpot, string? authenticationEmail, string? aadAppClientId, string? aadAppObjectId, bool aadAuthIsMultitenant, bool moveAllAppsToDevScope)
+        string cpuRequest, string memoryRequest, string? repo, string? project, bool multitenant, bool useSpot, string? licenseFileUrl, string? authenticationEmail, string? aadAppClientId, string? aadAppObjectId, bool aadAuthIsMultitenant, bool moveAllAppsToDevScope)
     {
         var annotations = new Dictionary<string, string>();
         if (!string.IsNullOrWhiteSpace(repo))
@@ -581,7 +582,7 @@ public class FkhCreateContainer : FkhServiceBase
                                 {
                                     new() { ContainerPort = 80 }, new() { ContainerPort = 443 }, new() { ContainerPort = 7047 }, new() { ContainerPort = 7048 }, new() { ContainerPort = 7049 },
                                 },
-                                Env = BuildEnvVars(adminUsername, secretName, publicDnsName, databaseName, multitenant, authenticationEmail, aadAppClientId, aadAuthIsMultitenant, await GenerateContainerBlobSasUrlAsync(appName)),
+                                Env = BuildEnvVars(adminUsername, secretName, publicDnsName, databaseName, multitenant, licenseFileUrl, authenticationEmail, aadAppClientId, aadAuthIsMultitenant, await GenerateContainerBlobSasUrlAsync(appName)),
                                 Resources = new V1ResourceRequirements
                                 {
                                     Requests = new Dictionary<string, ResourceQuantity>
@@ -600,7 +601,7 @@ public class FkhCreateContainer : FkhServiceBase
         await client.CreateNamespacedDeploymentAsync(deployment, Namespace);
     }
 
-    private List<V1EnvVar> BuildEnvVars(string adminUsername, string secretName, string publicDnsName, string databaseName, bool multitenant, string? authenticationEmail, string? aadAppClientId, bool aadAuthIsMultitenant, string encryptionKeyBlobSasUrl)
+    private List<V1EnvVar> BuildEnvVars(string adminUsername, string secretName, string publicDnsName, string databaseName, bool multitenant, string? licenseFileUrl, string? authenticationEmail, string? aadAppClientId, bool aadAuthIsMultitenant, string encryptionKeyBlobSasUrl)
     {
         var envVars = new List<V1EnvVar>
         {
@@ -647,6 +648,11 @@ public class FkhCreateContainer : FkhServiceBase
             },
             new() { Name = "ContainerBlobContainer", Value = encryptionKeyBlobSasUrl },
         };
+
+        if (!string.IsNullOrWhiteSpace(licenseFileUrl))
+        {
+            envVars.Add(new V1EnvVar { Name = "licensefile", Value = licenseFileUrl });
+        }
 
         if (multitenant)
         {

@@ -100,8 +100,24 @@ sealed class UploadDatabaseCommand : ClientCommand
         var blobClient = containerClient.GetBlobClient(blobName);
 
         await using (var fileStream = File.OpenRead(bakFile))
+        await using (var blobStream = await blobClient.OpenWriteAsync(overwrite: true))
         {
-            await blobClient.UploadAsync(fileStream, overwrite: true);
+            var buffer = new byte[81920];
+            long totalWritten = 0;
+            int bytesRead;
+            while ((bytesRead = await fileStream.ReadAsync(buffer)) > 0)
+            {
+                await blobStream.WriteAsync(buffer.AsMemory(0, bytesRead));
+                totalWritten += bytesRead;
+                if (!asJson && fileSize > 0)
+                {
+                    var pct = (double)totalWritten / fileSize * 100;
+                    Console.Write($"\r{Ansi.Dim}Uploaded {totalWritten / (1024.0 * 1024):N1} / {fileSize / (1024.0 * 1024):N1} MB ({pct:N0}%){Ansi.Reset}");
+                }
+            }
+
+            if (!asJson)
+                Console.WriteLine();
         }
 
         if (!asJson)

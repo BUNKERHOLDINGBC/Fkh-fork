@@ -127,6 +127,14 @@ public static class FunctionCatalog
                 },
                 new()
                 {
+                    Name = "licenseFileUrl",
+                    Type = "string",
+                    Description = "URL to a license file (.bclicense or .flf) to use in the container.",
+                    Required = false,
+                    DefaultValue = null
+                },
+                new()
+                {
                     Name = "authenticationEmail",
                     Type = "string",
                     Description = "Email address for Azure AD authentication. When set, the container uses AAD auth instead of NavUserPassword. Requires AAD App Registration setup — see docs/AadAuthentication.md.",
