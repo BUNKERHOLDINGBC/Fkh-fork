@@ -150,12 +150,21 @@ try {{
         }
         catch { /* best-effort cleanup */ }
 
+        var stdout = stdoutResult.Stdout.TrimEnd();
         var stderr = stderrResult.Stdout.TrimEnd();
+
+        if (!string.IsNullOrWhiteSpace(stderr))
+        {
+            var message = string.IsNullOrWhiteSpace(stdout)
+                ? $"Script failed in container '{appName}':\n{stderr}"
+                : $"Script failed in container '{appName}':\n{stderr}\n\nOutput:\n{stdout}";
+            throw new InvalidOperationException(message);
+        }
+
         return new
         {
             Container = appName,
-            Output = stdoutResult.Stdout.TrimEnd(),
-            Stderr = string.IsNullOrWhiteSpace(stderr) ? null : stderr,
+            Output = stdout,
         };
     }
 
