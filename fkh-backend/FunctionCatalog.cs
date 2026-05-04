@@ -717,6 +717,39 @@ public static class FunctionCatalog
         },
         new FunctionDefinition
         {
+            Name = "BackupDatabase",
+            Description = "Backs up the app database (or single tenant database) from a running container and uploads it to blob storage. Updates the version manifest (all.json).",
+            Route = "BackupDatabase",
+            Parameters = new List<FunctionParameterDefinition>
+            {
+                new()
+                {
+                    Name = "name",
+                    Type = "string",
+                    Description = "Name of the container in which the database is running.",
+                    Required = true,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "backupName",
+                    Type = "string",
+                    Description = "Backup name in the storage account (used as the folder name in blob storage).",
+                    Required = true,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "backupVersion",
+                    Type = "string",
+                    Description = "Backup version in the storage account (used as the blob name).",
+                    Required = true,
+                    DefaultValue = null
+                }
+            }
+        },
+        new FunctionDefinition
+        {
             Name = "BackupTenantDatabase",
             Description = "Backs up a tenant database from a running container and uploads it to blob storage. Updates the version manifest (all.json).",
             Route = "BackupTenantDatabase",
