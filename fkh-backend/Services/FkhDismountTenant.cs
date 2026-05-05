@@ -30,7 +30,14 @@ public class FkhDismountTenant : FkhServiceBase
         var dismountResult = await ExecInBcPodPwshAsync(client, podName, bcContainerName, dismountScript);
 
         if (!string.IsNullOrWhiteSpace(dismountResult.Stderr))
-            throw new InvalidOperationException($"Failed to dismount tenant '{tenant}' from container '{containerName}': {dismountResult.Stderr}");
+        {
+            // Dismount-NAVTenant may throw but still succeed — verify the tenant state
+            var verifyScript = $". 'C:\\run\\prompt.ps1' -silent; (Get-NAVTenant -ServerInstance $ServerInstance -Tenant '{tenant}').State";
+            var verifyResult = await ExecInBcPodPwshAsync(client, podName, bcContainerName, verifyScript);
+
+            if (!string.Equals(verifyResult.Stdout.Trim(), "Dismounted", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidOperationException($"Failed to dismount tenant '{tenant}' from container '{containerName}': {dismountResult.Stderr}");
+        }
 
         Logger.LogInformation("Tenant '{Tenant}' dismounted from container '{Container}'.", tenant, containerName);
 
