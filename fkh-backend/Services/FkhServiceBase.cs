@@ -487,4 +487,136 @@ public abstract class FkhServiceBase
         await client.PatchNamespacedDeploymentAsync(patch, deploymentName, Namespace);
         Logger.LogInformation("Cleared auto-stop annotation on '{Deployment}'.", deploymentName);
     }
+
+    protected async Task<string> ResolveUseDatabaseAsync(string useDatabase)
+    {
+        if (useDatabase.StartsWith("https://", StringComparison.OrdinalIgnoreCase))
+            return useDatabase;
+
+        var parts = useDatabase.Split('/', 2);
+        if (parts.Length != 2 || string.IsNullOrWhiteSpace(parts[0]) || string.IsNullOrWhiteSpace(parts[1]))
+            throw new ArgumentException($"Invalid useDatabase value '{useDatabase}'. Expected a URL (https://...) or 'name/version' (e.g. 'mydb/latest').");
+
+        var dbName = parts[0];
+        var dbVersion = parts[1];
+
+#pragma warning disable CS0618
+        var credential = new ManagedIdentityCredential(ClientId);
+#pragma warning restore CS0618
+        var blobServiceClient = new BlobServiceClient(
+            new Uri($"https://{DbsStorageAccountName}.blob.core.windows.net"), credential);
+        var containerClient = blobServiceClient.GetBlobContainerClient("databases");
+
+        var manifestClient = containerClient.GetBlobClient($"{dbName}/all.json");
+        if (!await manifestClient.ExistsAsync())
+            throw new InvalidOperationException($"No uploaded database named '{dbName}' found (missing {dbName}/all.json in 'databases' container).");
+
+        var downloadResponse = await manifestClient.DownloadContentAsync();
+        var manifestJson = downloadResponse.Value.Content.ToString();
+        using var doc = JsonDocument.Parse(manifestJson);
+        var root = doc.RootElement;
+
+        string resolvedVersion;
+        if (string.Equals(dbVersion, "latest", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!root.TryGetProperty("latest", out var latestProp) || latestProp.ValueKind == JsonValueKind.Null)
+                throw new InvalidOperationException($"Database '{dbName}' manifest has no 'latest' version.");
+            resolvedVersion = latestProp.GetString()!;
+        }
+        else
+        {
+            if (!root.TryGetProperty("versions", out var versionsProp) || versionsProp.ValueKind != JsonValueKind.Array)
+                throw new InvalidOperationException($"Database '{dbName}' manifest has no 'versions' array.");
+
+            var found = false;
+            foreach (var v in versionsProp.EnumerateArray())
+            {
+                if (string.Equals(v.GetString(), dbVersion, StringComparison.OrdinalIgnoreCase))
+                {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found)
+                throw new InvalidOperationException($"Version '{dbVersion}' not found for database '{dbName}'. Available versions: {string.Join(", ", versionsProp.EnumerateArray().Select(v => v.GetString()))}.");
+
+            resolvedVersion = dbVersion;
+        }
+
+        var blobName = $"{dbName}/{resolvedVersion}.bak";
+        var blobClient = containerClient.GetBlobClient(blobName);
+        if (!await blobClient.ExistsAsync())
+            throw new InvalidOperationException($"Database backup blob '{blobName}' not found in 'databases' container.");
+
+        var delegationKey = await blobServiceClient.GetUserDelegationKeyAsync(
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1));
+
+        var sasBuilder = new BlobSasBuilder
+        {
+            BlobContainerName = "databases",
+            BlobName = blobName,
+            Resource = "b",
+            ExpiresOn = DateTimeOffset.UtcNow.AddHours(1)
+        };
+        sasBuilder.SetPermissions(BlobSasPermissions.Read);
+
+        var blobUriBuilder = new BlobUriBuilder(blobClient.Uri)
+        {
+            Sas = sasBuilder.ToSasQueryParameters(delegationKey, blobServiceClient.AccountName)
+        };
+
+        Logger.LogInformation("Resolved useDatabase '{UseDatabase}' to blob '{BlobName}' (version: {Version}).", useDatabase, blobName, resolvedVersion);
+        return blobUriBuilder.ToUri().ToString();
+    }
+
+    protected async Task RestoreDatabaseViaExecAsync(Kubernetes client, string sasUrl, string databaseName)
+    {
+        Logger.LogInformation("Restoring database '{DatabaseName}' via k8s exec...", databaseName);
+        var podName = await FindMssqlPodAsync(client);
+
+        // Step 1: Download the backup file into the mssql pod
+        Logger.LogInformation("Downloading database backup to MSSQL pod...");
+        var downloadScript = $"wget -O '/var/opt/mssql/data/{databaseName}.bak' '{sasUrl}' 2>&1 && echo 'DOWNLOAD_OK'";
+        var downloadResult = await ExecInMssqlPodAsync(client, podName, downloadScript);
+        if (!downloadResult.Stdout.Contains("DOWNLOAD_OK"))
+            throw new InvalidOperationException($"Failed to download database backup for '{databaseName}'. {downloadResult}");
+
+        // Step 2: Get logical file names from the backup
+        Logger.LogInformation("Reading logical file names from backup...");
+        var fileListSql = $"SET NOCOUNT ON; RESTORE FILELISTONLY FROM DISK=N'/var/opt/mssql/data/{databaseName}.bak'";
+        var fileListScript = $"{SqlcmdPath} -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -C -b -h -1 -W -s \"|\" -Q \"{fileListSql}\"";
+        var fileListResult = await ExecInMssqlPodAsync(client, podName, fileListScript);
+
+        string? dataLogicalName = null;
+        string? logLogicalName = null;
+        foreach (var line in fileListResult.Stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var cols = line.Split('|');
+            if (cols.Length < 3) continue;
+            var logicalName = cols[0].Trim();
+            var fileType = cols[2].Trim();
+            if (fileType == "D" && dataLogicalName == null)
+                dataLogicalName = logicalName;
+            else if (fileType == "L" && logLogicalName == null)
+                logLogicalName = logicalName;
+        }
+
+        if (string.IsNullOrEmpty(dataLogicalName) || string.IsNullOrEmpty(logLogicalName))
+            throw new InvalidOperationException($"Failed to determine logical file names from backup for '{databaseName}'. {fileListResult}");
+
+        // Step 3: Restore database with MOVE clauses
+        Logger.LogInformation("Restoring database from backup file...");
+        var restoreSql = $"RESTORE DATABASE [{databaseName}] FROM DISK=N'/var/opt/mssql/data/{databaseName}.bak'" +
+            $" WITH MOVE N'{dataLogicalName}' TO N'/var/opt/mssql/data/{databaseName}.mdf'" +
+            $", MOVE N'{logLogicalName}' TO N'/var/opt/mssql/log/{databaseName}_log.ldf'" +
+            ", REPLACE";
+        var restoreScript = $"{SqlcmdPath} -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -C -b -Q \"{restoreSql}\" && echo 'RESTORE_COMPLETE'";
+        var restoreResult = await ExecInMssqlPodAsync(client, podName, restoreScript);
+        if (!restoreResult.Stdout.Contains("RESTORE_COMPLETE"))
+            throw new InvalidOperationException($"Failed to restore database '{databaseName}'. {restoreResult}");
+
+        // Step 4: Clean up the backup file
+        await ExecInMssqlPodAsync(client, podName, $"rm -f '/var/opt/mssql/data/{databaseName}.bak'");
+        Logger.LogInformation("Database '{DatabaseName}' restored successfully.", databaseName);
+    }
 }

@@ -791,6 +791,39 @@ public static class FunctionCatalog
         },
         new FunctionDefinition
         {
+            Name = "RestoreTenantDatabase",
+            Description = "Restores a tenant database on a running container from blob storage. The database reference can be a SAS URL to a .bak file, or 'name/version' referencing an uploaded database (use 'latest' for the most recent version).",
+            Route = "RestoreTenantDatabase",
+            Parameters = new List<FunctionParameterDefinition>
+            {
+                new()
+                {
+                    Name = "name",
+                    Type = "string",
+                    Description = "Name of the container in which the database should be restored.",
+                    Required = true,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "tenant",
+                    Type = "string",
+                    Description = "Tenant to restore. The database name is derived as '<containername>-<tenant>'.",
+                    Required = false,
+                    DefaultValue = "default"
+                },
+                new()
+                {
+                    Name = "database",
+                    Type = "string",
+                    Description = "Database to restore. Can be a SAS URL to a .bak file, or 'name/version' referencing an uploaded database (use 'latest' for the most recent version).",
+                    Required = true,
+                    DefaultValue = null
+                }
+            }
+        },
+        new FunctionDefinition
+        {
             Name = "GetAppInfo",
             Description = "Returns installed apps from a running Business Central container. Optionally filters by app name, publisher, or app ID. Supports wildcards (*) in name and publisher filters.",
             Route = "GetAppInfo",
