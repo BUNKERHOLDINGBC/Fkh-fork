@@ -1108,6 +1108,39 @@ public static class FunctionCatalog
                     DefaultValue = null
                 }
             }
+        },
+        new FunctionDefinition
+        {
+            Name = "ConvertToSingleTenant",
+            Description = "Converts a multitenant container to single-tenant by exporting the application database into the tenant database and switching the service tier to use it. The original app database is left behind and removed when the container is deleted.",
+            Route = "ConvertToSingleTenant",
+            Parameters = new List<FunctionParameterDefinition>
+            {
+                new()
+                {
+                    Name = "name",
+                    Type = "string",
+                    Description = "Name of the container to convert to single-tenant.",
+                    Required = true,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "tenant",
+                    Type = "string",
+                    Description = "Tenant whose database will become the single-tenant database.",
+                    Required = false,
+                    DefaultValue = "default"
+                },
+                new()
+                {
+                    Name = "doNotRestart",
+                    Type = "boolean",
+                    Description = "If set, the service tier will not be restarted after the conversion.",
+                    Required = false,
+                    DefaultValue = "false"
+                }
+            }
         }
     };
 
