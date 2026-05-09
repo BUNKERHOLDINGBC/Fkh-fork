@@ -629,7 +629,7 @@ public abstract class FkhServiceBase
     {
         Logger.LogInformation("Clearing tenant properties from restored app database '{DatabaseName}'...", databaseName);
         var podName = await FindMssqlPodAsync(client);
-        var sql = $"IF OBJECT_ID('[{databaseName}].[dbo].[$ndo$tenantproperty]') IS NOT NULL DELETE FROM [{databaseName}].[dbo].[$ndo$tenantproperty]";
+        var sql = $"IF OBJECT_ID('[{databaseName}].[dbo].[\\$ndo\\$tenantproperty]') IS NOT NULL DELETE FROM [{databaseName}].[dbo].[\\$ndo\\$tenantproperty]";
         var script = $"{SqlcmdPath} -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -C -b -Q \"{sql}\" && echo 'CLEAR_TENANTS_OK'";
         var result = await ExecInMssqlPodAsync(client, podName, script);
         if (!result.Stdout.Contains("CLEAR_TENANTS_OK"))
