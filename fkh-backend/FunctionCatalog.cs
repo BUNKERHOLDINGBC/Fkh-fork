@@ -299,7 +299,7 @@ public static class FunctionCatalog
                     Name = "ip",
                     Type = "string",
                     Description = "Your public IP address (e.g. 203.0.113.10). VSIX and CLI auto-detect this.",
-                    Required = true,
+                    Required = false,
                     DefaultValue = null
                 },
                 new()
