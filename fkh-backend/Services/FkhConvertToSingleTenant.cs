@@ -56,11 +56,11 @@ public class FkhConvertToSingleTenant : FkhServiceBase
         Logger.LogInformation("Step 3/6: Recreating primary keys on copied tables...");
         var pkSql = "DECLARE @sql NVARCHAR(MAX) = N'';" +
             $" SELECT @sql = @sql + N'ALTER TABLE [{tenantDatabaseName}].[dbo].' + QUOTENAME(t.name)" +
-            $" + N'' ADD CONSTRAINT '' + QUOTENAME(i.name) + N'' PRIMARY KEY ('' +" +
-            $" (SELECT STRING_AGG(QUOTENAME(c.name), N'', '') WITHIN GROUP (ORDER BY ic.key_ordinal)" +
+            $" + N' ADD CONSTRAINT ' + QUOTENAME(i.name) + N' PRIMARY KEY (' +" +
+            $" (SELECT STRING_AGG(QUOTENAME(c.name), N', ') WITHIN GROUP (ORDER BY ic.key_ordinal)" +
             $" FROM [{appDatabaseName}].sys.index_columns ic" +
             $" JOIN [{appDatabaseName}].sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id" +
-            $" WHERE ic.object_id = i.object_id AND ic.index_id = i.index_id) + N''); ''" +
+            $" WHERE ic.object_id = i.object_id AND ic.index_id = i.index_id) + N'); '" +
             $" FROM [{appDatabaseName}].sys.tables t" +
             $" JOIN [{appDatabaseName}].sys.indexes i ON t.object_id = i.object_id AND i.is_primary_key = 1" +
             $" WHERE t.name IN (SELECT name FROM [{tenantDatabaseName}].sys.tables tt" +
