@@ -446,6 +446,8 @@ public class FkhCreateContainer : FkhServiceBase
                             {
                                 Name = appName,
                                 Image = fullImage,
+                                Command = new List<string> { "powershell", "-NoProfile", "-Command",
+                                    "$ErrorActionPreference = 'Stop'; try { & c:\\run\\start.ps1 } catch { Write-Host \"CONTAINER STARTUP FAILED: $_\"; Write-Host $_.ScriptStackTrace }; if ($LASTEXITCODE) { Write-Host \"CONTAINER STARTUP FAILED with exit code: $LASTEXITCODE\" }; Write-Host 'CONTAINER STARTUP FAILED — container will stay alive for troubleshooting. Use GetContainerLog, InvokeScript, or Open to investigate. Remove the container when done.'; while ($true) { Start-Sleep -Seconds 3600 }" },
                                 Ports = new List<V1ContainerPort>
                                 {
                                     new() { ContainerPort = 80 }, new() { ContainerPort = 443 }, new() { ContainerPort = 7047 }, new() { ContainerPort = 7048 }, new() { ContainerPort = 7049 },
