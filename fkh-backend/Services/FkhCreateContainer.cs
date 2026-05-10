@@ -127,7 +127,6 @@ public class FkhCreateContainer : FkhServiceBase
             await EnsureDatabaseDoesNotExistAsync(client, databaseName);
             await EnsureDatabaseDoesNotExistAsync(client, tenantDatabaseName);
             await RestoreDatabaseViaExecAsync(client, appSasUrl, databaseName);
-            await ClearTenantPropertiesAsync(client, databaseName);
             await RestoreDatabaseViaExecAsync(client, tenantSasUrl, tenantDatabaseName);
         }
         else
