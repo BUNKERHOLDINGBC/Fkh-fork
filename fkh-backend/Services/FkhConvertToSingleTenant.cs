@@ -29,7 +29,7 @@ public class FkhConvertToSingleTenant : FkhServiceBase
         var bcContainerName = pod.Spec.Containers[0].Name;
 
         // Step 1: Stop the service tier so we can safely modify the databases
-        Logger.LogInformation("Step 1/5: Stopping service tier for '{Container}'...", containerName);
+        Logger.LogInformation("Step 1/6: Stopping service tier for '{Container}'...", containerName);
         await ExecInBcPodPwshAsync(client, podName, bcContainerName,
             ". 'C:\\run\\prompt.ps1' -silent; Stop-NAVServerInstance -ServerInstance $ServerInstance -Force");
         Logger.LogInformation("Service tier stopped.");
@@ -39,7 +39,7 @@ public class FkhConvertToSingleTenant : FkhServiceBase
         // Step 2: Copy application tables from app database into the tenant database
         // Export-NAVApplication doesn't support SQL auth, so we replicate its logic via direct SQL:
         // copy all tables that exist in the app database but not in the tenant database.
-        Logger.LogInformation("Step 2/5: Copying application tables from '{AppDb}' to '{TenantDb}'...", appDatabaseName, tenantDatabaseName);
+        Logger.LogInformation("Step 2/6: Copying application tables from '{AppDb}' to '{TenantDb}'...", appDatabaseName, tenantDatabaseName);
         var copySql = "DECLARE @sql NVARCHAR(MAX) = N'';" +
             $" SELECT @sql = @sql + N'SELECT * INTO [{tenantDatabaseName}].[dbo].' + QUOTENAME(t.name) + N' FROM [{appDatabaseName}].[dbo].' + QUOTENAME(t.name) + N'; '" +
             $" FROM [{appDatabaseName}].sys.tables t" +
@@ -51,16 +51,50 @@ public class FkhConvertToSingleTenant : FkhServiceBase
             throw new InvalidOperationException($"Failed to copy application tables from '{appDatabaseName}' to '{tenantDatabaseName}'. {copyResult}");
         Logger.LogInformation("Application tables copied.");
 
-        // Step 3: Drop the old app database and rename the tenant database to the app database name
+        // Recreate primary keys on the copied tables — SELECT * INTO does not copy constraints,
+        // and BC requires primary keys on application tables for change tracking.
+        Logger.LogInformation("Step 3/6: Recreating primary keys on copied tables...");
+        var pkSql = "DECLARE @sql NVARCHAR(MAX) = N'';" +
+            $" SELECT @sql = @sql + N'ALTER TABLE [{tenantDatabaseName}].[dbo].' + QUOTENAME(t.name)" +
+            $" + N'' ADD CONSTRAINT '' + QUOTENAME(i.name) + N'' PRIMARY KEY ('' +" +
+            $" (SELECT STRING_AGG(QUOTENAME(c.name), N'', '') WITHIN GROUP (ORDER BY ic.key_ordinal)" +
+            $" FROM [{appDatabaseName}].sys.index_columns ic" +
+            $" JOIN [{appDatabaseName}].sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id" +
+            $" WHERE ic.object_id = i.object_id AND ic.index_id = i.index_id) + N''); ''" +
+            $" FROM [{appDatabaseName}].sys.tables t" +
+            $" JOIN [{appDatabaseName}].sys.indexes i ON t.object_id = i.object_id AND i.is_primary_key = 1" +
+            $" WHERE t.name IN (SELECT name FROM [{tenantDatabaseName}].sys.tables tt" +
+            $" WHERE NOT EXISTS (SELECT 1 FROM [{tenantDatabaseName}].sys.indexes ti" +
+            $" JOIN [{tenantDatabaseName}].sys.tables tt2 ON ti.object_id = tt2.object_id" +
+            $" WHERE tt2.name = t.name AND ti.is_primary_key = 1));" +
+            " EXEC sp_executesql @sql; PRINT 'PK_COPY_OK'";
+        var pkScript = $"{SqlcmdPath} -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -C -b -Q \"{pkSql}\"";
+        var pkResult = await ExecInMssqlPodAsync(client, mssqlPod, pkScript);
+        if (!pkResult.Stdout.Contains("PK_COPY_OK"))
+            throw new InvalidOperationException($"Failed to recreate primary keys on copied tables. {pkResult}");
+        Logger.LogInformation("Primary keys recreated.");
+
+        // Clean up stale multi-tenant data: the [$ndo$tenants] table was copied from the app
+        // database and still contains mounted-tenant entries that are invalid in single-tenant mode.
+        Logger.LogInformation("Cleaning up stale tenant mount records...");
+        var cleanupSql = $"IF OBJECT_ID('[{tenantDatabaseName}].[dbo].[$ndo$tenants]') IS NOT NULL" +
+            $" DELETE FROM [{tenantDatabaseName}].[dbo].[$ndo$tenants]; PRINT 'CLEANUP_OK'";
+        var cleanupScript = $"{SqlcmdPath} -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -C -b -Q \"{cleanupSql}\"";
+        var cleanupResult = await ExecInMssqlPodAsync(client, mssqlPod, cleanupScript);
+        if (!cleanupResult.Stdout.Contains("CLEANUP_OK"))
+            throw new InvalidOperationException($"Failed to clean up tenant mount records. {cleanupResult}");
+        Logger.LogInformation("Stale tenant records cleaned.");
+
+        // Step 4: Drop the old app database and rename the tenant database to the app database name
         // so the DatabaseName in custom config doesn't need to change.
-        Logger.LogInformation("Step 3/5: Dropping old app database '{AppDb}'...", appDatabaseName);
+        Logger.LogInformation("Step 4/6: Dropping old app database '{AppDb}'...", appDatabaseName);
         var dropSql = $"ALTER DATABASE [{appDatabaseName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [{appDatabaseName}]";
         var dropScript = $"{SqlcmdPath} -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -C -b -Q \"{dropSql}\" && echo 'DROP_COMPLETE'";
         var dropResult = await ExecInMssqlPodAsync(client, mssqlPod, dropScript);
         if (!dropResult.Stdout.Contains("DROP_COMPLETE"))
             throw new InvalidOperationException($"Failed to drop old app database '{appDatabaseName}'. {dropResult}");
 
-        Logger.LogInformation("Step 4/5: Renaming database '{TenantDb}' to '{AppDb}'...", tenantDatabaseName, appDatabaseName);
+        Logger.LogInformation("Step 5/6: Renaming database '{TenantDb}' to '{AppDb}'...", tenantDatabaseName, appDatabaseName);
         var renameSql = $"ALTER DATABASE [{tenantDatabaseName}] MODIFY NAME = [{appDatabaseName}]";
         var renameScript = $"{SqlcmdPath} -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -C -b -Q \"{renameSql}\" && echo 'RENAME_COMPLETE'";
         var renameResult = await ExecInMssqlPodAsync(client, mssqlPod, renameScript);
@@ -70,7 +104,7 @@ public class FkhConvertToSingleTenant : FkhServiceBase
 
         // Step 5: Remove the multitenant env var from the deployment.
         // This triggers a new pod with the correct single-tenant configuration.
-        Logger.LogInformation("Step 5/5: Updating deployment to remove 'multitenant' env var...");
+        Logger.LogInformation("Step 6/6: Updating deployment to remove 'multitenant' env var...");
         var deployment = await client.ReadNamespacedDeploymentAsync(deploymentName, Namespace);
         var container = deployment.Spec.Template.Spec.Containers[0];
         container.Env = container.Env?.Where(e => e.Name != "multitenant").ToList();
