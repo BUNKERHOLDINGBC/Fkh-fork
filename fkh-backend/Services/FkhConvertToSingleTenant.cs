@@ -120,12 +120,14 @@ public class FkhConvertToSingleTenant : FkhServiceBase
             // Clean up backup files on MSSQL pod
             await ExecInMssqlPodAsync(client, mssqlPod, $"rm -f '{appBakPath}' '{tenantBakPath}'");
 
-            // Resolve the temp directory inside the BC pod
-            var tempDirResult = await ExecInBcPodPwshAsync(client, podName, bcContainerName,
-                "Write-Output $ENV:TEMP");
-            var tempDir = tempDirResult.Stdout.Trim();
-            if (string.IsNullOrEmpty(tempDir))
-                throw new InvalidOperationException($"Failed to resolve temp directory in BC pod. {tempDirResult}");
+            // Create a temp directory accessible by both PowerShell and SQL Server Express
+            var tempDir = "C:\\fkh-convert";
+            await ExecInBcPodPwshAsync(client, podName, bcContainerName,
+                $"$ErrorActionPreference = 'Stop'; " +
+                $"New-Item -Path '{tempDir}' -ItemType Directory -Force | Out-Null; " +
+                $"$acl = Get-Acl '{tempDir}'; " +
+                "$rule = New-Object System.Security.AccessControl.FileSystemAccessRule('Everyone','FullControl','ContainerInherit,ObjectInherit','None','Allow'); " +
+                $"$acl.SetAccessRule($rule); Set-Acl '{tempDir}' $acl");
 
             // Step 5: Download backups into the BC pod
             Logger.LogInformation("Step 5: Downloading database backups into BC pod...");
@@ -158,8 +160,10 @@ public class FkhConvertToSingleTenant : FkhServiceBase
             // Step 8: Backup the merged tenant database from local SQL Server Express
             Logger.LogInformation("Step 8: Backing up merged database from SQL Server Express...");
             var backupMergedResult = await ExecInBcPodPwshAsync(client, podName, bcContainerName,
-                $"$ErrorActionPreference = 'Stop'; sqlcmd -S '.\\SQLEXPRESS' -b -Q \"BACKUP DATABASE [{tenantDatabaseName}] TO DISK = N'{tempDir}\\merged.bak' WITH FORMAT, INIT, COMPRESSION; PRINT N'MERGED_BACKUP_OK'\";" +
-                " if ($LASTEXITCODE -ne 0) { throw 'sqlcmd backup failed' }");
+                $"$ErrorActionPreference = 'Stop'; " +
+                $"sqlcmd -S '.\\SQLEXPRESS' -b -Q \"BACKUP DATABASE [{tenantDatabaseName}] TO DISK = N'{tempDir}\\merged.bak' WITH FORMAT, INIT\"; " +
+                "if ($LASTEXITCODE -ne 0) { throw 'sqlcmd backup failed' }; " +
+                "Write-Output 'MERGED_BACKUP_OK'");
             if (!backupMergedResult.Stdout.Contains("MERGED_BACKUP_OK"))
                 throw new InvalidOperationException($"Failed to backup merged database from SQL Express. {backupMergedResult}");
 
@@ -235,7 +239,7 @@ public class FkhConvertToSingleTenant : FkhServiceBase
             Logger.LogInformation("Step 12: Stopping SQL Server Express and cleaning up...");
             await ExecInBcPodPwshAsync(client, podName, bcContainerName,
                 "Stop-Service 'MSSQL$SQLEXPRESS' -Force -ErrorAction SilentlyContinue; " +
-                $"Remove-Item '{tempDir}\\*.bak' -Force -ErrorAction SilentlyContinue");
+                $"Remove-Item '{tempDir}' -Recurse -Force -ErrorAction SilentlyContinue");
 
             // Step 13: Update deployment — set multitenant env var to false and set customsetting
             Logger.LogInformation("Step 13: Updating deployment to set multitenant=false...");
