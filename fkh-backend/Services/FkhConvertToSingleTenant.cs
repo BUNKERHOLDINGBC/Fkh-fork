@@ -78,12 +78,12 @@ public class FkhConvertToSingleTenant : FkhServiceBase
             // Step 1: Stop BC service tier
             Logger.LogInformation("Step 1: Stopping BC service tier for '{Container}'...", containerName);
             await ExecInBcPodPwshAsync(client, podName, bcContainerName,
-                ". 'C:\\run\\prompt.ps1' -silent; Stop-NAVServerInstance -ServerInstance $ServerInstance -Force");
+                "$ErrorActionPreference = 'Stop'; . 'C:\\run\\prompt.ps1' -silent; Stop-NAVServerInstance -ServerInstance $ServerInstance -Force");
 
             // Step 2: Start SQL Server Express in the Windows BC pod
             Logger.LogInformation("Step 2: Starting SQL Server Express in BC pod...");
             var startExpressResult = await ExecInBcPodPwshAsync(client, podName, bcContainerName,
-                "Start-Service 'MSSQL$SQLEXPRESS'; Write-Output 'EXPRESS_STARTED'");
+                "$ErrorActionPreference = 'Stop'; Start-Service 'MSSQL$SQLEXPRESS'; Write-Output 'EXPRESS_STARTED'");
             if (!startExpressResult.Stdout.Contains("EXPRESS_STARTED"))
                 throw new InvalidOperationException($"Failed to start SQL Server Express. {startExpressResult}");
 
@@ -131,12 +131,12 @@ public class FkhConvertToSingleTenant : FkhServiceBase
             Logger.LogInformation("Step 5: Downloading database backups into BC pod...");
 
             var dlAppResult = await ExecInBcPodPwshAsync(client, podName, bcContainerName,
-                $"$ErrorActionPreference = 'Stop'; [Net.WebClient]::new().DownloadFile('{appDownloadSas}', '{tempDir}\\app.bak'); Write-Output 'APP_DL_OK'");
+                $"$ErrorActionPreference = 'Stop'; Invoke-WebRequest -Uri '{appDownloadSas}' -OutFile '{tempDir}\\app.bak' -UseBasicParsing; Write-Output 'APP_DL_OK'");
             if (!dlAppResult.Stdout.Contains("APP_DL_OK"))
                 throw new InvalidOperationException($"Failed to download app database backup to BC pod. {dlAppResult}");
 
             var dlTenantResult = await ExecInBcPodPwshAsync(client, podName, bcContainerName,
-                $"$ErrorActionPreference = 'Stop'; [Net.WebClient]::new().DownloadFile('{tenantDownloadSas}', '{tempDir}\\tenant.bak'); Write-Output 'TENANT_DL_OK'");
+                $"$ErrorActionPreference = 'Stop'; Invoke-WebRequest -Uri '{tenantDownloadSas}' -OutFile '{tempDir}\\tenant.bak' -UseBasicParsing; Write-Output 'TENANT_DL_OK'");
             if (!dlTenantResult.Stdout.Contains("TENANT_DL_OK"))
                 throw new InvalidOperationException($"Failed to download tenant database backup to BC pod. {dlTenantResult}");
 
@@ -149,7 +149,7 @@ public class FkhConvertToSingleTenant : FkhServiceBase
             // Step 7: Run Export-NAVApplication to merge app database into tenant database
             Logger.LogInformation("Step 7: Running Export-NAVApplication to merge '{AppDb}' into '{TenantDb}'...", appDatabaseName, tenantDatabaseName);
             var exportResult = await ExecInBcPodPwshAsync(client, podName, bcContainerName,
-                ". 'C:\\run\\prompt.ps1' -silent; " +
+                "$ErrorActionPreference = 'Stop'; . 'C:\\run\\prompt.ps1' -silent; " +
                 $"Export-NAVApplication -DatabaseServer '.\\SQLEXPRESS' -DatabaseName '{appDatabaseName}' -DestinationDatabase '{tenantDatabaseName}' -Force; " +
                 "Write-Output 'EXPORT_OK'");
             if (!exportResult.Stdout.Contains("EXPORT_OK"))
@@ -158,17 +158,17 @@ public class FkhConvertToSingleTenant : FkhServiceBase
             // Step 8: Backup the merged tenant database from local SQL Server Express
             Logger.LogInformation("Step 8: Backing up merged database from SQL Server Express...");
             var backupMergedResult = await ExecInBcPodPwshAsync(client, podName, bcContainerName,
-                $"sqlcmd -S '.\\SQLEXPRESS' -Q \"BACKUP DATABASE [{tenantDatabaseName}] TO DISK = N'{tempDir}\\merged.bak' WITH FORMAT, INIT, COMPRESSION; PRINT N'MERGED_BACKUP_OK'\"");
+                $"$ErrorActionPreference = 'Stop'; sqlcmd -S '.\\SQLEXPRESS' -Q \"BACKUP DATABASE [{tenantDatabaseName}] TO DISK = N'{tempDir}\\merged.bak' WITH FORMAT, INIT, COMPRESSION; PRINT N'MERGED_BACKUP_OK'\"");
             if (!backupMergedResult.Stdout.Contains("MERGED_BACKUP_OK"))
                 throw new InvalidOperationException($"Failed to backup merged database from SQL Express. {backupMergedResult}");
 
             // Step 9: Upload merged backup from BC pod to blob storage
             Logger.LogInformation("Step 9: Uploading merged database to blob storage...");
             var uploadMergedResult = await ExecInBcPodPwshAsync(client, podName, bcContainerName,
-                "$wc = [Net.WebClient]::new(); " +
-                "$wc.Headers.Add('x-ms-blob-type', 'BlockBlob'); " +
-                $"$wc.UploadFile('{mergedUploadSas}', 'PUT', '{tempDir}\\merged.bak'); " +
-                "$wc.Dispose(); Write-Output 'MERGED_UPLOAD_OK'");
+                "$ErrorActionPreference = 'Stop'; " +
+                $"Invoke-WebRequest -Uri '{mergedUploadSas}' -Method PUT -InFile '{tempDir}\\merged.bak' " +
+                "-Headers @{ 'x-ms-blob-type' = 'BlockBlob' } -UseBasicParsing; " +
+                "Write-Output 'MERGED_UPLOAD_OK'");
             if (!uploadMergedResult.Stdout.Contains("MERGED_UPLOAD_OK"))
                 throw new InvalidOperationException($"Failed to upload merged database to blob storage. {uploadMergedResult}");
 
@@ -308,6 +308,7 @@ public class FkhConvertToSingleTenant : FkhServiceBase
     {
         // Use a PowerShell script that discovers logical file names and restores with MOVE clauses
         var script =
+            "$ErrorActionPreference = 'Stop'; " +
             $"$fileList = @(sqlcmd -S '.\\SQLEXPRESS' -h -1 -W -s '|' -Q \"SET NOCOUNT ON; RESTORE FILELISTONLY FROM DISK = N'{bakFilePath}'\");" +
             "$dataName = $null; $logName = $null;" +
             "foreach ($line in $fileList) {" +
