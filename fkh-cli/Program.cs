@@ -385,6 +385,12 @@ static ParsedArgs ParseArgs(string[] args, FunctionCatalogResponse catalog)
             continue;
         }
 
+        if (string.Equals(key, "open", StringComparison.OrdinalIgnoreCase))
+        {
+            parsed.Open = true;
+            continue;
+        }
+
         if (string.Equals(key, "useOIDC", StringComparison.OrdinalIgnoreCase))
         {
             continue;
@@ -648,6 +654,7 @@ static void PrintCommonOptions()
     Console.WriteLine("    --nowait            Don't wait for completion");
     Console.WriteLine("    --asJson            Output the result as JSON");
     Console.WriteLine("    --output <path>     Save binary output to a file");
+    Console.WriteLine("    --open              Open the downloaded file after saving");
     Console.WriteLine("    -h, --help          Show help");
 }
 
@@ -808,14 +815,36 @@ static bool TrySaveBinaryResponse(string body, ParsedArgs parsed, string? output
                 return true;
             }
 
-            var fileName = outputPath
-                ?? (root.TryGetProperty("fileName", out var fileNameProp) && fileNameProp.ValueKind == JsonValueKind.String
-                    ? fileNameProp.GetString() ?? "eventlog.evtx"
-                    : "eventlog.evtx");
+            string fileName;
+            if (outputPath != null)
+            {
+                fileName = outputPath;
+            }
+            else
+            {
+                var appName = root.TryGetProperty("container", out var containerProp) && containerProp.ValueKind == JsonValueKind.String
+                    ? containerProp.GetString() ?? "container"
+                    : "container";
+                var timestamp = DateTime.Now.ToString("yyyy-MM-dd-HH-mm");
+                fileName = Path.Combine(Path.GetTempPath(), $"{appName}-eventlog-{timestamp}.evtx");
+            }
 
             var bytes = Convert.FromBase64String(base64);
             File.WriteAllBytes(fileName, bytes);
             Console.WriteLine($"{Ansi.Cyan}Event log saved to {Path.GetFullPath(fileName)} ({bytes.Length / 1024.0:N1} KB){Ansi.Reset}");
+
+            if (parsed.Open)
+            {
+                try
+                {
+                    System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Path.GetFullPath(fileName)) { UseShellExecute = true });
+                }
+                catch (Exception ex)
+                {
+                    Console.Error.WriteLine($"{Ansi.Yellow}Could not open file: {ex.Message}{Ansi.Reset}");
+                }
+            }
+
             return true;
         }
     }
@@ -940,6 +969,7 @@ sealed class ParsedArgs
     public string? Command { get; init; }
     public bool NoWait { get; set; }
     public bool AsJson { get; set; }
+    public bool Open { get; set; }
     public string? OidcToken { get; set; }
     public string? Output { get; set; }
     public Dictionary<string, string> Parameters { get; } = new(StringComparer.OrdinalIgnoreCase);
