@@ -158,7 +158,8 @@ public class FkhConvertToSingleTenant : FkhServiceBase
             // Step 8: Backup the merged tenant database from local SQL Server Express
             Logger.LogInformation("Step 8: Backing up merged database from SQL Server Express...");
             var backupMergedResult = await ExecInBcPodPwshAsync(client, podName, bcContainerName,
-                $"$ErrorActionPreference = 'Stop'; sqlcmd -S '.\\SQLEXPRESS' -Q \"BACKUP DATABASE [{tenantDatabaseName}] TO DISK = N'{tempDir}\\merged.bak' WITH FORMAT, INIT, COMPRESSION; PRINT N'MERGED_BACKUP_OK'\"");
+                $"$ErrorActionPreference = 'Stop'; sqlcmd -S '.\\SQLEXPRESS' -b -Q \"BACKUP DATABASE [{tenantDatabaseName}] TO DISK = N'{tempDir}\\merged.bak' WITH FORMAT, INIT, COMPRESSION; PRINT N'MERGED_BACKUP_OK'\";" +
+                " if ($LASTEXITCODE -ne 0) { throw 'sqlcmd backup failed' }");
             if (!backupMergedResult.Stdout.Contains("MERGED_BACKUP_OK"))
                 throw new InvalidOperationException($"Failed to backup merged database from SQL Express. {backupMergedResult}");
 
@@ -309,7 +310,7 @@ public class FkhConvertToSingleTenant : FkhServiceBase
         // Use a PowerShell script that discovers logical file names and restores with MOVE clauses
         var script =
             "$ErrorActionPreference = 'Stop'; " +
-            $"$fileList = @(sqlcmd -S '.\\SQLEXPRESS' -h -1 -W -s '|' -Q \"SET NOCOUNT ON; RESTORE FILELISTONLY FROM DISK = N'{bakFilePath}'\");" +
+            $"$fileList = @(sqlcmd -S '.\\SQLEXPRESS' -b -h -1 -W -s '|' -Q \"SET NOCOUNT ON; RESTORE FILELISTONLY FROM DISK = N'{bakFilePath}'\");" +
             "$dataName = $null; $logName = $null;" +
             "foreach ($line in $fileList) {" +
             "  $cols = $line -split '\\|';" +
@@ -323,7 +324,7 @@ public class FkhConvertToSingleTenant : FkhServiceBase
             $" WITH MOVE N'\" + $dataName + \"' TO N'{tempDir}\\{databaseName}.mdf'" +
             $", MOVE N'\" + $logName + \"' TO N'{tempDir}\\{databaseName}_log.ldf'" +
             ", REPLACE\";" +
-            "sqlcmd -S '.\\SQLEXPRESS' -Q $sql;" +
+            "sqlcmd -S '.\\SQLEXPRESS' -b -Q $sql;" +
             "if ($LASTEXITCODE -ne 0) { throw 'Restore failed' };" +
             "Write-Output 'LOCAL_RESTORE_OK'";
 
