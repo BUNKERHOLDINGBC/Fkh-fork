@@ -1,4 +1,8 @@
+using Azure.Identity;
+using Azure.Storage.Blobs;
+using Azure.Storage.Sas;
 using k8s;
+using k8s.Models;
 using Microsoft.Extensions.Logging;
 
 namespace Fkh.Services;
@@ -14,7 +18,7 @@ public class FkhConvertToSingleTenant : FkhServiceBase
         var doNotRestart = parameters.TryGetValue("doNotRestart", out var flag)
             && string.Equals(flag, "true", StringComparison.OrdinalIgnoreCase);
 
-        var appDatabaseName = containerName; // app database is named after the container
+        var appDatabaseName = containerName;
         var tenantDatabaseName = $"{containerName}-{tenant}";
         var deploymentName = $"{containerName}-deployment";
 
@@ -27,91 +31,250 @@ public class FkhConvertToSingleTenant : FkhServiceBase
 
         var podName = pod.Metadata.Name;
         var bcContainerName = pod.Spec.Containers[0].Name;
-
-        // Step 1: Stop the service tier so we can safely modify the databases
-        Logger.LogInformation("Step 1/6: Stopping service tier for '{Container}'...", containerName);
-        await ExecInBcPodPwshAsync(client, podName, bcContainerName,
-            ". 'C:\\run\\prompt.ps1' -silent; Stop-NAVServerInstance -ServerInstance $ServerInstance -Force");
-        Logger.LogInformation("Service tier stopped.");
-
         var mssqlPod = await FindMssqlPodAsync(client);
 
-        // Step 2: Copy application tables from app database into the tenant database
-        // Export-NAVApplication doesn't support SQL auth, so we replicate its logic via direct SQL:
-        // copy all tables that exist in the app database but not in the tenant database.
-        Logger.LogInformation("Step 2/6: Copying application tables from '{AppDb}' to '{TenantDb}'...", appDatabaseName, tenantDatabaseName);
-        var copySql = "DECLARE @sql NVARCHAR(MAX) = N'';" +
-            $" SELECT @sql = @sql + N'SELECT * INTO [{tenantDatabaseName}].[dbo].' + QUOTENAME(t.name) + N' FROM [{appDatabaseName}].[dbo].' + QUOTENAME(t.name) + N'; '" +
-            $" FROM [{appDatabaseName}].sys.tables t" +
-            $" WHERE t.name NOT IN (SELECT name FROM [{tenantDatabaseName}].sys.tables);" +
-            " EXEC sp_executesql @sql; PRINT 'COPY_TABLES_OK'";
-        var copyScript = $"{SqlcmdPath} -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -C -b -Q \"{copySql}\"";
-        var copyResult = await ExecInMssqlPodAsync(client, mssqlPod, copyScript);
-        if (!copyResult.Stdout.Contains("COPY_TABLES_OK"))
-            throw new InvalidOperationException($"Failed to copy application tables from '{appDatabaseName}' to '{tenantDatabaseName}'. {copyResult}");
-        Logger.LogInformation("Application tables copied.");
+        // Generate temporary blob SAS URLs for transferring database backups between pods
+#pragma warning disable CS0618
+        var credential = new ManagedIdentityCredential(ClientId);
+#pragma warning restore CS0618
+        var blobServiceClient = new BlobServiceClient(
+            new Uri($"https://{DbsStorageAccountName}.blob.core.windows.net"), credential);
+        var blobContainerClient = blobServiceClient.GetBlobContainerClient("databases");
+        await blobContainerClient.CreateIfNotExistsAsync();
+        var delegationKey = await blobServiceClient.GetUserDelegationKeyAsync(
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddHours(1));
 
-        // Recreate primary keys on the copied tables — SELECT * INTO does not copy constraints,
-        // and BC requires primary keys on application tables for change tracking.
-        Logger.LogInformation("Step 3/6: Recreating primary keys on copied tables...");
-        var pkSql = "DECLARE @sql NVARCHAR(MAX) = N'';" +
-            $" SELECT @sql = @sql + N'ALTER TABLE [{tenantDatabaseName}].[dbo].' + QUOTENAME(t.name)" +
-            $" + N' ADD CONSTRAINT ' + QUOTENAME(i.name) + N' PRIMARY KEY (' +" +
-            $" (SELECT STRING_AGG(QUOTENAME(c.name), N', ') WITHIN GROUP (ORDER BY ic.key_ordinal)" +
-            $" FROM [{appDatabaseName}].sys.index_columns ic" +
-            $" JOIN [{appDatabaseName}].sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id" +
-            $" WHERE ic.object_id = i.object_id AND ic.index_id = i.index_id) + N'); '" +
-            $" FROM [{appDatabaseName}].sys.tables t" +
-            $" JOIN [{appDatabaseName}].sys.indexes i ON t.object_id = i.object_id AND i.is_primary_key = 1" +
-            $" WHERE t.name IN (SELECT name FROM [{tenantDatabaseName}].sys.tables tt" +
-            $" WHERE NOT EXISTS (SELECT 1 FROM [{tenantDatabaseName}].sys.indexes ti" +
-            $" JOIN [{tenantDatabaseName}].sys.tables tt2 ON ti.object_id = tt2.object_id" +
-            $" WHERE tt2.name = t.name AND ti.is_primary_key = 1));" +
-            " EXEC sp_executesql @sql; PRINT 'PK_COPY_OK'";
-        var pkScript = $"{SqlcmdPath} -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -C -b -Q \"{pkSql}\"";
-        var pkResult = await ExecInMssqlPodAsync(client, mssqlPod, pkScript);
-        if (!pkResult.Stdout.Contains("PK_COPY_OK"))
-            throw new InvalidOperationException($"Failed to recreate primary keys on copied tables. {pkResult}");
-        Logger.LogInformation("Primary keys recreated.");
+        var appBlobName = $"_convert/{containerName}/app.bak";
+        var tenantBlobName = $"_convert/{containerName}/tenant.bak";
+        var mergedBlobName = $"_convert/{containerName}/merged.bak";
 
-        // Clean up stale multi-tenant data: the [$ndo$tenants] table was copied from the app
-        // database and still contains mounted-tenant entries that are invalid in single-tenant mode.
-        Logger.LogInformation("Cleaning up stale tenant mount records...");
-        var cleanupSql = $"IF OBJECT_ID('[{tenantDatabaseName}].[dbo].[\\$ndo\\$tenants]') IS NOT NULL" +
-            $" DELETE FROM [{tenantDatabaseName}].[dbo].[\\$ndo\\$tenants]; PRINT 'CLEANUP_OK'";
-        var cleanupScript = $"{SqlcmdPath} -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -C -b -Q \"{cleanupSql}\"";
-        var cleanupResult = await ExecInMssqlPodAsync(client, mssqlPod, cleanupScript);
-        if (!cleanupResult.Stdout.Contains("CLEANUP_OK"))
-            throw new InvalidOperationException($"Failed to clean up tenant mount records. {cleanupResult}");
-        Logger.LogInformation("Stale tenant records cleaned.");
+        string GenerateSasUrl(string blobName, BlobSasPermissions permissions)
+        {
+            var sasBuilder = new BlobSasBuilder
+            {
+                BlobContainerName = "databases",
+                BlobName = blobName,
+                Resource = "b",
+                ExpiresOn = DateTimeOffset.UtcNow.AddHours(1)
+            };
+            sasBuilder.SetPermissions(permissions);
+            var blobClient = blobContainerClient.GetBlobClient(blobName);
+            var uriBuilder = new BlobUriBuilder(blobClient.Uri)
+            {
+                Sas = sasBuilder.ToSasQueryParameters(delegationKey, blobServiceClient.AccountName)
+            };
+            return uriBuilder.ToUri().ToString();
+        }
 
-        // Step 4: Drop the old app database and rename the tenant database to the app database name
-        // so the DatabaseName in custom config doesn't need to change.
-        Logger.LogInformation("Step 4/6: Dropping old app database '{AppDb}'...", appDatabaseName);
-        var dropSql = $"ALTER DATABASE [{appDatabaseName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [{appDatabaseName}]";
-        var dropScript = $"{SqlcmdPath} -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -C -b -Q \"{dropSql}\" && echo 'DROP_COMPLETE'";
-        var dropResult = await ExecInMssqlPodAsync(client, mssqlPod, dropScript);
-        if (!dropResult.Stdout.Contains("DROP_COMPLETE"))
-            throw new InvalidOperationException($"Failed to drop old app database '{appDatabaseName}'. {dropResult}");
+        var appUploadSas = GenerateSasUrl(appBlobName, BlobSasPermissions.Write);
+        var appDownloadSas = GenerateSasUrl(appBlobName, BlobSasPermissions.Read);
+        var tenantUploadSas = GenerateSasUrl(tenantBlobName, BlobSasPermissions.Write);
+        var tenantDownloadSas = GenerateSasUrl(tenantBlobName, BlobSasPermissions.Read);
+        var mergedUploadSas = GenerateSasUrl(mergedBlobName, BlobSasPermissions.Write);
+        var mergedDownloadSas = GenerateSasUrl(mergedBlobName, BlobSasPermissions.Read);
 
-        Logger.LogInformation("Step 5/6: Renaming database '{TenantDb}' to '{AppDb}'...", tenantDatabaseName, appDatabaseName);
-        var renameSql = $"ALTER DATABASE [{tenantDatabaseName}] MODIFY NAME = [{appDatabaseName}]";
-        var renameScript = $"{SqlcmdPath} -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -C -b -Q \"{renameSql}\" && echo 'RENAME_COMPLETE'";
-        var renameResult = await ExecInMssqlPodAsync(client, mssqlPod, renameScript);
-        if (!renameResult.Stdout.Contains("RENAME_COMPLETE"))
-            throw new InvalidOperationException($"Failed to rename database '{tenantDatabaseName}' to '{appDatabaseName}'. {renameResult}");
-        Logger.LogInformation("Database renamed from '{TenantDb}' to '{AppDb}'.", tenantDatabaseName, appDatabaseName);
+        try
+        {
+            // Step 1: Stop BC service tier
+            Logger.LogInformation("Step 1: Stopping BC service tier for '{Container}'...", containerName);
+            await ExecInBcPodPwshAsync(client, podName, bcContainerName,
+                ". 'C:\\run\\prompt.ps1' -silent; Stop-NAVServerInstance -ServerInstance $ServerInstance -Force");
 
-        // Step 5: Remove the multitenant env var from the deployment.
-        // This triggers a new pod with the correct single-tenant configuration.
-        Logger.LogInformation("Step 6/6: Updating deployment to remove 'multitenant' env var...");
-        var deployment = await client.ReadNamespacedDeploymentAsync(deploymentName, Namespace);
-        var container = deployment.Spec.Template.Spec.Containers[0];
-        container.Env = container.Env?.Where(e => e.Name != "multitenant").ToList();
-        if (doNotRestart)
-            deployment.Spec.Replicas = 0;
-        await client.ReplaceNamespacedDeploymentAsync(deployment, deploymentName, Namespace);
-        Logger.LogInformation("Deployment updated.");
+            // Step 2: Start SQL Server Express in the Windows BC pod
+            Logger.LogInformation("Step 2: Starting SQL Server Express in BC pod...");
+            var startExpressResult = await ExecInBcPodPwshAsync(client, podName, bcContainerName,
+                "Start-Service 'MSSQL`$SQLEXPRESS'; Write-Output 'EXPRESS_STARTED'");
+            if (!startExpressResult.Stdout.Contains("EXPRESS_STARTED"))
+                throw new InvalidOperationException($"Failed to start SQL Server Express. {startExpressResult}");
+
+            // Step 3: Backup app and tenant databases on the Linux MSSQL pod
+            Logger.LogInformation("Step 3: Backing up databases '{AppDb}' and '{TenantDb}' on MSSQL pod...", appDatabaseName, tenantDatabaseName);
+
+            var appBakPath = $"/var/opt/mssql/data/{appDatabaseName}-convert.bak";
+            var backupAppSql = $"BACKUP DATABASE [{appDatabaseName}] TO DISK = N'{appBakPath}' WITH FORMAT, INIT, COMPRESSION; PRINT N'APP_BACKUP_OK'";
+            var backupAppResult = await ExecInMssqlPodAsync(client, mssqlPod,
+                $"{SqlcmdPath} -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -C -b -Q \"{backupAppSql}\"");
+            if (!backupAppResult.Stdout.Contains("APP_BACKUP_OK"))
+                throw new InvalidOperationException($"Failed to backup app database '{appDatabaseName}'. {backupAppResult}");
+
+            var tenantBakPath = $"/var/opt/mssql/data/{tenantDatabaseName}-convert.bak";
+            var backupTenantSql = $"BACKUP DATABASE [{tenantDatabaseName}] TO DISK = N'{tenantBakPath}' WITH FORMAT, INIT, COMPRESSION; PRINT N'TENANT_BACKUP_OK'";
+            var backupTenantResult = await ExecInMssqlPodAsync(client, mssqlPod,
+                $"{SqlcmdPath} -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -C -b -Q \"{backupTenantSql}\"");
+            if (!backupTenantResult.Stdout.Contains("TENANT_BACKUP_OK"))
+                throw new InvalidOperationException($"Failed to backup tenant database '{tenantDatabaseName}'. {backupTenantResult}");
+
+            // Step 4: Upload backups from MSSQL pod to blob storage
+            Logger.LogInformation("Step 4: Uploading database backups to blob storage...");
+
+            var uploadAppResult = await ExecInMssqlPodAsync(client, mssqlPod,
+                $"wget --method=PUT --header='x-ms-blob-type: BlockBlob' --body-file='{appBakPath}' -O - -S '{appUploadSas}' 2>&1 && echo 'APP_UPLOAD_OK'");
+            if (!uploadAppResult.Stdout.Contains("APP_UPLOAD_OK"))
+                throw new InvalidOperationException($"Failed to upload app database backup. {uploadAppResult}");
+
+            var uploadTenantResult = await ExecInMssqlPodAsync(client, mssqlPod,
+                $"wget --method=PUT --header='x-ms-blob-type: BlockBlob' --body-file='{tenantBakPath}' -O - -S '{tenantUploadSas}' 2>&1 && echo 'TENANT_UPLOAD_OK'");
+            if (!uploadTenantResult.Stdout.Contains("TENANT_UPLOAD_OK"))
+                throw new InvalidOperationException($"Failed to upload tenant database backup. {uploadTenantResult}");
+
+            // Clean up backup files on MSSQL pod
+            await ExecInMssqlPodAsync(client, mssqlPod, $"rm -f '{appBakPath}' '{tenantBakPath}'");
+
+            // Step 5: Download backups into the BC pod
+            Logger.LogInformation("Step 5: Downloading database backups into BC pod...");
+
+            var dlAppResult = await ExecInBcPodPwshAsync(client, podName, bcContainerName,
+                $"[Net.WebClient]::new().DownloadFile('{appDownloadSas}', 'C:\\temp\\app.bak'); Write-Output 'APP_DL_OK'");
+            if (!dlAppResult.Stdout.Contains("APP_DL_OK"))
+                throw new InvalidOperationException($"Failed to download app database backup to BC pod. {dlAppResult}");
+
+            var dlTenantResult = await ExecInBcPodPwshAsync(client, podName, bcContainerName,
+                $"[Net.WebClient]::new().DownloadFile('{tenantDownloadSas}', 'C:\\temp\\tenant.bak'); Write-Output 'TENANT_DL_OK'");
+            if (!dlTenantResult.Stdout.Contains("TENANT_DL_OK"))
+                throw new InvalidOperationException($"Failed to download tenant database backup to BC pod. {dlTenantResult}");
+
+            // Step 6: Restore both databases into local SQL Server Express
+            Logger.LogInformation("Step 6: Restoring databases into local SQL Server Express...");
+
+            await RestoreOnLocalExpressAsync(client, podName, bcContainerName, appDatabaseName, "C:\\temp\\app.bak");
+            await RestoreOnLocalExpressAsync(client, podName, bcContainerName, tenantDatabaseName, "C:\\temp\\tenant.bak");
+
+            // Step 7: Run Export-NAVApplication to merge app database into tenant database
+            Logger.LogInformation("Step 7: Running Export-NAVApplication to merge '{AppDb}' into '{TenantDb}'...", appDatabaseName, tenantDatabaseName);
+            var exportResult = await ExecInBcPodPwshAsync(client, podName, bcContainerName,
+                ". 'C:\\run\\prompt.ps1' -silent; " +
+                $"Export-NAVApplication -DatabaseServer '.\\SQLEXPRESS' -DatabaseName '{appDatabaseName}' -DestinationDatabase '{tenantDatabaseName}' -Force; " +
+                "Write-Output 'EXPORT_OK'");
+            if (!exportResult.Stdout.Contains("EXPORT_OK"))
+                throw new InvalidOperationException($"Export-NAVApplication failed. {exportResult}");
+
+            // Step 8: Backup the merged tenant database from local SQL Server Express
+            Logger.LogInformation("Step 8: Backing up merged database from SQL Server Express...");
+            var backupMergedResult = await ExecInBcPodPwshAsync(client, podName, bcContainerName,
+                $"sqlcmd -S '.\\SQLEXPRESS' -Q \"BACKUP DATABASE [{tenantDatabaseName}] TO DISK = N'C:\\temp\\merged.bak' WITH FORMAT, INIT, COMPRESSION; PRINT N'MERGED_BACKUP_OK'\"");
+            if (!backupMergedResult.Stdout.Contains("MERGED_BACKUP_OK"))
+                throw new InvalidOperationException($"Failed to backup merged database from SQL Express. {backupMergedResult}");
+
+            // Step 9: Upload merged backup from BC pod to blob storage
+            Logger.LogInformation("Step 9: Uploading merged database to blob storage...");
+            var uploadMergedResult = await ExecInBcPodPwshAsync(client, podName, bcContainerName,
+                "$wc = [Net.WebClient]::new(); " +
+                "$wc.Headers.Add('x-ms-blob-type', 'BlockBlob'); " +
+                $"$wc.UploadFile('{mergedUploadSas}', 'PUT', 'C:\\temp\\merged.bak'); " +
+                "$wc.Dispose(); Write-Output 'MERGED_UPLOAD_OK'");
+            if (!uploadMergedResult.Stdout.Contains("MERGED_UPLOAD_OK"))
+                throw new InvalidOperationException($"Failed to upload merged database to blob storage. {uploadMergedResult}");
+
+            // Step 10: Drop old app and tenant databases on Linux MSSQL pod
+            Logger.LogInformation("Step 10: Dropping old databases on MSSQL pod...");
+
+            var dropAppSql = $"ALTER DATABASE [{appDatabaseName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [{appDatabaseName}]";
+            var dropAppResult = await ExecInMssqlPodAsync(client, mssqlPod,
+                $"{SqlcmdPath} -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -C -b -Q \"{dropAppSql}\" && echo 'DROP_APP_OK'");
+            if (!dropAppResult.Stdout.Contains("DROP_APP_OK"))
+                throw new InvalidOperationException($"Failed to drop app database '{appDatabaseName}'. {dropAppResult}");
+
+            var dropTenantSql = $"ALTER DATABASE [{tenantDatabaseName}] SET SINGLE_USER WITH ROLLBACK IMMEDIATE; DROP DATABASE [{tenantDatabaseName}]";
+            var dropTenantResult = await ExecInMssqlPodAsync(client, mssqlPod,
+                $"{SqlcmdPath} -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -C -b -Q \"{dropTenantSql}\" && echo 'DROP_TENANT_OK'");
+            if (!dropTenantResult.Stdout.Contains("DROP_TENANT_OK"))
+                throw new InvalidOperationException($"Failed to drop tenant database '{tenantDatabaseName}'. {dropTenantResult}");
+
+            // Step 11: Download merged backup on MSSQL pod and restore as the app database name
+            Logger.LogInformation("Step 11: Restoring merged database on MSSQL pod as '{AppDb}'...", appDatabaseName);
+
+            var dlMergedResult = await ExecInMssqlPodAsync(client, mssqlPod,
+                $"wget -O '/var/opt/mssql/data/{appDatabaseName}-merged.bak' '{mergedDownloadSas}' 2>&1 && echo 'MERGED_DL_OK'");
+            if (!dlMergedResult.Stdout.Contains("MERGED_DL_OK"))
+                throw new InvalidOperationException($"Failed to download merged database to MSSQL pod. {dlMergedResult}");
+
+            // Get logical file names from the merged backup
+            var fileListSql = $"SET NOCOUNT ON; RESTORE FILELISTONLY FROM DISK=N'/var/opt/mssql/data/{appDatabaseName}-merged.bak'";
+            var fileListResult = await ExecInMssqlPodAsync(client, mssqlPod,
+                $"{SqlcmdPath} -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -C -b -h -1 -W -s \"|\" -Q \"{fileListSql}\"");
+
+            string? dataLogicalName = null;
+            string? logLogicalName = null;
+            foreach (var line in fileListResult.Stdout.Split('\n', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var cols = line.Split('|');
+                if (cols.Length < 3) continue;
+                var logicalName = cols[0].Trim();
+                var fileType = cols[2].Trim();
+                if (fileType == "D" && dataLogicalName == null)
+                    dataLogicalName = logicalName;
+                else if (fileType == "L" && logLogicalName == null)
+                    logLogicalName = logicalName;
+            }
+
+            if (string.IsNullOrEmpty(dataLogicalName) || string.IsNullOrEmpty(logLogicalName))
+                throw new InvalidOperationException($"Failed to determine logical file names from merged backup. {fileListResult}");
+
+            // Restore the merged database with the app database name
+            var restoreSql = $"RESTORE DATABASE [{appDatabaseName}] FROM DISK=N'/var/opt/mssql/data/{appDatabaseName}-merged.bak'" +
+                $" WITH MOVE N'{dataLogicalName}' TO N'/var/opt/mssql/data/{appDatabaseName}.mdf'" +
+                $", MOVE N'{logLogicalName}' TO N'/var/opt/mssql/log/{appDatabaseName}_log.ldf'" +
+                ", REPLACE";
+            var restoreResult = await ExecInMssqlPodAsync(client, mssqlPod,
+                $"{SqlcmdPath} -S localhost -U sa -P \"$MSSQL_SA_PASSWORD\" -C -b -Q \"{restoreSql}\" && echo 'RESTORE_OK'");
+            if (!restoreResult.Stdout.Contains("RESTORE_OK"))
+                throw new InvalidOperationException($"Failed to restore merged database as '{appDatabaseName}'. {restoreResult}");
+
+            // Clean up backup file on MSSQL pod
+            await ExecInMssqlPodAsync(client, mssqlPod, $"rm -f '/var/opt/mssql/data/{appDatabaseName}-merged.bak'");
+
+            // Step 12: Clean up SQL Express and temp files in BC pod
+            Logger.LogInformation("Step 12: Stopping SQL Server Express and cleaning up...");
+            await ExecInBcPodPwshAsync(client, podName, bcContainerName,
+                "Stop-Service 'MSSQL`$SQLEXPRESS' -Force -ErrorAction SilentlyContinue; " +
+                "Remove-Item 'C:\\temp\\*.bak' -Force -ErrorAction SilentlyContinue");
+
+            // Step 13: Update deployment — set multitenant env var to false and set customsetting
+            Logger.LogInformation("Step 13: Updating deployment to set multitenant=false...");
+            var deployment = await client.ReadNamespacedDeploymentAsync(deploymentName, Namespace);
+            var container = deployment.Spec.Template.Spec.Containers[0];
+
+            // Set multitenant env var to false
+            var mtEnv = container.Env?.FirstOrDefault(e => e.Name == "multitenant");
+            if (mtEnv != null)
+            {
+                mtEnv.Value = "false";
+            }
+
+            // Add/update customNavSettings to include Multitenant=false
+            var csEnv = container.Env?.FirstOrDefault(e => e.Name == "customNavSettings");
+            if (csEnv != null)
+            {
+                var settings = csEnv.Value?.Split(',', StringSplitOptions.RemoveEmptyEntries).ToList() ?? [];
+                settings.RemoveAll(s => s.StartsWith("Multitenant=", StringComparison.OrdinalIgnoreCase));
+                settings.Add("Multitenant=false");
+                csEnv.Value = string.Join(",", settings);
+            }
+            else
+            {
+                container.Env ??= new List<V1EnvVar>();
+                container.Env.Add(new V1EnvVar { Name = "customNavSettings", Value = "Multitenant=false" });
+            }
+
+            if (doNotRestart)
+                deployment.Spec.Replicas = 0;
+            await client.ReplaceNamespacedDeploymentAsync(deployment, deploymentName, Namespace);
+            Logger.LogInformation("Deployment updated — container will restart with single-tenant configuration.");
+        }
+        finally
+        {
+            // Best-effort cleanup of temporary blobs
+            try
+            {
+                await blobContainerClient.GetBlobClient(appBlobName).DeleteIfExistsAsync();
+                await blobContainerClient.GetBlobClient(tenantBlobName).DeleteIfExistsAsync();
+                await blobContainerClient.GetBlobClient(mergedBlobName).DeleteIfExistsAsync();
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Failed to clean up temporary blobs under '_convert/{Container}'.", containerName);
+            }
+        }
 
         Logger.LogInformation("Container '{Container}' converted to single-tenant successfully.", containerName);
 
@@ -126,5 +289,38 @@ public class FkhConvertToSingleTenant : FkhServiceBase
             tenant,
             databaseName = appDatabaseName
         };
+    }
+
+    /// <summary>
+    /// Restores a .bak file into the local SQL Server Express instance inside the BC pod.
+    /// Handles FILELISTONLY to discover logical names and uses MOVE clauses for correct file placement.
+    /// </summary>
+    private async Task RestoreOnLocalExpressAsync(
+        Kubernetes client, string podName, string bcContainerName,
+        string databaseName, string bakFilePath)
+    {
+        // Use a PowerShell script that discovers logical file names and restores with MOVE clauses
+        var script =
+            $"$fileList = @(sqlcmd -S '.\\SQLEXPRESS' -h -1 -W -s '|' -Q \"SET NOCOUNT ON; RESTORE FILELISTONLY FROM DISK = N'{bakFilePath}'\");" +
+            "$dataName = $null; $logName = $null;" +
+            "foreach ($line in $fileList) {" +
+            "  $cols = $line -split '\\|';" +
+            "  if ($cols.Count -ge 3) {" +
+            "    if ($cols[2].Trim() -eq 'D' -and -not $dataName) { $dataName = $cols[0].Trim() }" +
+            "    if ($cols[2].Trim() -eq 'L' -and -not $logName) { $logName = $cols[0].Trim() }" +
+            "  }" +
+            "};" +
+            "if (-not $dataName -or -not $logName) { throw 'Could not determine logical file names from backup' };" +
+            $"$sql = \"RESTORE DATABASE [{databaseName}] FROM DISK = N'{bakFilePath}'" +
+            $" WITH MOVE N'\" + $dataName + \"' TO N'C:\\temp\\{databaseName}.mdf'" +
+            $", MOVE N'\" + $logName + \"' TO N'C:\\temp\\{databaseName}_log.ldf'" +
+            ", REPLACE\";" +
+            "sqlcmd -S '.\\SQLEXPRESS' -Q $sql;" +
+            "if ($LASTEXITCODE -ne 0) { throw 'Restore failed' };" +
+            "Write-Output 'LOCAL_RESTORE_OK'";
+
+        var result = await ExecInBcPodPwshAsync(client, podName, bcContainerName, script);
+        if (!result.Stdout.Contains("LOCAL_RESTORE_OK"))
+            throw new InvalidOperationException($"Failed to restore '{databaseName}' on local SQL Express. {result}");
     }
 }

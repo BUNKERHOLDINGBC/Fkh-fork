@@ -1104,7 +1104,7 @@ public static class FunctionCatalog
         new FunctionDefinition
         {
             Name = "ConvertToSingleTenant",
-            Description = "Converts a multitenant container to single-tenant by exporting the application database into the tenant database and switching the service tier to use it. The original app database is left behind and removed when the container is deleted.",
+            Description = "Converts a multitenant container to single-tenant by backing up both databases to a local SQL Server Express instance inside the BC pod, using Export-NAVApplication to merge the app database into the tenant database, then restoring the merged database back to the Linux SQL pod as the single database.",
             Route = "ConvertToSingleTenant",
             Parameters = new List<FunctionParameterDefinition>
             {
