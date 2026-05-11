@@ -120,24 +120,31 @@ public class FkhConvertToSingleTenant : FkhServiceBase
             // Clean up backup files on MSSQL pod
             await ExecInMssqlPodAsync(client, mssqlPod, $"rm -f '{appBakPath}' '{tenantBakPath}'");
 
+            // Resolve the temp directory inside the BC pod
+            var tempDirResult = await ExecInBcPodPwshAsync(client, podName, bcContainerName,
+                "Write-Output $ENV:TEMP");
+            var tempDir = tempDirResult.Stdout.Trim();
+            if (string.IsNullOrEmpty(tempDir))
+                throw new InvalidOperationException($"Failed to resolve temp directory in BC pod. {tempDirResult}");
+
             // Step 5: Download backups into the BC pod
             Logger.LogInformation("Step 5: Downloading database backups into BC pod...");
 
             var dlAppResult = await ExecInBcPodPwshAsync(client, podName, bcContainerName,
-                $"[Net.WebClient]::new().DownloadFile('{appDownloadSas}', 'C:\\temp\\app.bak'); Write-Output 'APP_DL_OK'");
+                $"$ErrorActionPreference = 'Stop'; [Net.WebClient]::new().DownloadFile('{appDownloadSas}', '{tempDir}\\app.bak'); Write-Output 'APP_DL_OK'");
             if (!dlAppResult.Stdout.Contains("APP_DL_OK"))
                 throw new InvalidOperationException($"Failed to download app database backup to BC pod. {dlAppResult}");
 
             var dlTenantResult = await ExecInBcPodPwshAsync(client, podName, bcContainerName,
-                $"[Net.WebClient]::new().DownloadFile('{tenantDownloadSas}', 'C:\\temp\\tenant.bak'); Write-Output 'TENANT_DL_OK'");
+                $"$ErrorActionPreference = 'Stop'; [Net.WebClient]::new().DownloadFile('{tenantDownloadSas}', '{tempDir}\\tenant.bak'); Write-Output 'TENANT_DL_OK'");
             if (!dlTenantResult.Stdout.Contains("TENANT_DL_OK"))
                 throw new InvalidOperationException($"Failed to download tenant database backup to BC pod. {dlTenantResult}");
 
             // Step 6: Restore both databases into local SQL Server Express
             Logger.LogInformation("Step 6: Restoring databases into local SQL Server Express...");
 
-            await RestoreOnLocalExpressAsync(client, podName, bcContainerName, appDatabaseName, "C:\\temp\\app.bak");
-            await RestoreOnLocalExpressAsync(client, podName, bcContainerName, tenantDatabaseName, "C:\\temp\\tenant.bak");
+            await RestoreOnLocalExpressAsync(client, podName, bcContainerName, appDatabaseName, $"{tempDir}\\app.bak", tempDir);
+            await RestoreOnLocalExpressAsync(client, podName, bcContainerName, tenantDatabaseName, $"{tempDir}\\tenant.bak", tempDir);
 
             // Step 7: Run Export-NAVApplication to merge app database into tenant database
             Logger.LogInformation("Step 7: Running Export-NAVApplication to merge '{AppDb}' into '{TenantDb}'...", appDatabaseName, tenantDatabaseName);
@@ -151,7 +158,7 @@ public class FkhConvertToSingleTenant : FkhServiceBase
             // Step 8: Backup the merged tenant database from local SQL Server Express
             Logger.LogInformation("Step 8: Backing up merged database from SQL Server Express...");
             var backupMergedResult = await ExecInBcPodPwshAsync(client, podName, bcContainerName,
-                $"sqlcmd -S '.\\SQLEXPRESS' -Q \"BACKUP DATABASE [{tenantDatabaseName}] TO DISK = N'C:\\temp\\merged.bak' WITH FORMAT, INIT, COMPRESSION; PRINT N'MERGED_BACKUP_OK'\"");
+                $"sqlcmd -S '.\\SQLEXPRESS' -Q \"BACKUP DATABASE [{tenantDatabaseName}] TO DISK = N'{tempDir}\\merged.bak' WITH FORMAT, INIT, COMPRESSION; PRINT N'MERGED_BACKUP_OK'\"");
             if (!backupMergedResult.Stdout.Contains("MERGED_BACKUP_OK"))
                 throw new InvalidOperationException($"Failed to backup merged database from SQL Express. {backupMergedResult}");
 
@@ -160,7 +167,7 @@ public class FkhConvertToSingleTenant : FkhServiceBase
             var uploadMergedResult = await ExecInBcPodPwshAsync(client, podName, bcContainerName,
                 "$wc = [Net.WebClient]::new(); " +
                 "$wc.Headers.Add('x-ms-blob-type', 'BlockBlob'); " +
-                $"$wc.UploadFile('{mergedUploadSas}', 'PUT', 'C:\\temp\\merged.bak'); " +
+                $"$wc.UploadFile('{mergedUploadSas}', 'PUT', '{tempDir}\\merged.bak'); " +
                 "$wc.Dispose(); Write-Output 'MERGED_UPLOAD_OK'");
             if (!uploadMergedResult.Stdout.Contains("MERGED_UPLOAD_OK"))
                 throw new InvalidOperationException($"Failed to upload merged database to blob storage. {uploadMergedResult}");
@@ -227,7 +234,7 @@ public class FkhConvertToSingleTenant : FkhServiceBase
             Logger.LogInformation("Step 12: Stopping SQL Server Express and cleaning up...");
             await ExecInBcPodPwshAsync(client, podName, bcContainerName,
                 "Stop-Service 'MSSQL$SQLEXPRESS' -Force -ErrorAction SilentlyContinue; " +
-                "Remove-Item 'C:\\temp\\*.bak' -Force -ErrorAction SilentlyContinue");
+                $"Remove-Item '{tempDir}\\*.bak' -Force -ErrorAction SilentlyContinue");
 
             // Step 13: Update deployment — set multitenant env var to false and set customsetting
             Logger.LogInformation("Step 13: Updating deployment to set multitenant=false...");
@@ -297,7 +304,7 @@ public class FkhConvertToSingleTenant : FkhServiceBase
     /// </summary>
     private async Task RestoreOnLocalExpressAsync(
         Kubernetes client, string podName, string bcContainerName,
-        string databaseName, string bakFilePath)
+        string databaseName, string bakFilePath, string tempDir)
     {
         // Use a PowerShell script that discovers logical file names and restores with MOVE clauses
         var script =
@@ -312,8 +319,8 @@ public class FkhConvertToSingleTenant : FkhServiceBase
             "};" +
             "if (-not $dataName -or -not $logName) { throw 'Could not determine logical file names from backup' };" +
             $"$sql = \"RESTORE DATABASE [{databaseName}] FROM DISK = N'{bakFilePath}'" +
-            $" WITH MOVE N'\" + $dataName + \"' TO N'C:\\temp\\{databaseName}.mdf'" +
-            $", MOVE N'\" + $logName + \"' TO N'C:\\temp\\{databaseName}_log.ldf'" +
+            $" WITH MOVE N'\" + $dataName + \"' TO N'{tempDir}\\{databaseName}.mdf'" +
+            $", MOVE N'\" + $logName + \"' TO N'{tempDir}\\{databaseName}_log.ldf'" +
             ", REPLACE\";" +
             "sqlcmd -S '.\\SQLEXPRESS' -Q $sql;" +
             "if ($LASTEXITCODE -ne 0) { throw 'Restore failed' };" +
