@@ -208,10 +208,7 @@ try
     Console.CancelKeyPress += (_, e) => { e.Cancel = true; cts.Cancel(); };
 
     using var client = new HttpClient();
-    if (hasFiles)
-    {
-        client.Timeout = TimeSpan.FromMinutes(30); // Large file uploads need more time
-    }
+    client.Timeout = TimeSpan.FromMinutes(30);
 
     var retryInProgress = false;
 

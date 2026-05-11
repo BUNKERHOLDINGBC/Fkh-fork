@@ -272,3 +272,14 @@ variable "enable_staging_backend" {
   type        = bool
   default     = false
 }
+
+variable "function_timeout_minutes" {
+  description = "Maximum execution time for Azure Function invocations (in minutes). Also used by the CLI as its HTTP request timeout. Consumption plan maximum is 10."
+  type        = number
+  default     = 10
+
+  validation {
+    condition     = var.function_timeout_minutes >= 1 && var.function_timeout_minutes <= 10
+    error_message = "function_timeout_minutes must be between 1 and 10 (Consumption plan limit)."
+  }
+}

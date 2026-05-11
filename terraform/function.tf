@@ -81,6 +81,8 @@ locals {
     AAD_GRAPH_CLIENT_ID                       = var.enable_aad_container_auth ? data.azuread_client_config.current.client_id : ""
     APPINSIGHTS_INSTRUMENTATIONKEY          = azurerm_application_insights.this.instrumentation_key
     APPLICATIONINSIGHTS_CONNECTION_STRING   = azurerm_application_insights.this.connection_string
+    FUNCTION_TIMEOUT_MINUTES                = tostring(var.function_timeout_minutes)
+    AzureFunctionsJobHost__functionTimeout  = format("00:%02d:00", var.function_timeout_minutes)
   }
 }
 

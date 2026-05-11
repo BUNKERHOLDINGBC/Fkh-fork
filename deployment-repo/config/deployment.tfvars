@@ -75,6 +75,10 @@ kubecost_enabled = false
 # Staging — deploy a staging Function App alongside production for testing backend changes
 enable_staging_backend = false
 
+# Function timeout — maximum execution time per request (in minutes). Also used by the CLI as its HTTP timeout.
+# Consumption plan maximum is 10 minutes.
+function_timeout_minutes = 10
+
 # SQL Server
 # sql_sa_password = ""  # set as GitHub Secret: SQL_SA_PASSWORD
 namespace        = "app"
