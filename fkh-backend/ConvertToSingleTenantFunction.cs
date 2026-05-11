@@ -24,5 +24,5 @@ public class ConvertToSingleTenantFunction : FunctionBase
     [Function("ConvertToSingleTenant")]
     public Task<HttpResponseData> RunAsync(
         [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "ConvertToSingleTenant")] HttpRequestData req)
-        => ExecuteAsync(req, _logger, _gitHub, "ConvertToSingleTenant", _convertToSingleTenant.ConvertToSingleTenantAsync);
+        => ExecuteFireAndForgetAsync(req, _logger, _gitHub, "ConvertToSingleTenant", _convertToSingleTenant.ConvertToSingleTenantAsync);
 }

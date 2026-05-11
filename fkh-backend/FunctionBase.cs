@@ -427,6 +427,61 @@ public abstract class FunctionBase
             () => aksOperation(parametersResult.Parameters!));
     }
 
+    /// <summary>
+    /// Like <see cref="ExecuteAsync"/> but fires the operation on a background thread
+    /// and returns HTTP 202 immediately. The operation continues running in-process
+    /// up to the Azure Functions timeout. Errors are logged but not returned to the caller.
+    /// </summary>
+    protected async Task<HttpResponseData> ExecuteFireAndForgetAsync(
+        HttpRequestData req,
+        ILogger logger,
+        GitHubAuthService gitHub,
+        string operationName,
+        Func<Dictionary<string, string>, Task<object>> aksOperation)
+    {
+        var (auth, errorResponse) = await AuthenticateAndAuthorizeAsync(req, logger, gitHub, operationName);
+        if (errorResponse is not null) return errorResponse;
+
+        var clusterError = await CheckClusterRunningAsync(req, logger);
+        if (clusterError is not null) return clusterError;
+
+        var parametersResult = await ParseAndValidateParametersAsync(req, auth!.Function, auth.IsAdmin);
+        if (!parametersResult.Success)
+            return Respond(req, HttpStatusCode.BadRequest, parametersResult.ErrorMessage!);
+
+        ClearFailedAttempts(auth.ClientIp);
+
+        parametersResult.Parameters!["_githubUsername"] = auth.Username;
+        parametersResult.Parameters!["_isAdmin"] = auth.IsAdmin.ToString();
+
+        var artifactError = await ResolveArtifactAsync(req, logger, parametersResult.Parameters);
+        if (artifactError is not null) return artifactError;
+
+        // Fire the operation on a background thread — do not await
+        var parameters = parametersResult.Parameters!;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await aksOperation(parameters);
+                logger.LogInformation("Background operation {Operation} completed for user {Username}.",
+                    operationName, auth.Username);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Background operation {Operation} failed for user {Username}.",
+                    operationName, auth.Username);
+            }
+        });
+
+        var response = req.CreateResponse(HttpStatusCode.Accepted);
+        await response.WriteAsJsonAsync(new
+        {
+            message = $"{operationName} started. The operation is running in the background."
+        });
+        return response;
+    }
+
     // ═══════════════════════════════════════════════════════════════════════════════
     // Shared pipeline helpers
     // ═══════════════════════════════════════════════════════════════════════════════
