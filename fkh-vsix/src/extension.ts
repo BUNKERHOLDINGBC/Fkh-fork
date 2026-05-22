@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { createReadSettingsOptions, readSettings, getRepoName } from './readALGoSettings';
+import { createReadSettingsOptions, readSettings, getRepoName, getProjects } from './readALGoSettings';
 import { ProjectsTreeProvider, ProjectTreeItem, ContainersTreeProvider, ContainerTreeItem, ImagesTreeProvider, ImageTreeItem, VMsTreeProvider, VMTreeItem } from './containersTreeProvider';
 import { updateLaunchJsonAfterCreate } from './updateLaunchJson';
 
@@ -420,7 +420,9 @@ async function loadFkhSettings(): Promise<void> {
   try {
     const session = await getGitHubSession();
     if (!session) { return; }
-    const options = await createReadSettingsOptions(session.accessToken);
+    const projects = await getProjects();
+    const project = projects[0] ?? '';
+    const options = await createReadSettingsOptions(session.accessToken, project);
     if (!options?.baseFolder) { return; }
     const settings = await readSettings(options);
     const fkh = settings['fkh'];
@@ -445,16 +447,17 @@ async function promptForParameters(
     for (const [key, value] of Object.entries(cachedFkhSettings)) {
       if (key.startsWith(prefix)) {
         const paramKey = key.substring(prefix.length);
+        const strValue = String(value ?? '').trim();
         if (paramKey.endsWith('?')) {
           // Trailing ? means show the parameter with value as default (don't override explicit prefilledDefaults)
           const cleanKey = paramKey.slice(0, -1);
-          if (!(cleanKey in prefilledDefaults)) {
-            prefilledDefaults[cleanKey] = String(value ?? '');
+          if (!(cleanKey in prefilledDefaults) && strValue) {
+            prefilledDefaults[cleanKey] = strValue;
           }
-        } else {
-          // Hard override (don't override explicit prefilled)
+        } else if (strValue) {
+          // Hard override — only if non-empty (don't override explicit prefilled)
           if (!(paramKey in prefilled)) {
-            prefilled[paramKey] = String(value ?? '');
+            prefilled[paramKey] = strValue;
           }
         }
       }
@@ -524,10 +527,9 @@ async function promptForParameters(
 
     const settingKey = `${definition.name}.${param.name}`;
     const inspected = config.inspect<string>(settingKey);
-    const settingValue = inspected?.workspaceFolderValue ?? inspected?.workspaceValue ?? inspected?.globalValue
-      ?? config.get<string>(settingKey);
+    const settingValue = (inspected?.workspaceFolderValue ?? inspected?.workspaceValue ?? inspected?.globalValue);
     if (settingValue !== undefined) {
-      const trimmed = String(settingValue).trim();
+      const trimmed = settingValue.trim();
       if (trimmed) {
         resolvedDefaults[param.name] = trimmed;
       }
