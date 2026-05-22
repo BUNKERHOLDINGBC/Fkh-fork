@@ -58,6 +58,17 @@ variable "aks_sku_tier" {
   }
 }
 
+variable "acr_sku" {
+  description = "Azure Container Registry pricing tier. 'Basic' for dev/test, 'Standard' for production, 'Premium' for geo-replication."
+  type        = string
+  default     = "Basic"
+
+  validation {
+    condition     = contains(["Basic", "Standard", "Premium"], var.acr_sku)
+    error_message = "acr_sku must be one of: Basic, Standard, Premium."
+  }
+}
+
 variable "windows_min_node_count" {
   description = "Minimum number of Windows nodes to keep running (0 = scale to zero, 1 = always keep a warm node)."
   type        = number

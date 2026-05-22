@@ -49,6 +49,7 @@ state_location  = ""             # Azure region for the Terraform state resource
 #                                                                                    __/ |    
 #                                                                                   |___/     
 aks_sku_tier                 = "Free"             # Free (dev/test, no SLA) | Standard (99.95% SLA) | Premium (99.99% SLA)
+acr_sku                      = "Basic"            # Basic (dev/test) | Standard (production) | Premium (geo-replication)
 linux_vm_size                = "Standard_D4s_v5"  # v6 not supported for sqlserver
 windows_vm_size              = "Standard_D4s_v5"  # v6 not supported for hyhervisor gen1
 windows_min_node_count       = 0                  # Set to 1 to keep a warm Windows node (~$70-100/mo)
