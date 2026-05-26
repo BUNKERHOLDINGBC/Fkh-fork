@@ -487,7 +487,7 @@ public class FkhCreateContainer : FkhServiceBase
             },
             new() { Name = "publicDnsName", Value = publicDnsName },
             new() { Name = "contactEMailForLetsEncrypt", Value = ContactEmail },
-            new() { Name = 'enableApiServices', Value = "Y" },
+            new() { Name = "enableApiServices", Value = "Y" },
             new() { Name = "folders", Value = FoldersValue },
             new()
             {
