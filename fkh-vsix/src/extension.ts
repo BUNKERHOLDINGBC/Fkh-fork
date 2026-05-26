@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { createReadSettingsOptions, readSettings, getRepoName, getProjects } from './readALGoSettings';
 import { ProjectsTreeProvider, ProjectTreeItem, ContainersTreeProvider, ContainerTreeItem, ImagesTreeProvider, ImageTreeItem, VMsTreeProvider, VMTreeItem } from './containersTreeProvider';
 import { updateLaunchJsonAfterCreate } from './updateLaunchJson';
+import { PROTOCOL_VERSION, CLIENT_APP } from './protocol';
 
 let functionCatalog: FunctionCatalogResponse | undefined;
 let outputChannel: vscode.OutputChannel;
@@ -817,6 +818,8 @@ async function invokeFunctionByName(functionName: string, prefilled: Record<stri
               method: 'POST',
               headers: {
                 Authorization: `Bearer ${session.accessToken}`,
+                'X-Fkh-Protocol-Version': String(PROTOCOL_VERSION),
+                'X-Fkh-Client': CLIENT_APP,
               },
               body: formData,
             });
@@ -827,6 +830,8 @@ async function invokeFunctionByName(functionName: string, prefilled: Record<stri
               headers: {
                 'Content-Type': 'application/json',
                 Authorization: `Bearer ${session.accessToken}`,
+                'X-Fkh-Protocol-Version': String(PROTOCOL_VERSION),
+                'X-Fkh-Client': CLIENT_APP,
               },
               body: JSON.stringify(body),
             });
@@ -894,6 +899,8 @@ async function showContainerLog(appLabel: string, containerName: string): Promis
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${session.accessToken}`,
+            'X-Fkh-Protocol-Version': String(PROTOCOL_VERSION),
+            'X-Fkh-Client': CLIENT_APP,
           },
           body: JSON.stringify(body),
         });
@@ -948,6 +955,8 @@ async function downloadContainerEventLog(appLabel: string, containerName: string
           headers: {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${session.accessToken}`,
+            'X-Fkh-Protocol-Version': String(PROTOCOL_VERSION),
+            'X-Fkh-Client': CLIENT_APP,
           },
           body: JSON.stringify(body),
         });

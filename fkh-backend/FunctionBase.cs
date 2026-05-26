@@ -536,7 +536,23 @@ public abstract class FunctionBase
     {
         var clientIp = GetClientIp(req);
 
-        // ── Step 0: Check IP block list ───────────────────────────────────────────
+        // ── Step 0a: Protocol version check ───────────────────────────────────────
+        var protocolVersionHeader = req.Headers.TryGetValues("X-Fkh-Protocol-Version", out var pvValues)
+            ? pvValues.FirstOrDefault() : null;
+        var clientAppHeader = req.Headers.TryGetValues("X-Fkh-Client", out var caValues)
+            ? caValues.FirstOrDefault() : null;
+
+        var protocolVersion = Models.ProtocolVersionConfig.ParseProtocolVersion(protocolVersionHeader);
+        var clientName = Models.ProtocolVersionConfig.ParseClientName(clientAppHeader);
+        var protocolError = Models.ProtocolVersionConfig.Validate(protocolVersion, clientName);
+        if (protocolError is not null)
+        {
+            logger.LogWarning("Protocol version mismatch from {ClientApp} (version {ProtocolVersion}): {Error}",
+                clientName, protocolVersion, protocolError);
+            return (null, Respond(req, HttpStatusCode.UpgradeRequired, protocolError));
+        }
+
+        // ── Step 0b: Check IP block list ──────────────────────────────────────────
         if (IsIpBlocked(clientIp))
         {
             logger.LogWarning("Blocked request from {IP} — too many failed auth attempts.", clientIp);

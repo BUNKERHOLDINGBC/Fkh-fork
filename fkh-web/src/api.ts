@@ -1,5 +1,8 @@
 import type { FunctionCatalogResponse, ListContainersResponse } from './types';
 
+const PROTOCOL_VERSION = '1';
+const CLIENT_APP = 'Web App';
+
 /** Thrown when the backend returns 503 indicating the AKS cluster is stopped. */
 export class SystemStoppedError extends Error {
   constructor(message?: string) {
@@ -39,6 +42,8 @@ async function apiFetch(backendUrl: string, path: string, token: string, body?: 
   const url = `${backendUrl}/${path}`;
   const headers: Record<string, string> = {
     Authorization: `Bearer ${token}`,
+    'X-Fkh-Protocol-Version': PROTOCOL_VERSION,
+    'X-Fkh-Client': CLIENT_APP,
   };
   if (body) {
     headers['Content-Type'] = 'application/json';

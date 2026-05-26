@@ -244,6 +244,8 @@ try
         }
 
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        request.Headers.Add("X-Fkh-Protocol-Version", ClientCommand.ProtocolVersion.ToString());
+        request.Headers.Add("X-Fkh-Client", ClientCommand.ClientApp);
 
         var response = await client.SendAsync(request, cts.Token);
         var body = await response.Content.ReadAsStringAsync(cts.Token);
