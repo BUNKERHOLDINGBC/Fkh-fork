@@ -487,6 +487,7 @@ public class FkhCreateContainer : FkhServiceBase
             },
             new() { Name = "publicDnsName", Value = publicDnsName },
             new() { Name = "contactEMailForLetsEncrypt", Value = ContactEmail },
+            new() { Name = 'enableApiServices', Value = "Y" },
             new() { Name = "folders", Value = FoldersValue },
             new()
             {
@@ -662,8 +663,8 @@ public class FkhCreateContainer : FkhServiceBase
                 {
                     new() { Name = "http", Port = 80, TargetPort = 80 },
                     new() { Name = "https", Port = 443, TargetPort = 443 },
-                    new() { Name = "odata", Port = 7047, TargetPort = 7047 },
-                    new() { Name = "soap", Port = 7048, TargetPort = 7048 },
+                    new() { Name = "soap", Port = 7047, TargetPort = 7047 },
+                    new() { Name = "odata", Port = 7048, TargetPort = 7048 },
                     new() { Name = "dev", Port = 7049, TargetPort = 7049 },
                 }
             }
