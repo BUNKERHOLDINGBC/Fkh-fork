@@ -63,13 +63,7 @@ abstract class ClientCommand
     /// </summary>
     protected static TokenProvider CreateTokenProvider(Dictionary<string, string> parameters, CliSettings settings)
     {
-        string? explicitOidcToken = null;
-        if (parameters.TryGetValue("oidcToken", out var oidc) && !string.IsNullOrWhiteSpace(oidc))
-        {
-            explicitOidcToken = oidc;
-            parameters.Remove("oidcToken");
-        }
-        return new TokenProvider(useOidc: settings.UseOidc, explicitOidcToken: explicitOidcToken, ghUser: settings.User);
+        return new TokenProvider(useOidc: settings.UseOidc, ghUser: settings.User);
     }
 
     /// <summary>
