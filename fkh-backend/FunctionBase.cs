@@ -585,7 +585,7 @@ public abstract class FunctionBase
             var repository = await OidcService.ValidateTokenAsync(token);
             if (repository is null)
             {
-                logger.LogWarning("OIDC token validation failed or repository not in allow-list.");
+                logger.LogError("OIDC token validation failed or repository not in allow-list.");
                 RecordFailedAttempt(clientIp);
                 return (null, Respond(req, HttpStatusCode.Forbidden,
                     "OIDC token invalid or repository not authorized. Check ALLOWED_OIDC_REPOS configuration."));
@@ -600,7 +600,7 @@ public abstract class FunctionBase
             var ghUsername = await gitHub.GetAuthenticatedUsernameAsync(token);
             if (ghUsername is null)
             {
-                logger.LogWarning("Invalid or expired GitHub token received.");
+                logger.LogError("Invalid or expired GitHub token received.");
                 RecordFailedAttempt(clientIp);
                 return (null, Respond(req, HttpStatusCode.Unauthorized, "Invalid or expired GitHub token."));
             }
