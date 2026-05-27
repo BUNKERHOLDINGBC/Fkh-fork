@@ -511,6 +511,55 @@ public static class FunctionCatalog
         },
         new FunctionDefinition
         {
+            Name = "ImportTestToolkit",
+            Description = "Imports the Business Central test toolkit apps into a running container.",
+            Route = "ImportTestToolkit",
+            Parameters = new List<FunctionParameterDefinition>
+            {
+                new()
+                {
+                    Name = "name",
+                    Type = "string",
+                    Description = "Name of the container to import the test toolkit into.",
+                    Required = true,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "includeTestFrameworkOnly",
+                    Type = "boolean",
+                    Description = "Import only the test framework apps.",
+                    Required = false,
+                    DefaultValue = "false"
+                },
+                new()
+                {
+                    Name = "includeTestLibrariesOnly",
+                    Type = "boolean",
+                    Description = "Import only the test libraries apps.",
+                    Required = false,
+                    DefaultValue = "false"
+                },
+                new()
+                {
+                    Name = "includeTestRunnerOnly",
+                    Type = "boolean",
+                    Description = "Import only the test runner app.",
+                    Required = false,
+                    DefaultValue = "false"
+                },
+                new()
+                {
+                    Name = "includePerformanceToolkit",
+                    Type = "boolean",
+                    Description = "Include the performance toolkit apps in the import.",
+                    Required = false,
+                    DefaultValue = "false"
+                }
+            }
+        },
+        new FunctionDefinition
+        {
             Name = "GetDatabaseUploadSas",
             Description = "Returns a SAS URL for uploading database backups to blob storage. Admin only.",
             Route = "GetDatabaseUploadSas",
