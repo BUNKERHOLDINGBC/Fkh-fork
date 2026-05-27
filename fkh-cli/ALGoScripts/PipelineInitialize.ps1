@@ -11,7 +11,7 @@ $ENV:FKH_TIMEZONE = "Europe/Copenhagen"
 $parts = "$ENV:GITHUB_REPOSITORY". Split('/')
 $containerName = "$($parts[0])-$($parts[1])-$($ENV:_project)-$($ENV:_buildMode)-$($ENV:GITHUB_RUN_ID)".ToLower() -replace "[^a-z0-9\-]"
 
-$containers = fkh listcontainers --all --asjson | convertfrom-json
+$containers = fkh listcontainers --all --asjson --useOIDC | convertfrom-json
 $container = $containers.containers | Where-Object { $_.appLabel -eq $containerName }
 if (-not $container) {
     $adminUsername = "admin"
