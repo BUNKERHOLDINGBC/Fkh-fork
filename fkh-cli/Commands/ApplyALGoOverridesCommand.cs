@@ -1,9 +1,9 @@
 using System.Reflection;
 
-sealed class DownloadALGoScriptsCommand : ClientCommand
+sealed class ApplyALGoOverridesCommand : ClientCommand
 {
-    public override string Name => "downloadALGoScripts";
-    public override string Description => "Copies bundled ALGoScripts files to a local folder. Defaults to the current directory.";
+    public override string Name => "applyALGoOverrides";
+    public override string Description => "Copies bundled ALGoScripts override files to a local folder. Defaults to the current directory.";
     public override List<ClientCommandParameter> Parameters =>
     [
         new() { Name = "output", Type = "string", Description = "Destination folder for ALGoScripts files. Default: current directory", Required = false },
