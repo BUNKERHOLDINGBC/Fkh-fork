@@ -544,7 +544,7 @@ public abstract class FunctionBase
 
         var protocolVersion = Models.ProtocolVersionConfig.ParseProtocolVersion(protocolVersionHeader);
         var clientName = Models.ProtocolVersionConfig.ParseClientName(clientAppHeader);
-        var protocolError = Models.ProtocolVersionConfig.Validate(protocolVersion, clientName);
+        var protocolError = await Models.ProtocolVersionConfig.ValidateAsync(protocolVersion, clientName);
         if (protocolError is not null)
         {
             logger.LogWarning("Protocol version mismatch from {ClientApp} (version {ProtocolVersion}): {Error}",
