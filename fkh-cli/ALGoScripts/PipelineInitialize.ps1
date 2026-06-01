@@ -15,7 +15,7 @@ $container = $containers.containers | Where-Object { $_.appLabel -eq $containerN
 if (-not $container) {
     $adminUsername = "admin"
     $adminPassword = GetRandomPassword
-    $settings = $ENV:settings | ConvertFrom-Json
+    $settings = $ENV:Settings | ConvertFrom-Json
 
     $params = @{
         name           = $containerName
