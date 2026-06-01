@@ -36,6 +36,13 @@ jobs:
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
 
+      - name: Check OVSX_PAT
+        id: check-ovsx
+        run: |
+          if [ -n "$OVSX_PAT" ]; then echo "available=true" >> "$GITHUB_OUTPUT"; fi
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
@@ -76,6 +83,12 @@ jobs:
           fi
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
+
+      - name: Publish to Open VSX
+        if: steps.check-ovsx.outputs.available == 'true'
+        run: npx ovsx publish "$(ls -1 *.vsix | head -1)"
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
 
   deployFkhClients-cli:
     if: github.repository == 'Freddy-DK/Fkh'

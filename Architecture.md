@@ -467,6 +467,7 @@ These are synced from Terraform outputs for the `CreateImages` workflow:
 | Secret / Variable | Purpose |
 |-------------------|---------|
 | `VSCE_PAT` | VS Code Marketplace publish token |
+| `OVSX_PAT` | Open VSX Registry publish token (Cursor extension marketplace) |
 | `AZURE_KEY_VAULT_CLIENT_ID` | App Registration for code signing via Azure Key Vault |
 | `AZURE_KEY_VAULT_TENANT_ID` | Tenant for Key Vault access |
 | `AZURE_KEY_VAULT_SUBSCRIPTION_ID` | Subscription for Key Vault access |

@@ -93,9 +93,14 @@ No test runner configured. Manual test in Extension Development Host against a r
 
 ## Publish
 
+- **VS Code Marketplace** — `npx vsce publish` (requires `VSCE_PAT` in CI).
+- **Open VSX** (Cursor and other Open VSX–based editors) — `npx ovsx publish <file>.vsix` (requires `OVSX_PAT` in CI). Namespace must match `publisher` in `package.json` (`Freddy-DK`).
+
 ```powershell
 npx vsce publish --pre-release   # requires VSCE_PAT in CI
 ```
+
+CI (`.github/workflows/DeployFkhClients.yml`) publishes to both registries when the corresponding secrets are set.
 
 ## Related
 
