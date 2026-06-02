@@ -86,8 +86,9 @@ function_timeout_minutes = 10
 
 # SQL Server
 # sql_sa_password = ""  # set as GitHub Secret: SQL_SA_PASSWORD
-namespace        = "app"
-sql_storage_size = "128Gi"
+namespace           = "app"
+sql_storage_size    = "128Gi"
+sql_memory_limit_mb = 10240              # SQL Server max buffer pool memory in MB (default 10 GiB)
 
 
 #   _____            _        _                     _____      _   _   _                 

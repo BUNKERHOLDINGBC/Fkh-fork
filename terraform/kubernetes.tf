@@ -218,6 +218,11 @@ resource "kubernetes_deployment" "mssql" {
             value = "/var/opt/mssql/log"
           }
 
+          env {
+            name  = "MSSQL_MEMORY_LIMIT_MB"
+            value = tostring(var.sql_memory_limit_mb)
+          }
+
           volume_mount {
             name       = "mssql-data"
             mount_path = "/var/opt/mssql/data"
@@ -234,10 +239,6 @@ resource "kubernetes_deployment" "mssql" {
             requests = {
               memory = "2Gi"
               cpu    = "500m"
-            }
-            limits = {
-              memory = "4Gi"
-              cpu    = "2"
             }
           }
 

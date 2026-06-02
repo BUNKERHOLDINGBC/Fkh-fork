@@ -166,6 +166,12 @@ variable "sql_storage_size" {
   default     = "128Gi"
 }
 
+variable "sql_memory_limit_mb" {
+  description = "SQL Server max memory (buffer pool) in MB. Controls MSSQL_MEMORY_LIMIT_MB inside the container."
+  type        = number
+  default     = 10240
+}
+
 # ── GitHub ────────────────────────────────────────────────────────────────────
 
 # ── Function access config ────────────────────────────────────────────────────
