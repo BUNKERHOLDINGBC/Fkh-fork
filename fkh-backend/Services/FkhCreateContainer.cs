@@ -652,12 +652,14 @@ public class FkhCreateContainer : FkhServiceBase
                 Annotations = new Dictionary<string, string>
                 {
                     ["service.beta.kubernetes.io/azure-dns-label-name"] = dnsLabel,
-                    ["service.beta.kubernetes.io/azure-load-balancer-health-probe-protocol"] = "tcp"
+                    ["service.beta.kubernetes.io/azure-load-balancer-health-probe-protocol"] = "tcp",
+                    ["service.beta.kubernetes.io/azure-load-balancer-tcp-idle-timeout"] = "30"
                 }
             },
             Spec = new V1ServiceSpec
             {
                 Type = "LoadBalancer",
+                ExternalTrafficPolicy = "Local",
                 Selector = new Dictionary<string, string> { ["app"] = appName },
                 Ports = new List<V1ServicePort>
                 {

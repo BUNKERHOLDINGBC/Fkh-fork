@@ -6,7 +6,8 @@ if ($doNotPublishApps) {
 # BcContainerHelper override
 
 $parts = "$ENV:GITHUB_REPOSITORY". Split('/')
-$containerName = "$($parts[0])-$($parts[1])-$($ENV:_project)-$($ENV:_buildMode)-$($ENV:GITHUB_RUN_ID)".ToLower() -replace "[^a-z0-9\-]"
+$projectHash = (Get-FileHash -InputStream ([System.IO.MemoryStream]::new([System.Text.Encoding]::UTF8.GetBytes("$($ENV:_project)-$($ENV:_buildMode)-$($ENV:GITHUB_RUN_ID)"))) -Algorithm SHA256).Hash.Substring(0, 16)
+$containerName = "$($parts[0])-$($parts[1])-$projectHash".ToLower() -replace "[^a-z0-9\-]"
 
 $containersJson = fkh listcontainers --all --asjson --useOIDC
 Write-Host $containersJson
@@ -16,24 +17,33 @@ if (-not $container) {
     $adminUsername = "admin"
     $adminPassword = GetRandomPassword
     $settings = $ENV:Settings | ConvertFrom-Json
-
+    $secrets = $ENV:Secrets | ConvertFrom-Json
     $params = @{
-        name           = $containerName
-        artifactUrl    = $artifact
-        adminUsername  = $adminUsername
-        adminPassword  = $adminPassword
-        autostop       = "6h"
-        repo           = $ENV:REPOSITORY
-        project        = $ENV:_project
+        name          = $containerName
+        artifactUrl   = $artifact
+        adminUsername = $adminUsername
+        adminPassword = $adminPassword
+        autostop      = '6h'
+        repo          = $ENV:GITHUB_REPOSITORY
+        project       = $ENV:_project
+    }
+    if ($secrets.PSObject.Properties.Name -eq "licenseFileUrl") {
+        Write-Host "LicenseFileUrl secret found"
+        $licenseFileUrl = $secrets.licenseFileUrl
+        if ($licenseFileUrl -notlike 'https://*') {
+            Write-Host "Secrets are base64 encoded"
+            $licenseFileUrl = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($licenseFileUrl))
+        }
+        $params += @{
+            licenseFileUrl = $licenseFileUrl
+        }
     }
     if ($settings.PSObject.Properties.Name -eq "fkh") {
         $fkhSettings = $settings."fkh"
-        foreach ($prop in $fkhSettings.PSObject.Properties) {
-            if ($prop.Name -like "CreateContainer.*") {
-                $paramName = $prop.Name.Substring("CreateContainer.".Length)
-                if (-not $params.ContainsKey($paramName)) {
-                    $params[$paramName] = $prop.Value
-                }
+        foreach ($prop in 'useDatabase', 'cpu', 'memory') {
+            $createContainerProp = "CreateContainer.$prop"
+            if ($fkhSettings.PSObject.Properties.Name -eq $createContainerProp) {
+                $params[$prop] = $fkhSettings."$createContainerProp"
             }
         }
     }
@@ -41,7 +51,7 @@ if (-not $container) {
     foreach ($key in $params.Keys) {
         if ($params[$key]) {
             $fkhArgs += "--$key"
-            $fkhArgs += "$($params[$key])"
+            $fkhArgs += $params[$key]
         }
     }
 
