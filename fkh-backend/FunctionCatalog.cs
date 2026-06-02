@@ -284,6 +284,14 @@ public static class FunctionCatalog
                     Description = "List all containers instead of only your own.",
                     Required = false,
                     DefaultValue = null
+                },
+                new()
+                {
+                    Name = "runningOnly",
+                    Type = "boolean",
+                    Description = "Only list running containers (excludes stopped, pending, and failed containers).",
+                    Required = false,
+                    DefaultValue = null
                 }
             }
         },
