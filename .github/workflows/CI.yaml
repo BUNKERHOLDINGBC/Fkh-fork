@@ -6,10 +6,6 @@ on:
     paths:
       - 'fkh-vsix/**'
       - 'fkh-cli/**'
-  pull_request:
-    paths:
-      - 'fkh-vsix/**'
-      - 'fkh-cli/**'
   workflow_dispatch:
 
 env:
