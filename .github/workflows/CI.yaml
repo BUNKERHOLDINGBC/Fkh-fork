@@ -32,11 +32,13 @@ jobs:
         run: npm ci
 
       - name: Set dev version
+        id: version
         shell: pwsh
         run: |
           $now = Get-Date
           $devVersion = "0.$($now.Year).$($now.ToString('MMddHHmm'))"
           Write-Host "Setting dev version: $devVersion"
+          "value=$devVersion" >> $env:GITHUB_OUTPUT
           npm version $devVersion --no-git-tag-version --allow-same-version
           # Append (Dev) to display name
           $pkg = Get-Content package.json | ConvertFrom-Json
@@ -57,7 +59,7 @@ jobs:
       - name: Upload VSIX artifact
         uses: actions/upload-artifact@v7
         with:
-          name: vsix
+          name: fkh-vsix-${{ steps.version.outputs.value }}
           path: fkh-vsix/*.vsix
 
   build-cli:
@@ -77,11 +79,13 @@ jobs:
           dotnet-version: '8.0.x'
 
       - name: Set dev version
+        id: version
         shell: pwsh
         run: |
           $now = Get-Date
           $devVersion = "0.$($now.Year).$($now.ToString('MMddHHmm'))"
           Write-Host "Setting dev version: $devVersion"
+          "value=$devVersion" >> $env:GITHUB_OUTPUT
           $csproj = Get-Content fkh-cli.csproj -Raw
           $csproj = $csproj -replace '<Version>[^<]*</Version>', "<Version>$devVersion</Version>"
           # Pin AssemblyVersion to avoid 65535 overflow on the large patch number
@@ -98,5 +102,5 @@ jobs:
       - name: Upload NuGet artifact
         uses: actions/upload-artifact@v7
         with:
-          name: nuget
+          name: fkh-cli-${{ steps.version.outputs.value }}
           path: fkh-cli/nupkg/*.nupkg
