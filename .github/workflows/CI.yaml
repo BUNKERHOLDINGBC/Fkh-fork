@@ -35,7 +35,7 @@ jobs:
         shell: pwsh
         run: |
           $now = Get-Date
-          $devVersion = "0.0.$($now.ToString('yyyyMMddHHmm'))"
+          $devVersion = "0.$($now.Year).$($now.ToString('MMddHHmm'))"
           Write-Host "Setting dev version: $devVersion"
           npm version $devVersion --no-git-tag-version --allow-same-version
           # Append (Dev) to display name
@@ -80,7 +80,7 @@ jobs:
         shell: pwsh
         run: |
           $now = Get-Date
-          $devVersion = "0.0.$($now.ToString('yyyyMMddHHmm'))"
+          $devVersion = "0.$($now.Year).$($now.ToString('MMddHHmm'))"
           Write-Host "Setting dev version: $devVersion"
           $csproj = Get-Content fkh-cli.csproj -Raw
           $csproj = $csproj -replace '<Version>[^<]*</Version>', "<Version>$devVersion</Version>"
