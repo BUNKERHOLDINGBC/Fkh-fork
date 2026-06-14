@@ -8,9 +8,9 @@
     <ToolCommandName>fkh</ToolCommandName>
     <AssemblyName>fkh</AssemblyName>
     <PackageId>fkh</PackageId>
-    <Version>0.2.0</Version>
-    <Authors>Freddy DK</Authors>
-    <Description>FKH command line client</Description>
+    <Version>0.0.1</Version>
+    <Authors>Freddy Kristiansen</Authors>
+    <Description>FKh command line client</Description>
     <PackageIcon>icon.png</PackageIcon>
     <PackageReadmeFile>README.md</PackageReadmeFile>
   </PropertyGroup>
