@@ -228,8 +228,27 @@ jobs:
         run: |
           # Parse version YYYY.MM.DD from release metadata
           $version = "${{ needs.release.outputs.version }}"
+          $isBeta = "${{ needs.release.outputs.is_beta }}" -eq 'true'
+          $betaNumber = [int]"${{ needs.release.outputs.beta_number }}"
           $parts = $version -split '\.'
-          $vsixVersion = "$($parts[0]).$([int]$parts[1]).$([int]$parts[2])"
+          $major = $parts[0]
+          $minor = [int]$parts[1]
+          $day = [int]$parts[2]
+
+          # 4-part version: YYYY.M.DD.revision
+          # Beta: revision = beta number (1, 2, 3, ...)
+          # Stable: revision = last beta number + 1 (always higher than any beta), or 0 if no betas
+          if ($isBeta) {
+            $revision = $betaNumber
+          } else {
+            # Find highest beta number for this version
+            $existingBetaTags = git tag -l "v$version-beta.*" | ForEach-Object {
+              if ($_ -match '-beta\.(\d+)$') { [int]$Matches[1] }
+            } | Sort-Object -Descending
+            $lastBeta = if ($existingBetaTags) { $existingBetaTags[0] } else { 0 }
+            $revision = if ($lastBeta -gt 0) { $lastBeta + 1 } else { 0 }
+          }
+          $vsixVersion = "$major.$minor.$day.$revision"
 
           Write-Host "Setting VSIX version: $vsixVersion"
           npm version $vsixVersion --no-git-tag-version --allow-same-version
@@ -243,7 +262,13 @@ jobs:
         run: cp ../LICENSE .
 
       - name: Package VSIX
-        run: npx vsce package
+        shell: pwsh
+        run: |
+          if ("${{ needs.release.outputs.is_beta }}" -eq "true") {
+            npx vsce package --pre-release
+          } else {
+            npx vsce package
+          }
 
       - name: Upload VSIX artifact
         uses: actions/upload-artifact@v7
