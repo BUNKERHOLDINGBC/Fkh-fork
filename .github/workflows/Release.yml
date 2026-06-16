@@ -3,12 +3,20 @@
 # ============================================================================
 # MUST be triggered from Freddy-DK/Fkh@main. Fails otherwise.
 #
+# Version scheme: YYYY.MMDD.revision (e.g. 2026.0616.1)
+#   - Release branch: releases/vYYYY.MMDD (e.g. releases/v2026.0616)
+#   - Git tag:        vYYYY.MMDD.revision (e.g. v2026.0616.1)
+#   - VSIX:           YYYY.MMDD.revision
+#   - NuGet stable:   YYYY.MMDD.revision
+#   - NuGet beta:     YYYY.MMDD.revision-prerelease
+#
 # Inputs:
 #   - beta: whether this is a pre-release
-#   - branch: the release branch suffix (e.g. "v2026.06.16")
+#   - branch: the release branch suffix (e.g. "v2026.0616")
 #             "releases/" is prepended automatically.
 #             Use "main" to create a new release branch from today's date.
 #
+# Revision auto-increments based on existing tags for that branch.
 # Deployment repos can reference release tags as the fkh-ref input.
 # ============================================================================
 
@@ -23,7 +31,7 @@ on:
         type: boolean
         default: true
       branch:
-        description: 'Release branch (e.g. "v2026.06.16") — "releases/" is prepended automatically. Use "main" for a new release.'
+        description: 'Release branch (e.g. "v2026.0616") — "releases/" is prepended automatically. Use "main" for a new release.'
         required: true
         type: string
 
@@ -42,7 +50,6 @@ jobs:
       tag_name: ${{ steps.meta.outputs.tag_name }}
       version: ${{ steps.meta.outputs.version }}
       is_beta: ${{ steps.meta.outputs.is_beta }}
-      beta_number: ${{ steps.meta.outputs.beta_number }}
       ref: ${{ steps.resolve.outputs.ref }}
     steps:
       - name: Guard – must run on Freddy-DK/Fkh@main
@@ -95,8 +102,8 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           if ($fromMain) {
-            # Version from today's date
-            $version = Get-Date -Format 'yyyy.MM.dd'
+            # Version base from today's date: YYYY.MMDD
+            $version = Get-Date -Format 'yyyy.MMdd'
             $releaseBranch = "releases/v$version"
 
             # Fail early if branch already exists
@@ -110,33 +117,24 @@ jobs:
             git checkout -b $releaseBranch
             git push origin $releaseBranch
             Write-Host "Created release branch: $releaseBranch"
-
-            if ($isBeta) {
-              $tagName = "v$version-beta.1"
-            } else {
-              $tagName = "v$version"
-            }
           } else {
-            # Running from a release branch
-            if ($branch -notmatch '^releases/v(\d{4}\.\d{2}\.\d{2})$') {
-              Write-Error "Branch '$branch' is not a valid release branch. Expected format: releases/vYYYY.MM.DD"
+            # Running from a release branch — extract version from branch name
+            if ($branch -notmatch '^releases/v(\d{4}\.\d{4})$') {
+              Write-Error "Branch '$branch' is not a valid release branch. Expected format: releases/vYYYY.MMDD"
               exit 1
             }
             $version = $Matches[1]
-
-            if ($isBeta) {
-              # Find the highest existing beta tag for this version
-              $existingBetaTags = git tag -l "v$version-beta.*" | ForEach-Object {
-                if ($_ -match '-beta\.(\d+)$') { [int]$Matches[1] }
-              } | Sort-Object -Descending
-              $nextBeta = if ($existingBetaTags) { $existingBetaTags[0] + 1 } else { 1 }
-              $tagName = "v$version-beta.$nextBeta"
-            } else {
-              $tagName = "v$version"
-            }
           }
 
-          # Determine if this is the latest release branch (highest date)
+          # Find existing tags for this version to determine next revision
+          $existingRevisions = git tag -l "v$version.*" | ForEach-Object {
+            if ($_ -match "^v[\d.]+\.(\d+)$") { [int]$Matches[1] }
+          } | Sort-Object -Descending
+          $nextRevision = if ($existingRevisions) { $existingRevisions[0] + 1 } else { 1 }
+
+          $tagName = "v$version.$nextRevision"
+
+          # Determine if this is the latest release branch (highest version)
           $allReleaseBranches = git branch -r --list 'origin/releases/v*' | ForEach-Object {
             $_.Trim() -replace '^origin/', ''
           } | Sort-Object -Descending
@@ -145,27 +143,14 @@ jobs:
           $currentReleaseBranch = if ($fromMain) { "releases/v$version" } else { $branch }
           $isLatest = ($currentReleaseBranch -eq $latestReleaseBranch) -or $fromMain
 
-          # Fail early if a non-beta tag already exists (releases are immutable)
-          $tagExists = git tag -l $tagName
-          if ($tagExists -and (-not $isBeta)) {
-            Write-Error "Tag '$tagName' already exists. Non-beta releases cannot be updated."
-            exit 1
-          }
-
-          # Extract beta number from tag
-          $betaNumber = 0
-          if ($tagName -match '-beta\.(\d+)$') { $betaNumber = [int]$Matches[1] }
-
           "tag_name=$tagName" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           "is_beta=$($isBeta.ToString().ToLower())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           "is_latest=$($isLatest.ToString().ToLower())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          "beta_number=$betaNumber" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          "version=$version.$nextRevision" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
-          Write-Host "Version: $version"
+          Write-Host "Version: $version.$nextRevision"
           Write-Host "Tag: $tagName"
           Write-Host "Beta: $isBeta"
-          Write-Host "Beta number: $betaNumber"
           Write-Host "Is latest release: $isLatest"
 
       - name: Create release
@@ -226,29 +211,8 @@ jobs:
       - name: Set version
         shell: pwsh
         run: |
-          # Parse version YYYY.MM.DD from release metadata
-          $version = "${{ needs.release.outputs.version }}"
-          $isBeta = "${{ needs.release.outputs.is_beta }}" -eq 'true'
-          $betaNumber = [int]"${{ needs.release.outputs.beta_number }}"
-          $parts = $version -split '\.'
-          $major = $parts[0]
-          $minor = [int]$parts[1]
-          $day = [int]$parts[2]
-
-          # 4-part version: YYYY.M.DD.revision
-          # Beta: revision = beta number (1, 2, 3, ...)
-          # Stable: revision = last beta number + 1 (always higher than any beta), or 0 if no betas
-          if ($isBeta) {
-            $revision = $betaNumber
-          } else {
-            # Find highest beta number for this version
-            $existingBetaTags = git tag -l "v$version-beta.*" | ForEach-Object {
-              if ($_ -match '-beta\.(\d+)$') { [int]$Matches[1] }
-            } | Sort-Object -Descending
-            $lastBeta = if ($existingBetaTags) { $existingBetaTags[0] } else { 0 }
-            $revision = if ($lastBeta -gt 0) { $lastBeta + 1 } else { 0 }
-          }
-          $vsixVersion = "$major.$minor.$day.$revision"
+          # Version is already YYYY.MMDD.revision from release metadata
+          $vsixVersion = "${{ needs.release.outputs.version }}"
 
           Write-Host "Setting VSIX version: $vsixVersion"
           npm version $vsixVersion --no-git-tag-version --allow-same-version
@@ -347,17 +311,15 @@ jobs:
       - name: Set version
         shell: pwsh
         run: |
-          # Parse version YYYY.MM.DD from release metadata
+          # Version is already YYYY.MMDD.revision from release metadata
           $version = "${{ needs.release.outputs.version }}"
           $isBeta = "${{ needs.release.outputs.is_beta }}" -eq 'true'
-          $betaNumber = [int]"${{ needs.release.outputs.beta_number }}"
 
-          # NuGet version: YYYY.M.DD for stable, YYYY.M.DD-beta.N for pre-release
-          $parts = $version -split '\.'
-          $nugetVersion = "$($parts[0]).$([int]$parts[1]).$([int]$parts[2])"
-          if ($isBeta) { $nugetVersion += "-beta.$betaNumber" }
+          # NuGet: YYYY.MMDD.revision for stable, YYYY.MMDD.revision-prerelease for beta
+          $nugetVersion = $version
+          if ($isBeta) { $nugetVersion += "-prerelease" }
 
-          Write-Host "Setting CLI version: $nugetVersion (from Fkh version $version, beta=$isBeta)"
+          Write-Host "Setting CLI version: $nugetVersion (beta=$isBeta)"
           $csproj = Get-Content fkh-cli.csproj -Raw
           $csproj = $csproj -replace '<Version>[^<]*</Version>', "<Version>$nugetVersion</Version>"
           Set-Content fkh-cli.csproj $csproj
