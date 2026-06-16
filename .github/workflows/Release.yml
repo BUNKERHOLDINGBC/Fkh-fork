@@ -21,7 +21,7 @@ on:
 
 jobs:
   release:
-    uses: ./.github/workflows/_release-impl.yml
+    uses: Freddy-DK/Fkh/.github/workflows/_release-impl.yml@main
     with:
       beta: ${{ inputs.beta }}
       ref: ${{ github.ref_name }}
