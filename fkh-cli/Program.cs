@@ -201,6 +201,20 @@ try
     var tokenProvider = new TokenProvider(useOidc: settings.UseOidc, ghUser: settings.User);
     var token = await tokenProvider.GetTokenAsync();
 
+    // Interactive confirmation for destructive commands when --confirm is not passed
+    if (function.RequiresConfirmation &&
+        (!parsed.Parameters.TryGetValue("confirm", out var confirmVal) || !string.Equals(confirmVal, "true", StringComparison.OrdinalIgnoreCase)))
+    {
+        Console.Write($"{function.Name} Are you sure? [yes/N] ");
+        var answer = Console.ReadLine()?.Trim();
+        if (!string.Equals(answer, "yes", StringComparison.OrdinalIgnoreCase))
+        {
+            Console.WriteLine("Aborted.");
+            return 1;
+        }
+        parsed.Parameters["confirm"] = "true";
+    }
+
     // Send the client's timezone so the server can resolve time-of-day autostop values
     parsed.Parameters["_timezone"] = Environment.GetEnvironmentVariable("FKH_TIMEZONE") is string tz && !string.IsNullOrWhiteSpace(tz)
         ? tz.Trim()
@@ -1026,6 +1040,9 @@ sealed class FunctionDefinition
 
     [JsonPropertyName("parameters")]
     public List<FunctionParameterDefinition> Parameters { get; init; } = new();
+
+    [JsonPropertyName("requiresConfirmation")]
+    public bool RequiresConfirmation { get; init; }
 }
 
 sealed class FunctionParameterDefinition

@@ -761,7 +761,18 @@ public static class FunctionCatalog
             Description = "Stops the AKS cluster to save costs. All nodes are deallocated. Use 'startfkh' to restart. Admin only.",
             Route = "StopFkh",
             AdminOnly = true,
-            Parameters = new List<FunctionParameterDefinition>()
+            RequiresConfirmation = true,
+            Parameters = new List<FunctionParameterDefinition>
+            {
+                new()
+                {
+                    Name = "confirm",
+                    Type = "boolean",
+                    Description = "Confirm that you want to stop the cluster.",
+                    Required = false,
+                    DefaultValue = null
+                }
+            }
         },
         new FunctionDefinition
         {
