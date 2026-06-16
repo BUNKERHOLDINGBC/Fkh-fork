@@ -29,11 +29,11 @@ on:
 
 jobs:
   update:
-    uses: Freddy-DK/Fkh/.github/workflows/UpdateFkhBackEnd.yml@latest
+    uses: Freddy-DK/Fkh/.github/workflows/UpdateFkhBackEnd.yml@main
     permissions:
       id-token: write
       contents: read
     with:
       fkh-repo: Freddy-DK/Fkh
-      fkh-ref: latest
+      fkh-ref: main
       staging: ${{ inputs.staging }}

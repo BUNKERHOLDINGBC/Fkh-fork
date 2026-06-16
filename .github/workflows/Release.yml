@@ -14,11 +14,7 @@
 #   - Beta checked → increments beta number (finds latest -beta.X tag, creates -beta.(X+1))
 #   - Beta unchecked → final stable release vYYYY.MM.DD (updates existing release if tag exists)
 #
-# Tag behavior:
-#   - latest tag: updated on stable release from main or the latest release branch
-#   - preview tag: updated on beta release from main or the latest release branch
-#
-# Deployment repos can reference these tags as the fkh-ref input.
+# Deployment repos can reference release tags as the fkh-ref input.
 # ============================================================================
 
 name: Release
@@ -118,9 +114,12 @@ jobs:
           $currentReleaseBranch = if ($fromMain) { "releases/v$version" } else { $branch }
           $isLatest = ($currentReleaseBranch -eq $latestReleaseBranch) -or $fromMain
 
-          # Check if tag already exists (for updating existing release)
+          # Fail early if a non-beta tag already exists (releases are immutable)
           $tagExists = git tag -l $tagName
-          $updateExisting = [bool]$tagExists -and (-not $isBeta)
+          if ($tagExists -and (-not $isBeta)) {
+            Write-Error "Tag '$tagName' already exists. Non-beta releases cannot be updated."
+            exit 1
+          }
 
           # Extract beta number from tag
           $betaNumber = 0
@@ -129,7 +128,6 @@ jobs:
           "tag_name=$tagName" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           "is_beta=$($isBeta.ToString().ToLower())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           "is_latest=$($isLatest.ToString().ToLower())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
-          "update_existing=$($updateExisting.ToString().ToLower())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           "beta_number=$betaNumber" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
@@ -138,16 +136,14 @@ jobs:
           Write-Host "Beta: $isBeta"
           Write-Host "Beta number: $betaNumber"
           Write-Host "Is latest release: $isLatest"
-          Write-Host "Update existing: $updateExisting"
 
-      - name: Create or update release
+      - name: Create release
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tagName = "${{ steps.meta.outputs.tag_name }}"
           $isBeta = "${{ steps.meta.outputs.is_beta }}" -eq 'true'
-          $updateExisting = "${{ steps.meta.outputs.update_existing }}" -eq 'true'
           $isLatest = "${{ steps.meta.outputs.is_latest }}" -eq 'true'
 
           $args = @()
@@ -155,28 +151,8 @@ jobs:
           if ($isLatest -and -not $isBeta) { $args += '--latest' } else { $args += '--latest=false' }
           $args += '--generate-notes'
 
-          if ($updateExisting) {
-            # Update existing release: move the tag, then edit the release
-            git tag -f $tagName ${{ github.sha }}
-            git push origin $tagName --force
-            gh release edit $tagName --title $tagName @args
-          } else {
-            gh release create $tagName --title $tagName --target ${{ github.sha }} @args
-          }
+          gh release create $tagName --title $tagName --target ${{ github.sha }} @args
 
-      - name: Update preview tag
-        if: steps.meta.outputs.is_latest == 'true' && steps.meta.outputs.is_beta == 'true'
-        shell: pwsh
-        run: |
-          git tag -f preview ${{ github.sha }}
-          git push origin preview --force
-
-      - name: Update latest tag
-        if: steps.meta.outputs.is_latest == 'true' && steps.meta.outputs.is_beta != 'true'
-        shell: pwsh
-        run: |
-          git tag -f latest ${{ github.sha }}
-          git push origin latest --force
 
   # ══════════════════════════════════════════════════════════════════════════
   # Deploy VSIX to VS Code Marketplace and Open VSX

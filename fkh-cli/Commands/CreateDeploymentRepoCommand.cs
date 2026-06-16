@@ -43,7 +43,10 @@ sealed class CreateDeploymentRepoCommand : ClientCommand
             return 1;
         }
 
-        // 3. Confirm before proceeding
+        // 3. Resolve "latest" / "preview" to actual release tags
+        fkhBranch = UpdateDeploymentRepoCommand.ResolveFkhBranch(fkhRepo, fkhBranch);
+
+        // 4. Confirm before proceeding
         Console.WriteLine();
         Console.WriteLine($"  Action:          Create private deployment repo");
         Console.WriteLine($"  Deployment repo: {deployFullRepo}");

@@ -42,7 +42,48 @@ try
         var version = typeof(FunctionCatalogResponse).Assembly.GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>()?.InformationalVersion
             ?? typeof(FunctionCatalogResponse).Assembly.GetName().Version?.ToString()
             ?? "unknown";
-        Console.WriteLine(version);
+        Console.WriteLine($"Client:  {version}");
+
+        try
+        {
+            var verSettings = LoadSettings();
+            var verBackendUrl = FindArgValue(args, "backendUrl");
+            if (!string.IsNullOrWhiteSpace(verBackendUrl))
+                verSettings.BackendUrl = verBackendUrl;
+            verSettings.User = FindArgValue(args, "ghUser") ?? Environment.GetEnvironmentVariable("GH_USER");
+
+            var verEndpoint = $"{verSettings.BackendUrl!.TrimEnd('/')}/GetVersion";
+            var verTokenProvider = new TokenProvider(useOidc: useOidc, ghUser: verSettings.User);
+            var verToken = await verTokenProvider.GetTokenAsync();
+
+            using var verClient = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+            using var verRequest = new HttpRequestMessage(HttpMethod.Post, verEndpoint);
+            verRequest.Content = new StringContent("{}", Encoding.UTF8, "application/json");
+            verRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", verToken);
+            verRequest.Headers.Add("X-Fkh-Protocol-Version", ClientCommand.ProtocolVersion.ToString());
+            verRequest.Headers.Add("X-Fkh-Client", ClientCommand.ClientApp);
+
+            var verResponse = await verClient.SendAsync(verRequest);
+            if (verResponse.IsSuccessStatusCode)
+            {
+                var verBody = await verResponse.Content.ReadAsStringAsync();
+                var verData = JsonSerializer.Deserialize<JsonElement>(verBody);
+                var backendVer = verData.TryGetProperty("backendVersion", out var bv) ? bv.GetString() : null;
+                var clusterVer = verData.TryGetProperty("clusterVersion", out var cv) ? cv.GetString() : null;
+                Console.WriteLine($"Backend: {backendVer ?? "unknown"}");
+                Console.WriteLine($"Cluster: {clusterVer ?? "unknown"}");
+            }
+            else
+            {
+                Console.WriteLine("Backend: (unavailable)");
+                Console.WriteLine("Cluster: (unavailable)");
+            }
+        }
+        catch
+        {
+            Console.WriteLine("Backend: (unavailable)");
+            Console.WriteLine("Cluster: (unavailable)");
+        }
         return 0;
     }
 

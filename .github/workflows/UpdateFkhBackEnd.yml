@@ -38,7 +38,7 @@ on:
         description: 'Git ref to checkout from the Fkh fork (e.g. main, a branch name, a tag or a commit SHA)'
         required: false
         type: string
-        default: 'latest'
+        default: 'main'
       staging:
         description: 'Deploy to the staging Function App instead of production'
         required: false
@@ -137,6 +137,19 @@ jobs:
           tenant-id: ${{ steps.parse.outputs.tenant_id }}
           subscription-id: ${{ steps.parse.outputs.subscription_id }}
 
+      # ── Stamp version into AKS ───────────────────────────────────────────
+      - name: Set fkh-version ConfigMap
+        run: |
+          AKS_RG="${{ steps.parse.outputs.resource_group_name }}"
+          AKS_NAME="fkh-${{ steps.parse.outputs.deployment_name }}-aks"
+          az aks get-credentials --resource-group "$AKS_RG" --name "$AKS_NAME" --overwrite-existing
+          kubectl create namespace app --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create configmap fkh-version \
+            --namespace app \
+            --from-literal=version="${{ inputs.fkh-ref }}" \
+            --from-literal=deployed-at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
       # ── Publish function code ─────────────────────────────────────────────
       - name: Publish Azure Function
         shell: pwsh
@@ -158,6 +171,22 @@ jobs:
           }
 
           Write-Host "Function app $functionAppName published successfully." -ForegroundColor Green
+
+      # ── Stamp version into app settings ───────────────────────────────────
+      - name: Set FKH_VERSION app setting
+        shell: pwsh
+        run: |
+          $staging = "${{ inputs.staging }}" -eq "true"
+          $functionAppName   = if ($staging) { "${{ steps.parse.outputs.staging_function_app_name }}" } else { "${{ steps.parse.outputs.function_app_name }}" }
+          $resourceGroupName = "${{ steps.parse.outputs.resource_group_name }}"
+          $version = "${{ inputs.fkh-ref }}"
+
+          Write-Host "Setting FKH_VERSION=$version on $functionAppName..."
+          az functionapp config appsettings set `
+            --name $functionAppName `
+            --resource-group $resourceGroupName `
+            --settings "FKH_VERSION=$version" `
+            --output none
 
       # ── Also publish to staging (when deploying to production and staging exists) ──
       - name: Publish to staging
@@ -184,6 +213,14 @@ jobs:
           }
 
           Write-Host "Staging function app $stagingAppName published successfully." -ForegroundColor Green
+
+          # Stamp version on staging too
+          $version = "${{ inputs.fkh-ref }}"
+          az functionapp config appsettings set `
+            --name $stagingAppName `
+            --resource-group $resourceGroupName `
+            --settings "FKH_VERSION=$version" `
+            --output none
 
       # ── Build and deploy web app ───────────────────────────────────────
       - name: Build and deploy web app

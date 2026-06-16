@@ -43,6 +43,9 @@ sealed class UpdateDeploymentRepoCommand : ClientCommand
             return 1;
         }
 
+        // Resolve "latest" / "preview" to actual release tags
+        fkhBranch = ResolveFkhBranch(fkhRepo, fkhBranch);
+
         // Confirm before proceeding
         Console.WriteLine();
         Console.WriteLine($"  Action:          Update deployment repo");
@@ -221,6 +224,41 @@ sealed class UpdateDeploymentRepoCommand : ClientCommand
         if (atIndex >= 0)
             return (fkhFullRepo[..atIndex], fkhFullRepo[(atIndex + 1)..]);
         return (fkhFullRepo, "latest");
+    }
+
+    /// <summary>
+    /// Resolves "latest" and "preview" branch aliases to actual release tags from the given repo.
+    /// - "latest" → tag of the latest stable (non-prerelease) release.
+    /// - "preview" → the most recent release tag (beta or stable), whichever is newer.
+    /// Falls back to "main" if no releases are found.
+    /// </summary>
+    internal static string ResolveFkhBranch(string fkhRepo, string fkhBranch)
+    {
+        if (!fkhBranch.Equals("latest", StringComparison.OrdinalIgnoreCase) &&
+            !fkhBranch.Equals("preview", StringComparison.OrdinalIgnoreCase))
+            return fkhBranch;
+
+        if (fkhBranch.Equals("latest", StringComparison.OrdinalIgnoreCase))
+        {
+            // Get the latest stable (non-prerelease) release
+            var (exit, tag, _) = RunProcess("gh", ["api", $"repos/{fkhRepo}/releases/latest", "--jq", ".tag_name"]);
+            tag = tag?.Trim();
+            if (exit == 0 && !string.IsNullOrWhiteSpace(tag))
+                return tag;
+
+            Console.Error.WriteLine($"{Ansi.Yellow}Warning: No stable release found in {fkhRepo}. Falling back to 'main'.{Ansi.Reset}");
+            return "main";
+        }
+
+        // "preview" — use the newest release (beta or stable)
+        // Get the most recent release overall (GitHub sorts by created_at desc)
+        var (exitAll, newestTag, _) = RunProcess("gh", ["api", $"repos/{fkhRepo}/releases?per_page=1", "--jq", ".[0].tag_name"]);
+        newestTag = newestTag?.Trim();
+        if (exitAll == 0 && !string.IsNullOrWhiteSpace(newestTag))
+            return newestTag;
+
+        Console.Error.WriteLine($"{Ansi.Yellow}Warning: No releases found in {fkhRepo}. Falling back to 'main'.{Ansi.Reset}");
+        return "main";
     }
 
     internal static List<string> EnumerateGitHubDirectory(string repo, string dirPath, string branch = "latest")

@@ -40,7 +40,7 @@ on:
         description: 'Git ref to checkout from the Fkh fork (e.g. main, a branch name, a tag or a commit SHA)'
         required: false
         type: string
-        default: 'latest'
+        default: 'main'
     secrets:
       SQL_SA_PASSWORD:
         required: true
@@ -273,6 +273,16 @@ jobs:
           AKS_NAME="fkh-${{ steps.parse.outputs.deployment_name }}-aks"
           az aks get-credentials --resource-group "$AKS_RG" --name "$AKS_NAME" --overwrite-existing
 
+      # ── Stamp version into AKS ───────────────────────────────────────────
+      - name: Set fkh-version ConfigMap
+        run: |
+          kubectl create namespace app --dry-run=client -o yaml | kubectl apply -f -
+          kubectl create configmap fkh-version \
+            --namespace app \
+            --from-literal=version="${{ inputs.fkh-ref }}" \
+            --from-literal=deployed-at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --dry-run=client -o yaml | kubectl apply -f -
+
       # ── Build and push MSSQL FTS image to ACR ─────────────────────────────
       - name: Build and push MSSQL FTS image
         shell: pwsh
@@ -314,6 +324,20 @@ jobs:
             Pop-Location
           }
 
+      - name: Set FKH_VERSION app setting
+        shell: pwsh
+        run: |
+          $functionAppName   = terraform output -raw function_app_name
+          $resourceGroupName = terraform output -raw resource_group_name
+          $version = "${{ inputs.fkh-ref }}"
+
+          Write-Host "Setting FKH_VERSION=$version on $functionAppName..."
+          az functionapp config appsettings set `
+            --name $functionAppName `
+            --resource-group $resourceGroupName `
+            --settings "FKH_VERSION=$version" `
+            --output none
+
       - name: Publish Azure Function (staging)
         shell: pwsh
         run: |
@@ -339,6 +363,14 @@ jobs:
           finally {
             Pop-Location
           }
+
+          # Stamp version on staging too
+          $version = "${{ inputs.fkh-ref }}"
+          az functionapp config appsettings set `
+            --name $stagingAppName `
+            --resource-group $resourceGroupName `
+            --settings "FKH_VERSION=$version" `
+            --output none
 
       # ── Build and deploy web app ───────────────────────────────────────
       - name: Build and deploy web app

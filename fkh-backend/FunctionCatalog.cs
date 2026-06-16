@@ -639,6 +639,13 @@ public static class FunctionCatalog
         },
         new FunctionDefinition
         {
+            Name = "GetVersion",
+            Description = "Returns backend and cluster version information.",
+            Route = "GetVersion",
+            Parameters = new List<FunctionParameterDefinition>()
+        },
+        new FunctionDefinition
+        {
             Name = "Status",
             Description = "Returns system status including Kubernetes nodes, BC containers, SQL, storage, quotas, and security. Admin only.",
             Route = "Status",
