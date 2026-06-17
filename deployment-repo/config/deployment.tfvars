@@ -155,7 +155,7 @@ allowed_users = [
 # Repositories — GitHub repos allowed to call Fkh via OIDC from GitHub Actions
 # Please note that the AUTH token provided must be the ID token
 allowed_oidc_repos = [
-  # "my-company/my-bc-app"
+  "my-company/my-bc-app"
 ]
 
 # GitHub App — triggers image-build workflows in this deployment repo

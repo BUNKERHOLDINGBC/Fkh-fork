@@ -297,10 +297,18 @@ sealed class UpdateDeploymentRepoCommand : ClientCommand
 
             if (key is null || !oldValues.TryGetValue(key, out var oldValue))
             {
-                result.Add(line);
-                // If this is a multi-line value we don't have in old, skip the remaining lines of the value
+                // New key not in old file — emit ALL lines of the value (including multi-line body)
                 if (key is not null)
-                    i = SkipMultiLineValue(newLines, i);
+                {
+                    int endLine = SkipMultiLineValue(newLines, i);
+                    for (int j = i; j <= endLine; j++)
+                        result.Add(newLines[j]);
+                    i = endLine;
+                }
+                else
+                {
+                    result.Add(line);
+                }
                 continue;
             }
 
