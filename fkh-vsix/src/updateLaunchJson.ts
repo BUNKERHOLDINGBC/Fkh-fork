@@ -110,6 +110,7 @@ async function upsertLaunchConfiguration(
     serverInstance: 'BC',
     port: 7049,
     authentication: 'UserPassword',
+    tenant: 'default',
     startupObjectId: resolve<number>('startupObjectId', 22),
     startupObjectType: resolve<string>('startupObjectType', 'Page'),
     startupCompany: resolve<string>('startupCompany', ''),
@@ -123,6 +124,7 @@ async function upsertLaunchConfiguration(
     numberOfSqlStatements: resolve<number>('numberOfSqlStatements', 10),
     enableSqlInformationDebugger: resolve<boolean>('enableSqlInformationDebugger', true),
     forceUpgrade: resolve<boolean>('forceUpgrade', false),
+    dependencyPublishingOption: resolve<string>('dependencyPublishingOption', 'Default'),
   };
 
   // Replace existing configuration with the same name, or append
