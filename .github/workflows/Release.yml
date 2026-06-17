@@ -33,8 +33,8 @@ on:
         type: boolean
         default: true
       branch:
-        description: 'Release branch (e.g. "v2026.0616") — "releases/" is prepended automatically. Use "main" for a new release.'
-        required: true
+        description: 'Release branch (e.g. "v2026.0616"). Leave empty and use the branch selector instead.'
+        required: false
         type: string
 
 permissions:
@@ -73,7 +73,7 @@ jobs:
             # Strip the 'releases/' prefix to get the branch input value
             $branchInput = $currentBranch -replace '^releases/', ''
             Write-Host "Triggered from '$currentBranch' — re-dispatching Release workflow on main with branch='$branchInput', beta=${{ inputs.beta }}"
-            gh workflow run Release.yml --ref main -f branch=$branchInput -f beta=${{ inputs.beta }}
+            gh workflow run Release.yml --repo ${{ github.repository }} --ref main -f branch=$branchInput -f beta=${{ inputs.beta }}
             Write-Host "Workflow dispatched successfully. Check the Actions tab for the new run."
             "proceed=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           }
@@ -88,13 +88,14 @@ jobs:
       is_beta: ${{ steps.meta.outputs.is_beta }}
       ref: ${{ steps.resolve.outputs.ref }}
     steps:
-
       - name: Resolve branch ref
         id: resolve
         shell: pwsh
+        env:
+          BRANCH: ${{ inputs.branch }}
         run: |
-          $branch = "${{ inputs.branch }}"
-          if ($branch -eq 'main') {
+          $branch = "$ENV:BRANCH"
+          if ([string]::IsNullOrWhiteSpace($branch) -or $branch -eq 'main') {
             $ref = 'main'
           } else {
             $ref = "releases/$branch"
@@ -109,7 +110,7 @@ jobs:
           fetch-depth: 0
 
       - name: Validate branch exists
-        if: inputs.branch != 'main'
+        if: inputs.branch != 'main' && inputs.branch != ''
         shell: pwsh
         run: |
           $ref = "${{ steps.resolve.outputs.ref }}"
