@@ -476,6 +476,7 @@ public class FkhCreateContainer : FkhServiceBase
         var envVars = new List<V1EnvVar>
         {
             new() { Name = "accept_eula", Value = "Y" },
+            new() { Name = "ACCEPT_OUTDATED", Value = "Y" },   // bypass BcContainerHelper 90-day age guard
             new() { Name = "username", Value = adminUsername },
             new()
             {
