@@ -53,7 +53,7 @@ sealed class UpdateDeploymentRepoCommand : ClientCommand
         Console.WriteLine($"  Action:          Update deployment repo");
         Console.WriteLine($"  Deployment repo: {deployFullRepo}");
         Console.WriteLine($"  Fkh fork:        {fkhRepo}");
-        Console.WriteLine($"  Fkh branch:      {fkhBranch}");
+        Console.WriteLine($"  Fkh version:     {fkhBranch}");
         Console.WriteLine($"  GitHub account:  {ghUser}");
         Console.WriteLine();
         if (!skipConfirm)

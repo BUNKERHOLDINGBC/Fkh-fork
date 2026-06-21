@@ -130,22 +130,27 @@ aad_app_additional_owner  = ""
 # Values are case-sensitive.
 
 # Member teams — users in these teams can provision containers
+# Format: { org = "<github-org>", team = "<team-slug>" }
+# The team slug is visible in the team URL: https://github.com/orgs/<org>/teams/<team-slug>
 allowed_org_teams = [
   # { org = "my-company",    team = "Fkh-members" },
   # { org = "partner-org",   team = "Fkh-members" }
 ]
 
 # Admin teams — members get admin access (and also have normal access)
+# Format: { org = "<github-org>", team = "<team-slug>" }
 admin_org_teams = [
   # { org = "my-company",    team = "Fkh-admins" }
 ]
 
 # Support teams — members get support access (permissions defined in the backend)
+# Format: { org = "<github-org>", team = "<team-slug>" }
 support_org_teams = [
   # { org = "my-company", team = "Fkh-supporters" }
 ]
 
 # Explicit users — grant access by GitHub username without team membership
+# Format: { user = "<github-username>", role = "<role>" }
 # Role must be admin, member, or support
 allowed_users = [
   # { user = "octocat", role = "member" },
