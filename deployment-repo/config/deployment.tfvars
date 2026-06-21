@@ -139,12 +139,14 @@ allowed_org_teams = [
 
 # Admin teams — members get admin access (and also have normal access)
 # Format: { org = "<github-org>", team = "<team-slug>" }
+# The team slug is visible in the team URL: https://github.com/orgs/<org>/teams/<team-slug>
 admin_org_teams = [
   # { org = "my-company",    team = "Fkh-admins" }
 ]
 
 # Support teams — members get support access (permissions defined in the backend)
 # Format: { org = "<github-org>", team = "<team-slug>" }
+# The team slug is visible in the team URL: https://github.com/orgs/<org>/teams/<team-slug>
 support_org_teams = [
   # { org = "my-company", team = "Fkh-supporters" }
 ]
