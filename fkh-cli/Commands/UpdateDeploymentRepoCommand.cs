@@ -6,6 +6,7 @@ sealed class UpdateDeploymentRepoCommand : ClientCommand
     [
         new() { Name = "deploymentRepo", Type = "string", Description = "Owner/name of the deployment repo to update (e.g. myorg/fkh-deploy)", Required = true },
         new() { Name = "fkhRepo",        Type = "string", Description = "Owner/name of the Fkh fork, optionally with @branch (e.g. myorg/Fkh@dev). Default: Freddy-DK/Fkh@latest", Required = false },
+        new() { Name = "confirm",        Type = "boolean", Description = "Skip the interactive confirmation prompt (for CI/automation)", Required = false },
     ];
 
     public override async Task<int> ExecuteAsync(string[] args, CliSettings settings, bool asJson)
@@ -46,7 +47,8 @@ sealed class UpdateDeploymentRepoCommand : ClientCommand
         // Resolve "latest" / "preview" to actual release tags
         fkhBranch = ResolveFkhBranch(fkhRepo, fkhBranch);
 
-        // Confirm before proceeding
+        // Confirm before proceeding (skip with --confirm)
+        var skipConfirm = parameters.TryGetValue("confirm", out var confirmVal) && string.Equals(confirmVal, "true", StringComparison.OrdinalIgnoreCase);
         Console.WriteLine();
         Console.WriteLine($"  Action:          Update deployment repo");
         Console.WriteLine($"  Deployment repo: {deployFullRepo}");
@@ -54,14 +56,17 @@ sealed class UpdateDeploymentRepoCommand : ClientCommand
         Console.WriteLine($"  Fkh branch:      {fkhBranch}");
         Console.WriteLine($"  GitHub account:  {ghUser}");
         Console.WriteLine();
-        Console.Write("Do you want to proceed? [y/N] ");
-        var answer = Console.ReadLine()?.Trim();
-        if (!string.Equals(answer, "y", StringComparison.OrdinalIgnoreCase) && !string.Equals(answer, "yes", StringComparison.OrdinalIgnoreCase))
+        if (!skipConfirm)
         {
-            Console.WriteLine("Aborted.");
-            return 1;
+            Console.Write("Do you want to proceed? [y/N] ");
+            var answer = Console.ReadLine()?.Trim();
+            if (!string.Equals(answer, "y", StringComparison.OrdinalIgnoreCase) && !string.Equals(answer, "yes", StringComparison.OrdinalIgnoreCase))
+            {
+                Console.WriteLine("Aborted.");
+                return 1;
+            }
+            Console.WriteLine();
         }
-        Console.WriteLine();
 
         return await UpdateDeploymentRepoAsync(deployFullRepo, fkhRepo, fkhBranch, "Update deployment repo from Fkh template");
     }

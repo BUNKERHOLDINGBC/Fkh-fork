@@ -70,6 +70,26 @@ jobs:
           ref: ${{ inputs.fkh-ref }}
           path: fkh
 
+      # ── Compute fork status ───────────────────────────────────────────────
+      - name: Compute fork status
+        if: inputs.fkh-repo != 'Freddy-DK/Fkh'
+        id: fork
+        shell: bash
+        working-directory: fkh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          OWNER="${{ inputs.fkh-repo }}"
+          OWNER="${OWNER%%/*}"
+          if RESPONSE=$(gh api "repos/Freddy-DK/Fkh/compare/main...${OWNER}:${{ inputs.fkh-ref }}" 2>/dev/null); then
+            echo "ahead=$(echo "$RESPONSE" | jq -r '.ahead_by')" >> $GITHUB_OUTPUT
+            echo "behind=$(echo "$RESPONSE" | jq -r '.behind_by')" >> $GITHUB_OUTPUT
+            echo "merge_base_sha=$(echo "$RESPONSE" | jq -r '.merge_base_commit.sha')" >> $GITHUB_OUTPUT
+            echo "merge_base_date=$(echo "$RESPONSE" | jq -r '.merge_base_commit.commit.committer.date')" >> $GITHUB_OUTPUT
+          else
+            echo "::warning::Could not determine fork status — GitHub API call failed"
+          fi
+
       # ── Resolve tfvars ────────────────────────────────────────────────────
       - name: Resolve tfvars file
         id: tfvars
@@ -148,6 +168,7 @@ jobs:
             --namespace app \
             --from-literal=version="${{ inputs.fkh-ref }}" \
             --from-literal=deployed-at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --from-literal=deployment-repo="${{ github.repository }}" \
             --dry-run=client -o yaml | kubectl apply -f -
 
       # ── Publish function code ─────────────────────────────────────────────
@@ -181,11 +202,26 @@ jobs:
           $resourceGroupName = "${{ steps.parse.outputs.resource_group_name }}"
           $version = "${{ inputs.fkh-ref }}"
 
-          Write-Host "Setting FKH_VERSION=$version on $functionAppName..."
+          $deploymentRepo = "${{ github.repository }}"
+          $deployedAt = (Get-Date -AsUTC -Format 'o')
+          $settings = @(
+            "FKH_VERSION=$version"
+            "DEPLOYMENT_REPO=$deploymentRepo"
+            "DEPLOYED_AT=$deployedAt"
+            "FKH_FORK=${{ inputs.fkh-repo }}"
+          )
+          $forkAhead = "${{ steps.fork.outputs.ahead }}"
+          if ($forkAhead) {
+            $settings += "FKH_FORK_AHEAD=$forkAhead"
+            $settings += "FKH_FORK_BEHIND=${{ steps.fork.outputs.behind }}"
+            $settings += "FKH_FORK_MERGE_BASE_SHA=${{ steps.fork.outputs.merge_base_sha }}"
+            $settings += "FKH_FORK_MERGE_BASE_DATE=${{ steps.fork.outputs.merge_base_date }}"
+          }
+          Write-Host "Setting app settings on $functionAppName..."
           az functionapp config appsettings set `
             --name $functionAppName `
             --resource-group $resourceGroupName `
-            --settings "FKH_VERSION=$version" `
+            --settings @settings `
             --output none
 
       # ── Also publish to staging (when deploying to production and staging exists) ──
@@ -216,10 +252,25 @@ jobs:
 
           # Stamp version on staging too
           $version = "${{ inputs.fkh-ref }}"
+          $deploymentRepo = "${{ github.repository }}"
+          $deployedAt = (Get-Date -AsUTC -Format 'o')
+          $settings = @(
+            "FKH_VERSION=$version"
+            "DEPLOYMENT_REPO=$deploymentRepo"
+            "DEPLOYED_AT=$deployedAt"
+            "FKH_FORK=${{ inputs.fkh-repo }}"
+          )
+          $forkAhead = "${{ steps.fork.outputs.ahead }}"
+          if ($forkAhead) {
+            $settings += "FKH_FORK_AHEAD=$forkAhead"
+            $settings += "FKH_FORK_BEHIND=${{ steps.fork.outputs.behind }}"
+            $settings += "FKH_FORK_MERGE_BASE_SHA=${{ steps.fork.outputs.merge_base_sha }}"
+            $settings += "FKH_FORK_MERGE_BASE_DATE=${{ steps.fork.outputs.merge_base_date }}"
+          }
           az functionapp config appsettings set `
             --name $stagingAppName `
             --resource-group $resourceGroupName `
-            --settings "FKH_VERSION=$version" `
+            --settings @settings `
             --output none
 
       # ── Build and deploy web app ───────────────────────────────────────

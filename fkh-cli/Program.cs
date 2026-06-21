@@ -42,7 +42,16 @@ try
         var version = typeof(FunctionCatalogResponse).Assembly.GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>()?.InformationalVersion
             ?? typeof(FunctionCatalogResponse).Assembly.GetName().Version?.ToString()
             ?? "unknown";
-        Console.WriteLine($"Client:  {version}");
+        // Strip build metadata (+hash) and leading zeros from segments
+        var plusIndex = version.IndexOf('+');
+        if (plusIndex >= 0) version = version[..plusIndex];
+        version = string.Join('.', version.Split('.').Select(s => s.TrimStart('0') is "" ? "0" : s.TrimStart('0')));
+
+        string? backendVer = null, backendDeployedAt = null, clusterVer = null, clusterDeployedAt = null;
+        string? deploymentRepo = null, fkhFork = null;
+        int? forkAhead = null, forkBehind = null;
+        string? mergeBaseSha = null, mergeBaseDate = null;
+        bool backendAvailable = false;
 
         try
         {
@@ -66,23 +75,69 @@ try
             var verResponse = await verClient.SendAsync(verRequest);
             if (verResponse.IsSuccessStatusCode)
             {
+                backendAvailable = true;
                 var verBody = await verResponse.Content.ReadAsStringAsync();
                 var verData = JsonSerializer.Deserialize<JsonElement>(verBody);
-                var backendVer = verData.TryGetProperty("backendVersion", out var bv) ? bv.GetString() : null;
-                var clusterVer = verData.TryGetProperty("clusterVersion", out var cv) ? cv.GetString() : null;
-                Console.WriteLine($"Backend: {backendVer ?? "unknown"}");
-                Console.WriteLine($"Cluster: {clusterVer ?? "unknown"}");
+                backendVer = verData.TryGetProperty("backendVersion", out var bv) ? bv.GetString() : null;
+                backendDeployedAt = verData.TryGetProperty("backendDeployedAt", out var bda) ? bda.GetString() : null;
+                clusterVer = verData.TryGetProperty("clusterVersion", out var cv) ? cv.GetString() : null;
+                clusterDeployedAt = verData.TryGetProperty("clusterDeployedAt", out var cda) ? cda.GetString() : null;
+                deploymentRepo = verData.TryGetProperty("deploymentRepo", out var dr) ? dr.GetString() : null;
+                fkhFork = verData.TryGetProperty("fkhFork", out var ff) ? ff.GetString() : null;
+                if (verData.TryGetProperty("forkStatus", out var fs) && fs.ValueKind == JsonValueKind.Object)
+                {
+                    forkAhead = fs.TryGetProperty("ahead", out var a) ? a.GetInt32() : null;
+                    forkBehind = fs.TryGetProperty("behind", out var b) ? b.GetInt32() : null;
+                    mergeBaseSha = fs.TryGetProperty("mergeBaseSha", out var ms) ? ms.GetString() : null;
+                    mergeBaseDate = fs.TryGetProperty("mergeBaseDate", out var md) ? md.GetString() : null;
+                }
             }
-            else
+        }
+        catch { }
+
+        if (asJson)
+        {
+            var jsonObj = new Dictionary<string, object?>
+            {
+                ["client_version"] = version,
+                ["backend_version"] = backendVer,
+                ["backend_deployed_at"] = backendDeployedAt,
+                ["cluster_version"] = clusterVer,
+                ["cluster_deployed_at"] = clusterDeployedAt,
+                ["deployment_repo"] = deploymentRepo,
+                ["fkh_fork"] = fkhFork,
+                ["fork_ahead"] = forkAhead,
+                ["fork_behind"] = forkBehind,
+                ["fork_merge_base_sha"] = mergeBaseSha,
+                ["fork_merge_base_date"] = mergeBaseDate,
+            };
+            Console.WriteLine(JsonSerializer.Serialize(jsonObj, new JsonSerializerOptions { WriteIndented = true, DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull }));
+        }
+        else
+        {
+            Console.WriteLine($"Client:  {version}");
+            if (!backendAvailable)
             {
                 Console.WriteLine("Backend: (unavailable)");
                 Console.WriteLine("Cluster: (unavailable)");
             }
-        }
-        catch
-        {
-            Console.WriteLine("Backend: (unavailable)");
-            Console.WriteLine("Cluster: (unavailable)");
+            else
+            {
+                Console.WriteLine($"Backend: {backendVer ?? "unknown"}{FormatDeployedAt(backendDeployedAt)}");
+                Console.WriteLine($"Cluster: {clusterVer ?? "unknown"}{FormatDeployedAt(clusterDeployedAt)}");
+                if (!string.IsNullOrEmpty(deploymentRepo))
+                    Console.WriteLine($"Repo:    {deploymentRepo}");
+                if (!string.IsNullOrEmpty(fkhFork))
+                {
+                    Console.WriteLine($"Fork:    {fkhFork}");
+                    if (forkAhead is not null)
+                    {
+                        Console.WriteLine($"         {forkAhead} ahead, {forkBehind} behind Freddy-DK/Fkh");
+                        if (!string.IsNullOrEmpty(mergeBaseSha))
+                            Console.WriteLine($"         merge base: {mergeBaseSha?[..7]}{FormatDeployedAt(mergeBaseDate)}");
+                    }
+                }
+            }
         }
         return 0;
     }
@@ -970,6 +1025,14 @@ static void FormatElement(StringBuilder sb, JsonElement element, int indent)
             sb.AppendLine($"{prefix}{element}");
             break;
     }
+}
+
+static string FormatDeployedAt(string? deployedAt)
+{
+    if (string.IsNullOrEmpty(deployedAt)) return "";
+    if (DateTimeOffset.TryParse(deployedAt, out var dto))
+        return $" (deployed {dto.ToLocalTime():yyyy-MM-dd HH:mm})";
+    return $" (deployed {deployedAt})";
 }
 
 static CliSettings LoadSettings()
