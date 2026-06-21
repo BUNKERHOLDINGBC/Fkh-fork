@@ -33,7 +33,7 @@ on:
         type: boolean
         default: true
       branch:
-        description: 'Release branch (e.g. "v2026.0616"). Leave empty and use the branch selector instead.'
+        description: 'Release from branch (e.g. "v2026.0616"). Leave empty and use the branch selector instead.'
         required: false
         type: string
 
