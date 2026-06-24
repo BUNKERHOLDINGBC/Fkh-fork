@@ -590,13 +590,13 @@ public abstract class FunctionBase
 
         if (AdoOidcService.IsAdoOidcToken(token))
         {
-            var subject = await AdoOidcService.ValidateTokenAsync(token);
+            var (subject, adoError) = await AdoOidcService.ValidateTokenAsync(token);
             if (subject is null)
             {
-                logger.LogError("Azure DevOps OIDC token validation failed or connection not in allow-list.");
+                logger.LogError("Azure DevOps OIDC token validation failed: {Error}", adoError);
                 RecordFailedAttempt(clientIp);
                 return (null, Respond(req, HttpStatusCode.Forbidden,
-                    "Azure DevOps OIDC token invalid or service connection not authorized. Check ALLOWED_ADO_CONNECTIONS configuration."));
+                    $"Azure DevOps OIDC token invalid or service connection not authorized. {adoError}"));
             }
 
             username = subject.Replace("sc://", "").Replace('/', '-');

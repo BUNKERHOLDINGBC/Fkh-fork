@@ -166,23 +166,17 @@ allowed_oidc_repos = [
 ]
 
 # Azure DevOps — service connections allowed to call Fkh via OIDC from Azure Pipelines.
-# Each entry requires a Workload Identity Federation service connection to be created in the
-# Azure DevOps project with the specified connection_name. The service connection must be
-# configured to trust the managed identity created by Terraform (output: ado_identity_client_id).
-#
-# To create the service connection in Azure DevOps:
+# Create a service connection in Azure DevOps:
 #   Project Settings → Service connections → New → Azure Resource Manager
-#     → Workload Identity Federation (manual)
-#   - Service connection name: must match devops_connection_name below
-#   - Client ID: use the ado_identity_client_id Terraform output
-#   - Tenant ID: your Azure AD tenant
+#     → Workload Identity Federation (automatic or manual)
+#   Then open the connection and note the Managed Identity Client ID
+#   (click "Manage Managed Identity" → Properties → Client ID).
 #
-# Azure DevOps automatically creates the Entra ID federated credential on the managed identity
-# when you complete the service connection setup (verify connection). The backend accepts
-# both token formats (vstoken.dev.azure.com and login.microsoftonline.com).
+# Get your devops_org_id by opening https://dev.azure.com/<org>/_apis/connectiondata
+# and using the instanceId value.
 allowed_ado_connections = [
   # {
-  #   devops_org_id          = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"   # Azure DevOps organization ID (open https://dev.azure.com/<org>/_apis/connectiondata and use the instanceId value)
+  #   devops_org_id          = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"   # Azure DevOps organization ID (instanceId from connectiondata API)
   #   devops_org             = "my-org"                                 # Azure DevOps organization name
   #   devops_project         = "my-project"                             # Azure DevOps project name
   #   devops_connection_name = "fkh-oidc"                               # Service connection name (must match exactly)

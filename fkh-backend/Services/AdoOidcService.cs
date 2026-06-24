@@ -55,10 +55,10 @@ public class AdoOidcService
     /// Validates an Azure DevOps OIDC token and returns the subject claim (e.g. "sc://org/project/connection").
     /// Returns null if validation fails or the connection is not in the allow-list.
     /// </summary>
-    public async Task<string?> ValidateTokenAsync(string token)
+    public async Task<(string? Subject, string? Error)> ValidateTokenAsync(string token)
     {
         if (AllowedConnections.Count == 0)
-            return null;
+            return (null, "No allowed connections configured");
 
         var handler = new JwtSecurityTokenHandler();
         JwtSecurityToken unvalidatedJwt;
@@ -66,14 +66,14 @@ public class AdoOidcService
         {
             unvalidatedJwt = handler.ReadJwtToken(token);
         }
-        catch
+        catch (Exception ex)
         {
-            return null;
+            return (null, $"Failed to read JWT: {ex.Message}");
         }
 
         var issuer = unvalidatedJwt.Issuer;
         if (!ConfigManagers.TryGetValue(issuer.ToLowerInvariant(), out var configManager))
-            return null;
+            return (null, $"No config manager for issuer: {issuer} (known: {string.Join(", ", ConfigManagers.Keys)})");
 
         var isEntraFormat = issuer.StartsWith("https://login.microsoftonline.com/", StringComparison.OrdinalIgnoreCase);
 
@@ -100,7 +100,7 @@ public class AdoOidcService
 
             var subject = jwt.Subject;
             if (string.IsNullOrEmpty(subject))
-                return null;
+                return (null, "Token has no subject claim");
 
             if (isEntraFormat)
             {
@@ -108,19 +108,24 @@ public class AdoOidcService
                 // Validate that the subject contains a known org ID
                 var isAllowed = AllowedConnections.Any(c =>
                     subject.Contains($"/sc/{c.DevopsOrgId}", StringComparison.OrdinalIgnoreCase));
+                if (!isAllowed)
+                    return (null, $"Subject not in allow-list. Subject: {subject}, Expected org IDs: {string.Join(", ", AllowedConnections.Select(c => c.DevopsOrgId))}");
                 // Return a normalized subject for logging
-                return isAllowed ? $"sc://{AllowedConnections[0].DevopsOrg}/ado-entra/{subject}" : null;
+                return ($"sc://{AllowedConnections[0].DevopsOrg}/ado-entra/{subject}", null);
             }
 
             // vstoken format: subject is sc://org/project/connection
             var isVstokenAllowed = AllowedConnections.Any(c =>
                 string.Equals($"sc://{c.DevopsOrg}/{c.DevopsProject}/{c.DevopsConnectionName}", subject, StringComparison.OrdinalIgnoreCase));
 
-            return isVstokenAllowed ? subject : null;
+            if (!isVstokenAllowed)
+                return (null, $"vstoken subject not in allow-list. Subject: {subject}, Expected: {string.Join(", ", AllowedConnections.Select(c => $"sc://{c.DevopsOrg}/{c.DevopsProject}/{c.DevopsConnectionName}"))}");
+
+            return (subject, null);
         }
-        catch (SecurityTokenException)
+        catch (SecurityTokenException ex)
         {
-            return null;
+            return (null, $"Token validation failed: {ex.Message} (audiences: {string.Join(", ", validAudiences)})");
         }
     }
 
