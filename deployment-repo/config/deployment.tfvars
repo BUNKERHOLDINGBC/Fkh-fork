@@ -180,7 +180,7 @@ allowed_oidc_repos = [
 #   - Tenant ID: your Azure AD tenant
 allowed_ado_connections = [
   # {
-  #   devops_org_id          = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"   # Azure DevOps organization ID (found in Organization Settings → Overview)
+  #   devops_org_id          = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"   # Azure DevOps organization ID (open https://dev.azure.com/<org>/_apis/connectiondata and use the instanceId value)
   #   devops_org             = "my-org"                                 # Azure DevOps organization name
   #   devops_project         = "my-project"                             # Azure DevOps project name
   #   devops_connection_name = "fkh-oidc"                               # Service connection name (must match exactly)
