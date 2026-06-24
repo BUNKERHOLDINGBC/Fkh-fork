@@ -177,25 +177,15 @@ allowed_oidc_repos = [
 #   - Client ID: use the ado_identity_client_id Terraform output
 #   - Tenant ID: your Azure AD tenant
 #
-# Azure DevOps will show the Issuer and Subject identifier for the connection.
-# After saving the service connection as draft, go to Edit and look at the
-# "Federation details" section — it shows the Issuer and Subject identifier.
-# Two formats exist depending on how ADO issues the token:
-#   Format 1 (vstoken): Issuer = https://vstoken.dev.azure.com/<org_id>
-#                        Subject = sc://<org>/<project>/<connection_name>
-#   Format 2 (Entra ID): Issuer = https://login.microsoftonline.com/<tenant_id>/v2.0
-#                         Subject = /eid1/c/pub/t/<base64>/a/<base64>/sc/<org_id>-...
-#
-# If your service connection shows the Entra ID format (login.microsoftonline.com issuer),
-# copy the full "Subject identifier" value into entra_subject below.
-# Terraform will create federated credentials for both formats automatically.
+# Azure DevOps automatically creates the Entra ID federated credential on the managed identity
+# when you complete the service connection setup (verify connection). The backend accepts
+# both token formats (vstoken.dev.azure.com and login.microsoftonline.com).
 allowed_ado_connections = [
   # {
   #   devops_org_id          = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"   # Azure DevOps organization ID (open https://dev.azure.com/<org>/_apis/connectiondata and use the instanceId value)
   #   devops_org             = "my-org"                                 # Azure DevOps organization name
   #   devops_project         = "my-project"                             # Azure DevOps project name
   #   devops_connection_name = "fkh-oidc"                               # Service connection name (must match exactly)
-  #   entra_subject          = ""                                       # (Optional) Copy the "Subject identifier" shown on the ADO service connection edit page (e.g. "/eid1/c/pub/t/XXXXX/a/XXXXX/sc/XXXXX-...")
   # }
 ]
 
