@@ -234,12 +234,16 @@ variable "allowed_ado_connections" {
     Create the service connection in Azure DevOps:
       Project Settings → Service connections → New → Azure Resource Manager → Workload Identity Federation (manual)
       Set the Issuer and Subject from Terraform outputs (ado_federated_issuer, ado_federated_subjects).
+
+    If the service connection uses the Entra ID format (issuer: login.microsoftonline.com),
+    copy the Subject identifier shown in the ADO service connection editor into entra_subject.
   EOT
   type = list(object({
     devops_org_id          = string
     devops_org             = string
     devops_project         = string
     devops_connection_name = string
+    entra_subject          = optional(string, "")
   }))
   default = []
 }

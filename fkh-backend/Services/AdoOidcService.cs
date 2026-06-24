@@ -8,15 +8,20 @@ namespace Fkh.Services;
 
 /// <summary>
 /// Validates Azure DevOps OIDC tokens and checks the subject claim against the allowed connections list.
+/// Supports two token formats:
+///   1. Azure DevOps native (issuer: https://vstoken.dev.azure.com/{org-id}, subject: sc://org/project/connection)
+///   2. Entra ID (issuer: https://login.microsoftonline.com/{tenant}/v2.0, subject contains /sc/{org-id})
 /// </summary>
 public class AdoOidcService
 {
     private static readonly List<AdoConnection> AllowedConnections = LoadAllowedConnections();
+    private static readonly string? TenantId = Environment.GetEnvironmentVariable("AAD_TENANT_ID");
+    private static readonly string? AdoIdentityClientId = Environment.GetEnvironmentVariable("ADO_IDENTITY_CLIENT_ID");
 
     private static readonly Dictionary<string, ConfigurationManager<OpenIdConnectConfiguration>> ConfigManagers = CreateConfigManagers();
 
     /// <summary>
-    /// Returns true if the token's issuer matches a known Azure DevOps OIDC issuer.
+    /// Returns true if the token's issuer matches a known Azure DevOps OIDC issuer (vstoken or Entra ID format).
     /// </summary>
     public static bool IsAdoOidcToken(string token)
     {
@@ -27,7 +32,18 @@ public class AdoOidcService
         {
             var handler = new JwtSecurityTokenHandler();
             var jwt = handler.ReadJwtToken(token);
-            return jwt.Issuer.StartsWith("https://vstoken.dev.azure.com/", StringComparison.OrdinalIgnoreCase);
+
+            // Format 1: Azure DevOps native issuer
+            if (jwt.Issuer.StartsWith("https://vstoken.dev.azure.com/", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            // Format 2: Entra ID issuer with ADO service connection subject
+            if (!string.IsNullOrEmpty(TenantId) &&
+                string.Equals(jwt.Issuer, $"https://login.microsoftonline.com/{TenantId}/v2.0", StringComparison.OrdinalIgnoreCase) &&
+                jwt.Subject?.Contains("/sc/", StringComparison.OrdinalIgnoreCase) == true)
+                return true;
+
+            return false;
         }
         catch
         {
@@ -59,13 +75,20 @@ public class AdoOidcService
         if (!ConfigManagers.TryGetValue(issuer.ToLowerInvariant(), out var configManager))
             return null;
 
+        var isEntraFormat = issuer.StartsWith("https://login.microsoftonline.com/", StringComparison.OrdinalIgnoreCase);
+
+        // Build valid audiences based on token format
+        var validAudiences = new List<string> { "api://AzureADTokenExchange" };
+        if (isEntraFormat && !string.IsNullOrEmpty(AdoIdentityClientId))
+            validAudiences.Add(AdoIdentityClientId);
+
         var config = await configManager.GetConfigurationAsync(CancellationToken.None);
 
         var validationParameters = new TokenValidationParameters
         {
             ValidIssuer = issuer,
             IssuerSigningKeys = config.SigningKeys,
-            ValidAudiences = ["api://AzureADTokenExchange"],
+            ValidAudiences = validAudiences,
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromMinutes(2),
         };
@@ -79,11 +102,21 @@ public class AdoOidcService
             if (string.IsNullOrEmpty(subject))
                 return null;
 
-            // Check if the subject matches any allowed connection
-            var isAllowed = AllowedConnections.Any(c =>
+            if (isEntraFormat)
+            {
+                // Entra format subject contains /sc/{org-id}-{...}
+                // Validate that the subject contains a known org ID
+                var isAllowed = AllowedConnections.Any(c =>
+                    subject.Contains($"/sc/{c.DevopsOrgId}", StringComparison.OrdinalIgnoreCase));
+                // Return a normalized subject for logging
+                return isAllowed ? $"sc://{AllowedConnections[0].DevopsOrg}/ado-entra/{subject}" : null;
+            }
+
+            // vstoken format: subject is sc://org/project/connection
+            var isVstokenAllowed = AllowedConnections.Any(c =>
                 string.Equals($"sc://{c.DevopsOrg}/{c.DevopsProject}/{c.DevopsConnectionName}", subject, StringComparison.OrdinalIgnoreCase));
 
-            return isAllowed ? subject : null;
+            return isVstokenAllowed ? subject : null;
         }
         catch (SecurityTokenException)
         {
@@ -108,16 +141,32 @@ public class AdoOidcService
         var managers = new Dictionary<string, ConfigurationManager<OpenIdConnectConfiguration>>(StringComparer.OrdinalIgnoreCase);
         foreach (var conn in AllowedConnections)
         {
-            var issuer = $"https://vstoken.dev.azure.com/{conn.DevopsOrgId}";
-            var key = issuer.ToLowerInvariant();
-            if (!managers.ContainsKey(key))
+            // Format 1: Azure DevOps native issuer
+            var vstokenIssuer = $"https://vstoken.dev.azure.com/{conn.DevopsOrgId}";
+            var vstokenKey = vstokenIssuer.ToLowerInvariant();
+            if (!managers.ContainsKey(vstokenKey))
             {
-                managers[key] = new ConfigurationManager<OpenIdConnectConfiguration>(
-                    $"{issuer}/.well-known/openid-configuration",
+                managers[vstokenKey] = new ConfigurationManager<OpenIdConnectConfiguration>(
+                    $"{vstokenIssuer}/.well-known/openid-configuration",
                     new OpenIdConnectConfigurationRetriever(),
                     new HttpDocumentRetriever());
             }
         }
+
+        // Format 2: Entra ID issuer (one per tenant)
+        if (!string.IsNullOrEmpty(TenantId) && AllowedConnections.Count > 0)
+        {
+            var entraIssuer = $"https://login.microsoftonline.com/{TenantId}/v2.0";
+            var entraKey = entraIssuer.ToLowerInvariant();
+            if (!managers.ContainsKey(entraKey))
+            {
+                managers[entraKey] = new ConfigurationManager<OpenIdConnectConfiguration>(
+                    $"https://login.microsoftonline.com/{TenantId}/v2.0/.well-known/openid-configuration",
+                    new OpenIdConnectConfigurationRetriever(),
+                    new HttpDocumentRetriever());
+            }
+        }
+
         return managers;
     }
 
