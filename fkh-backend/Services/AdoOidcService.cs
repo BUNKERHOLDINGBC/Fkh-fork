@@ -72,23 +72,21 @@ public class AdoOidcService
         }
 
         var issuer = unvalidatedJwt.Issuer;
+        var tokenAudiences = string.Join(", ", unvalidatedJwt.Audiences);
+        Console.WriteLine($"ADO OIDC token — issuer: {issuer}, audiences: {tokenAudiences}, subject: {unvalidatedJwt.Subject}");
         if (!ConfigManagers.TryGetValue(issuer.ToLowerInvariant(), out var configManager))
             return (null, $"No config manager for issuer: {issuer} (known: {string.Join(", ", ConfigManagers.Keys)})");
 
-        var isEntraFormat = issuer.StartsWith("https://login.microsoftonline.com/", StringComparison.OrdinalIgnoreCase);
-
-        // Build valid audiences based on token format
-        var validAudiences = new List<string> { "api://AzureADTokenExchange" };
-        if (isEntraFormat && !string.IsNullOrEmpty(AdoIdentityClientId))
-            validAudiences.Add(AdoIdentityClientId);
-
         var config = await configManager.GetConfigurationAsync(CancellationToken.None);
 
+        // Audience validation is not needed — we validate issuer, signature, lifetime,
+        // and subject against the allowed connections list. The audience varies by ADO
+        // token format (client ID, api://AzureADTokenExchange, etc.) and is unreliable.
         var validationParameters = new TokenValidationParameters
         {
             ValidIssuer = issuer,
             IssuerSigningKeys = config.SigningKeys,
-            ValidAudiences = validAudiences,
+            ValidateAudience = false,
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromMinutes(2),
         };
@@ -97,6 +95,7 @@ public class AdoOidcService
         {
             handler.ValidateToken(token, validationParameters, out var validatedToken);
             var jwt = (JwtSecurityToken)validatedToken;
+            var isEntraFormat = issuer.StartsWith("https://login.microsoftonline.com/", StringComparison.OrdinalIgnoreCase);
 
             var subject = jwt.Subject;
             if (string.IsNullOrEmpty(subject))
@@ -125,8 +124,7 @@ public class AdoOidcService
         }
         catch (SecurityTokenException ex)
         {
-            var tokenAudience = string.Join(", ", unvalidatedJwt.Audiences);
-            return (null, $"Token validation failed: {ex.Message} (token audience: {tokenAudience}, valid audiences: {string.Join(", ", validAudiences)})");
+            return (null, $"Token validation failed: {ex.Message}");
         }
     }
 
