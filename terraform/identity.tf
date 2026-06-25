@@ -25,6 +25,13 @@ resource "azurerm_role_assignment" "function_dbs_storage" {
   principal_id         = azurerm_user_assigned_identity.function.principal_id
 }
 
+# Grant the Function's identity "AcrPull" so it can list and pull images from ACR.
+resource "azurerm_role_assignment" "function_acr_pull" {
+  scope                = azurerm_container_registry.this.id
+  role_definition_name = "AcrPull"
+  principal_id         = azurerm_user_assigned_identity.function.principal_id
+}
+
 # Grant the Function's identity "Log Analytics Reader" so it can query
 # ContainerRegistryRepositoryEvents for image pull timestamps.
 resource "azurerm_role_assignment" "function_log_analytics_reader" {
