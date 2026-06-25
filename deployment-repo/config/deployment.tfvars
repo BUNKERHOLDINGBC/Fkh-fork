@@ -166,20 +166,22 @@ allowed_oidc_repos = [
 ]
 
 # Azure DevOps — service connections allowed to call Fkh via OIDC from Azure Pipelines.
-# Create a service connection in Azure DevOps:
+# Create the service connection in Azure DevOps:
 #   Project Settings → Service connections → New → Azure Resource Manager
-#     → Workload Identity Federation (automatic or manual)
-#   Then open the connection and note the Managed Identity Client ID
-#   (click "Manage Managed Identity" → Properties → Client ID).
-#
-# Get your devops_org_id by opening https://dev.azure.com/<org>/_apis/connectiondata
-# and using the instanceId value.
+#     → Workload Identity Federation (manual)
+#   - Service connection name: must match devops_connection_name below
+#   - Application (client) ID: use the ado_identity_client_id Terraform output
+#   - Tenant ID: your Azure AD tenant
+#   - Subscription ID/Name: your Azure subscription
+#   Save as draft, then copy the "Subject identifier" value into entra_subject below.
+#   Deploy Terraform to create the federated credential, then verify the connection in ADO.
 allowed_ado_connections = [
   # {
-  #   devops_org_id          = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"   # Azure DevOps organization ID (instanceId from connectiondata API)
+  #   devops_org_id          = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"   # Azure DevOps organization ID (open https://dev.azure.com/<org>/_apis/connectiondata and use the instanceId value)
   #   devops_org             = "my-org"                                 # Azure DevOps organization name
   #   devops_project         = "my-project"                             # Azure DevOps project name
   #   devops_connection_name = "fkh-oidc"                               # Service connection name (must match exactly)
+  #   entra_subject          = "/eid1/c/pub/t/..."                      # Subject identifier from the ADO service connection form
   # }
 ]
 

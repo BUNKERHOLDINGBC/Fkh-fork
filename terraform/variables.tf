@@ -227,20 +227,19 @@ variable "allowed_oidc_repos" {
 variable "allowed_ado_connections" {
   description = <<-EOT
     Azure DevOps service connections allowed to authenticate via OIDC.
-    Each entry requires a Workload Identity Federation service connection created in the
-    Azure DevOps project with the specified connection name, configured to trust the
-    managed identity created by this Terraform (output: ado_identity_client_id).
-    
+    Each entry requires a Workload Identity Federation service connection in Azure DevOps.
+
     Create the service connection in Azure DevOps:
-      Project Settings → Service connections → New → Azure Resource Manager → Workload Identity Federation (manual)
+      Project Settings → Service connections → New → Azure Resource Manager
+        → Workload Identity Federation (manual)
       Set the Client ID to the ado_identity_client_id Terraform output.
-      Azure DevOps automatically creates the Entra ID federated credential on the managed identity.
   EOT
   type = list(object({
     devops_org_id          = string
     devops_org             = string
     devops_project         = string
     devops_connection_name = string
+    entra_subject          = optional(string, "")
   }))
   default = []
 }

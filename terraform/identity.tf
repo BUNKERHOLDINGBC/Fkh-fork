@@ -89,6 +89,13 @@ resource "azurerm_user_assigned_identity" "ado" {
   location            = azurerm_resource_group.this.location
 }
 
+resource "azurerm_role_assignment" "ado_subscription_reader" {
+  count                = length(var.allowed_ado_connections) > 0 ? 1 : 0
+  scope                = "/subscriptions/${var.subscription_id}"
+  role_definition_name = "Reader"
+  principal_id         = azurerm_user_assigned_identity.ado[0].principal_id
+}
+
 resource "azurerm_federated_identity_credential" "ado" {
   for_each = { for idx, conn in var.allowed_ado_connections : "${conn.devops_org}-${conn.devops_project}-${conn.devops_connection_name}" => conn }
 
@@ -102,3 +109,13 @@ resource "azurerm_federated_identity_credential" "ado" {
 # Note: Azure DevOps also creates an Entra ID-format federated credential automatically
 # when you set up the service connection (issuer: login.microsoftonline.com).
 # That credential is managed by ADO, not Terraform.
+
+resource "azurerm_federated_identity_credential" "ado_entra" {
+  for_each = { for idx, conn in var.allowed_ado_connections : "${conn.devops_org}-${conn.devops_project}-${conn.devops_connection_name}" => conn if conn.entra_subject != "" }
+
+  name                      = "ado-entra-${substr(md5("${each.value.devops_org}/${each.value.devops_project}/${each.value.devops_connection_name}"), 0, 8)}"
+  user_assigned_identity_id = azurerm_user_assigned_identity.ado[0].id
+  audience                  = ["api://AzureADTokenExchange"]
+  issuer                    = "https://login.microsoftonline.com/${var.tenant_id}/v2.0"
+  subject                   = each.value.entra_subject
+}

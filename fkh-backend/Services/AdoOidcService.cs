@@ -125,7 +125,8 @@ public class AdoOidcService
         }
         catch (SecurityTokenException ex)
         {
-            return (null, $"Token validation failed: {ex.Message} (audiences: {string.Join(", ", validAudiences)})");
+            var tokenAudience = string.Join(", ", unvalidatedJwt.Audiences);
+            return (null, $"Token validation failed: {ex.Message} (token audience: {tokenAudience}, valid audiences: {string.Join(", ", validAudiences)})");
         }
     }
 
