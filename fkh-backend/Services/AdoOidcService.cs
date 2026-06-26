@@ -16,7 +16,6 @@ public class AdoOidcService
 {
     private static readonly List<AdoConnection> AllowedConnections = LoadAllowedConnections();
     private static readonly string? TenantId = Environment.GetEnvironmentVariable("AAD_TENANT_ID");
-    private static readonly string? AdoIdentityClientId = Environment.GetEnvironmentVariable("ADO_IDENTITY_CLIENT_ID");
 
     private static readonly Dictionary<string, ConfigurationManager<OpenIdConnectConfiguration>> ConfigManagers = CreateConfigManagers();
 
@@ -78,14 +77,12 @@ public class AdoOidcService
             return (null, $"No config manager for issuer: {issuer} (known: {string.Join(", ", ConfigManagers.Keys)})");
 
         var config = await configManager.GetConfigurationAsync(CancellationToken.None);
-
-        // Audience validation is not needed — we validate issuer, signature, lifetime,
-        // and subject against the allowed connections list. The audience varies by ADO
-        // token format (client ID, api://AzureADTokenExchange, etc.) and is unreliable.
+        var isEntraFormat = issuer.StartsWith("https://login.microsoftonline.com/", StringComparison.OrdinalIgnoreCase);
         var validationParameters = new TokenValidationParameters
         {
             ValidIssuer = issuer,
             IssuerSigningKeys = config.SigningKeys,
+            ValidateIssuer = true,
             ValidateAudience = false,
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromMinutes(2),
@@ -95,7 +92,6 @@ public class AdoOidcService
         {
             handler.ValidateToken(token, validationParameters, out var validatedToken);
             var jwt = (JwtSecurityToken)validatedToken;
-            var isEntraFormat = issuer.StartsWith("https://login.microsoftonline.com/", StringComparison.OrdinalIgnoreCase);
 
             var subject = jwt.Subject;
             if (string.IsNullOrEmpty(subject))
@@ -103,14 +99,14 @@ public class AdoOidcService
 
             if (isEntraFormat)
             {
-                // Entra format subject contains /sc/{org-id}-{...}
-                // Validate that the subject contains a known org ID
-                var isAllowed = AllowedConnections.Any(c =>
-                    subject.Contains($"/sc/{c.DevopsOrgId}", StringComparison.OrdinalIgnoreCase));
-                if (!isAllowed)
-                    return (null, $"Subject not in allow-list. Subject: {subject}, Expected org IDs: {string.Join(", ", AllowedConnections.Select(c => c.DevopsOrgId))}");
-                // Return a normalized subject for logging
-                return ($"sc://{AllowedConnections[0].DevopsOrg}/ado-entra/{subject}", null);
+                var matchingConnection = AllowedConnections.FirstOrDefault(c =>
+                    !string.IsNullOrWhiteSpace(c.EntraSubject) &&
+                    string.Equals(c.EntraSubject, subject, StringComparison.Ordinal));
+
+                if (matchingConnection is null)
+                    return (null, $"Entra subject not in allow-list. Subject: {subject}, Expected: {string.Join(", ", AllowedConnections.Where(c => !string.IsNullOrWhiteSpace(c.EntraSubject)).Select(c => c.EntraSubject))}");
+
+                return ($"sc://{matchingConnection.DevopsOrg}/{matchingConnection.DevopsProject}/{matchingConnection.DevopsConnectionName}", null);
             }
 
             // vstoken format: subject is sc://org/project/connection
@@ -180,5 +176,6 @@ public class AdoOidcService
         public string DevopsOrg { get; set; } = "";
         public string DevopsProject { get; set; } = "";
         public string DevopsConnectionName { get; set; } = "";
+        public string EntraSubject { get; set; } = "";
     }
 }
