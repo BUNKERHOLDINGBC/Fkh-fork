@@ -41,6 +41,11 @@ on:
         required: false
         type: string
         default: 'main'
+      resilient-apply:
+        description: 'Auto-import resources that already exist in Azure (handles manual changes / state drift)'
+        required: false
+        type: boolean
+        default: false
     secrets:
       SQL_SA_PASSWORD:
         required: true
@@ -261,30 +266,39 @@ jobs:
 
       # ── Bootstrap (AKS + core infra) ──────────────────────────────────────
       - name: Terraform bootstrap apply
+        shell: pwsh
         run: |
-          terraform apply \
-            -var-file="${{ steps.tfvars.outputs.tfvars_file }}" \
-            -target=azurerm_resource_group.this \
-            -target=azurerm_kubernetes_cluster.this \
-            -target=azurerm_kubernetes_cluster_node_pool.win \
-            -target=azurerm_kubernetes_cluster_node_pool.winspot \
-            -target=azurerm_container_registry.this \
-            -target=azurerm_role_assignment.aks_acr_pull \
-            -target=azurerm_role_assignment.function_acr_push \
-            -target=azurerm_storage_account.function \
-            -target=azurerm_storage_account.dbs \
-            -target=azurerm_service_plan.function \
-            -target=azurerm_log_analytics_workspace.this \
-            -target=azurerm_application_insights.this \
-            -target=azurerm_windows_function_app.this \
-            -target=azurerm_user_assigned_identity.function \
-            -target=azurerm_federated_identity_credential.github_actions \
-            -target=azurerm_role_assignment.function_aks \
-            -target=azurerm_role_assignment.function_dbs_storage \
-            -target=azurerm_role_assignment.function_log_analytics_reader \
-            -target=data.azuread_service_principal.msgraph \
-            -target=azuread_app_role_assignment.function_graph_app_owned \
-            -auto-approve
+          $varFile = "${{ steps.tfvars.outputs.tfvars_file }}"
+          $targets = @(
+            'azurerm_resource_group.this'
+            'azurerm_kubernetes_cluster.this'
+            'azurerm_kubernetes_cluster_node_pool.win'
+            'azurerm_kubernetes_cluster_node_pool.winspot'
+            'azurerm_container_registry.this'
+            'azurerm_role_assignment.aks_acr_pull'
+            'azurerm_role_assignment.function_acr_push'
+            'azurerm_storage_account.function'
+            'azurerm_storage_account.dbs'
+            'azurerm_service_plan.function'
+            'azurerm_log_analytics_workspace.this'
+            'azurerm_application_insights.this'
+            'azurerm_windows_function_app.this'
+            'azurerm_user_assigned_identity.function'
+            'azurerm_federated_identity_credential.github_actions'
+            'azurerm_role_assignment.function_aks'
+            'azurerm_role_assignment.function_dbs_storage'
+            'azurerm_role_assignment.function_log_analytics_reader'
+            'data.azuread_service_principal.msgraph'
+            'azuread_app_role_assignment.function_graph_app_owned'
+          )
+          if ('${{ inputs.resilient-apply }}' -eq 'true') {
+            ./Invoke-ResilientApply.ps1 -VarFile $varFile -Targets $targets
+          } else {
+            $tfArgs = @('apply', '-var-file', $varFile, '-auto-approve')
+            foreach ($t in $targets) { $tfArgs += '-target'; $tfArgs += $t }
+            terraform @tfArgs
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
 
       # ── Fetch AKS credentials ────────────────────────────────────────────
       - name: Fetch AKS credentials
@@ -317,10 +331,15 @@ jobs:
 
       # ── Full Terraform apply ──────────────────────────────────────────────
       - name: Terraform apply
+        shell: pwsh
         run: |
-          terraform apply \
-            -var-file="${{ steps.tfvars.outputs.tfvars_file }}" \
-            -auto-approve
+          $varFile = "${{ steps.tfvars.outputs.tfvars_file }}"
+          if ('${{ inputs.resilient-apply }}' -eq 'true') {
+            ./Invoke-ResilientApply.ps1 -VarFile $varFile
+          } else {
+            terraform apply -var-file $varFile -auto-approve
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
 
       # ── Publish function code ─────────────────────────────────────────────
       - name: Publish Azure Function
