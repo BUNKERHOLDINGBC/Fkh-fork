@@ -176,7 +176,7 @@ code {
 .header-user {
   font-size: 0.875rem;
   color: var(--text-muted);
-  max-width: 120px;
+  max-width: 240px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -205,6 +205,11 @@ code {
   cursor: pointer;
 }
 .toggle-all input { accent-color: var(--accent); }
+.toggle-all-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.toggle-all-disabled input { cursor: not-allowed; }
 
 .empty-state {
   text-align: center;

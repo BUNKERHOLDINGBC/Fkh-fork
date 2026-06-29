@@ -8,6 +8,7 @@ interface ContainerListProps {
   loading: boolean;
   error: string | null;
   showAll: boolean;
+  canShowAll: boolean;
   onToggleAll: () => void;
   onRefresh: () => void;
   onStart: (name: string) => void;
@@ -20,6 +21,7 @@ export function ContainerList({
   loading,
   error,
   showAll,
+  canShowAll,
   onToggleAll,
   onRefresh,
   onStart,
@@ -31,8 +33,8 @@ export function ContainerList({
       <div className="list-toolbar">
         <h2>Containers</h2>
         <div className="toolbar-actions">
-          <label className="toggle-all">
-            <input type="checkbox" checked={showAll} onChange={onToggleAll} />
+          <label className={`toggle-all ${canShowAll ? '' : 'toggle-all-disabled'}`}>
+            <input type="checkbox" checked={showAll} onChange={onToggleAll} disabled={!canShowAll} />
             Show all
           </label>
           <button className="btn btn-sm btn-secondary" onClick={onRefresh} disabled={loading}>
@@ -117,7 +119,7 @@ function ContainerCard({
           {container.autoStop && <DetailRow icon="⏰" label="AutoStop" value={container.autoStop} />}
           {container.repo && <DetailRow icon="📁" label="Repo" value={container.repo} />}
           {container.project && <DetailRow icon="📂" label="Project" value={container.project} />}
-          {container.webClient && (
+          {container.webClient && isRunning && (
             <div className="detail-row">
               <span className="detail-icon">🔗</span>
               <span className="detail-label">WebClient:</span>
