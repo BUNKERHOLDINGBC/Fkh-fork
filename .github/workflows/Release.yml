@@ -59,6 +59,12 @@ jobs:
           echo "::error::This workflow must be triggered from Freddy-DK/Fkh. Current: ${{ github.repository }}"
           exit 1
 
+      - name: Display ClientId8
+        env:
+          CLIENTID: ${{ secrets.AZURE_KEY_VAULT_CLIENT_ID }}
+        run: |
+          Write-Host "$ENV:CLIENTID".Substring(0,8)
+
       - name: Check branch
         id: check
         shell: pwsh
@@ -337,10 +343,7 @@ jobs:
       - name: Get access token for Key Vault
         if: vars.AZURE_KEY_VAULT_CERTIFICATE != ''
         id: get-token
-        env:
-          CLIENTID: ${{ secrets.AZURE_KEY_VAULT_CLIENT_ID }}
         run: |
-          Write-Host "$ENV:CLIENTID".Substring(0,8)
           TOKEN=$(az account get-access-token --resource https://vault.azure.net --query accessToken -o tsv)
           echo "::add-mask::$TOKEN"
           echo "token=$TOKEN" >> "$GITHUB_OUTPUT"
