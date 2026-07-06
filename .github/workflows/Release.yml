@@ -60,6 +60,7 @@ jobs:
           exit 1
 
       - name: Display ClientId8
+        shell: pwsh
         env:
           CLIENTID: ${{ secrets.AZURE_KEY_VAULT_CLIENT_ID }}
         run: |
