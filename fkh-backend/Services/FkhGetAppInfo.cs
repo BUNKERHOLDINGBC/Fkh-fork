@@ -74,23 +74,22 @@ $apps = @(Get-NAVAppInfo @inArgs |
         }}
     }})
 
-ConvertTo-Json -InputObject $apps -Depth 10
+Write-Output '{PodJsonMarker}'
+ConvertTo-Json -InputObject $apps -Depth 10 -Compress
 ";
 
         var result = await ExecInBcPodAsync(client, podName, containerName, script);
 
         if (!string.IsNullOrWhiteSpace(result.Stderr))
         {
-            throw new InvalidOperationException($"Failed to get app info from container '{appName}':\n{result.Stderr.TrimEnd()}");
+            throw new InvalidOperationException($"Failed to get app info from container '{appName}':\n{StripAnsi(result.Stderr).TrimEnd()}");
         }
 
-        // Parse the JSON output
-        var jsonStart = result.Stdout.IndexOf('[');
-        var jsonStartObj = result.Stdout.IndexOf('{');
-        if (jsonStart < 0 || (jsonStartObj >= 0 && jsonStartObj < jsonStart))
-            jsonStart = jsonStartObj;
+        // Locate the JSON payload, ignoring ANSI color codes and any info/warning
+        // lines the pod may emit before the ConvertTo-Json output.
+        var jsonText = ExtractPodJson(result.Stdout);
 
-        if (jsonStart < 0)
+        if (string.IsNullOrWhiteSpace(jsonText))
         {
             return new
             {
@@ -101,7 +100,6 @@ ConvertTo-Json -InputObject $apps -Depth 10
             };
         }
 
-        var jsonText = result.Stdout[jsonStart..].TrimEnd();
         using var doc = JsonDocument.Parse(jsonText);
         var apps = new List<JsonElement>();
 

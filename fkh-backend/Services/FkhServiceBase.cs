@@ -14,6 +14,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace Fkh.Services;
 
@@ -379,6 +380,61 @@ public abstract class FkhServiceBase
     {
         public override string ToString() =>
             string.IsNullOrWhiteSpace(Stderr) ? Stdout : $"{Stdout}\n[stderr]: {Stderr}";
+    }
+
+    /// <summary>
+    /// Sentinel written via <c>Write-Output</c> in a PowerShell script immediately before
+    /// <c>ConvertTo-Json</c> so the JSON payload can be reliably located in pod exec output.
+    /// </summary>
+    protected const string PodJsonMarker = "@@FKH_JSON@@";
+
+    private static readonly Regex AnsiEscapeRegex =
+        new("\u001B\\[[0-9;?]*[ -/]*[@-~]", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Removes ANSI escape / color sequences (e.g. PowerShell <c>$PSStyle</c> warning coloring)
+    /// from terminal output so it can be parsed safely.
+    /// </summary>
+    protected static string StripAnsi(string value) =>
+        string.IsNullOrEmpty(value) ? value : AnsiEscapeRegex.Replace(value, string.Empty);
+
+    /// <summary>
+    /// Strips ANSI codes and returns everything after the last <see cref="PodJsonMarker"/>
+    /// sentinel (or the whole cleaned output when the sentinel is absent). Use for non-JSON
+    /// single-token payloads such as base64 content.
+    /// </summary>
+    protected static string ExtractPodPayload(string stdout)
+    {
+        if (string.IsNullOrWhiteSpace(stdout))
+            return string.Empty;
+
+        var cleaned = StripAnsi(stdout);
+        var markerIndex = cleaned.LastIndexOf(PodJsonMarker, StringComparison.Ordinal);
+        return (markerIndex >= 0 ? cleaned[(markerIndex + PodJsonMarker.Length)..] : cleaned).Trim();
+    }
+
+    /// <summary>
+    /// Extracts the JSON payload from pod exec stdout. Strips ANSI codes, then takes everything
+    /// after the last <see cref="PodJsonMarker"/> sentinel when present; otherwise falls back to
+    /// the first <c>[</c> or <c>{</c>. Returns an empty string when no JSON can be located.
+    /// </summary>
+    protected static string ExtractPodJson(string stdout)
+    {
+        if (string.IsNullOrWhiteSpace(stdout))
+            return string.Empty;
+
+        var cleaned = StripAnsi(stdout);
+        var markerIndex = cleaned.LastIndexOf(PodJsonMarker, StringComparison.Ordinal);
+        if (markerIndex >= 0)
+            return cleaned[(markerIndex + PodJsonMarker.Length)..].Trim();
+
+        var arrayIndex = cleaned.IndexOf('[');
+        var objectIndex = cleaned.IndexOf('{');
+        var jsonStart = arrayIndex;
+        if (jsonStart < 0 || (objectIndex >= 0 && objectIndex < jsonStart))
+            jsonStart = objectIndex;
+
+        return jsonStart < 0 ? string.Empty : cleaned[jsonStart..].Trim();
     }
 
     protected async Task<ExecResult> ExecInMssqlPodAsync(Kubernetes client, string podName, string bashScript)

@@ -42,23 +42,24 @@ public class FkhGetContainerEventLog : FkhServiceBase
             githubUsername, appName);
 
         // Export the Windows Application event log to a temp file, read as base64, then clean up
-        var script = @"
+        var script = $@"
 $tempFile = Join-Path $env:TEMP ('eventlog_' + [guid]::NewGuid().ToString('N') + '.evtx')
-try {
+try {{
     wevtutil epl Application $tempFile /ow:true 2>&1 | Out-Null
-    if (-not (Test-Path $tempFile)) {
+    if (-not (Test-Path $tempFile)) {{
         throw 'Failed to export event log.'
-    }
+    }}
     $bytes = [System.IO.File]::ReadAllBytes($tempFile)
+    Write-Output '{PodJsonMarker}'
     [System.Convert]::ToBase64String($bytes)
-} finally {
-    if (Test-Path $tempFile) { Remove-Item $tempFile -Force -ErrorAction SilentlyContinue }
-}
+}} finally {{
+    if (Test-Path $tempFile) {{ Remove-Item $tempFile -Force -ErrorAction SilentlyContinue }}
+}}
 ";
 
         var result = await ExecInBcPodAsync(client, podName, containerName, script);
 
-        var base64Content = result.Stdout.Trim();
+        var base64Content = ExtractPodPayload(result.Stdout);
         if (string.IsNullOrWhiteSpace(base64Content))
         {
             var errorMsg = string.IsNullOrWhiteSpace(result.Stderr)
