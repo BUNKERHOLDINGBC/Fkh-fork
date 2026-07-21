@@ -717,12 +717,21 @@ static void PrintCommandUsage(FunctionDefinition function)
         Console.WriteLine("Parameters:");
         foreach (var parameter in function.Parameters)
         {
-            var requiredText = parameter.Required ? "required" : "optional";
-            var defaultText = string.IsNullOrWhiteSpace(parameter.DefaultValue)
-                ? string.Empty
-                : $", default='{parameter.DefaultValue}'";
-            Console.WriteLine(
-                $"    --{parameter.Name} <{parameter.Type}> [{requiredText}{defaultText}]");
+            var isFlag = string.Equals(parameter.Type, "boolean", StringComparison.OrdinalIgnoreCase);
+            if (isFlag)
+            {
+                Console.WriteLine(
+                    $"    --{parameter.Name} [flag]");
+            }
+            else
+            {
+                var requiredText = parameter.Required ? "required" : "optional";
+                var defaultText = string.IsNullOrWhiteSpace(parameter.DefaultValue)
+                    ? string.Empty
+                    : $", default='{parameter.DefaultValue}'";
+                Console.WriteLine(
+                    $"    --{parameter.Name} <{parameter.Type}> [{requiredText}{defaultText}]");
+            }
             Console.WriteLine(
                 $"        {parameter.Description}");
         }
@@ -742,8 +751,16 @@ static void PrintClientCommandUsage(ClientCommand cmd)
         Console.WriteLine("Parameters:");
         foreach (var param in cmd.Parameters)
         {
+            var isFlag = string.Equals(param.Type, "boolean", StringComparison.OrdinalIgnoreCase);
             var requiredText = param.Required ? "required" : "optional";
-            Console.WriteLine($"    --{param.Name} <{param.Type}> [{requiredText}]");
+            if (isFlag)
+            {
+                Console.WriteLine($"    --{param.Name} [flag, {requiredText}]");
+            }
+            else
+            {
+                Console.WriteLine($"    --{param.Name} <{param.Type}> [{requiredText}]");
+            }
             Console.WriteLine($"        {param.Description}");
         }
     }
