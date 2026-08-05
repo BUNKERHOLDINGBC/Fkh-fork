@@ -519,6 +519,47 @@ public static class FunctionCatalog
         },
         new FunctionDefinition
         {
+            Name = "RunTests",
+            Description = "Runs tests from a published test app inside a Business Central container.",
+            Route = "RunTests",
+            Parameters = new List<FunctionParameterDefinition>
+            {
+                new()
+                {
+                    Name = "name",
+                    Type = "string",
+                    Description = "Name of the container in which to run tests.",
+                    Required = true,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "tenant",
+                    Type = "string",
+                    Description = "Business Central tenant.",
+                    Required = false,
+                    DefaultValue = "default"
+                },
+                new()
+                {
+                    Name = "extensionId",
+                    Type = "string",
+                    Description = "ID of the published test app whose tests should run.",
+                    Required = true,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "appName",
+                    Type = "string",
+                    Description = "Optional test app name used for validation and reporting.",
+                    Required = false,
+                    DefaultValue = null
+                }
+            }
+        },
+        new FunctionDefinition
+        {
             Name = "ImportTestToolkit",
             Description = "Imports the Business Central test toolkit apps into a running container.",
             Route = "ImportTestToolkit",
