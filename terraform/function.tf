@@ -80,6 +80,7 @@ locals {
     LOG_ANALYTICS_WORKSPACE_ID             = azurerm_log_analytics_workspace.this.id
     CONTAINER_DEFAULT_CPU                  = var.container_default_cpu
     CONTAINER_DEFAULT_MEMORY               = var.container_default_memory
+    FKH_TEST_TIMEOUT_MINUTES               = tostring(var.test_timeout_minutes)
     AAD_TENANT_ID                          = var.tenant_id
     AAD_AUTH_IS_MULTITENANT                = tostring(var.aad_auth_is_multitenant)
     AAD_APP_NAME_PREFIX                    = var.aad_app_name_prefix

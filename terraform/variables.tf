@@ -381,3 +381,14 @@ variable "function_timeout_minutes" {
     error_message = "function_timeout_minutes must be between 1 and 10 (Consumption plan limit)."
   }
 }
+
+variable "test_timeout_minutes" {
+  description = "Hard timeout for a Business Central test run inside a container (in minutes)."
+  type        = number
+  default     = 30
+
+  validation {
+    condition     = var.test_timeout_minutes >= 1 && var.test_timeout_minutes <= 120
+    error_message = "test_timeout_minutes must be between 1 and 120."
+  }
+}
