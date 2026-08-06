@@ -132,8 +132,13 @@ fkh publishapp --name mycontainer --appFile .\MyApp.app --install
 fkh publishapp --name mycontainer --appFile .\MyTests.app --install
 fkh runtests --name mycontainer --tenant default `
 	--extensionId 11111111-1111-1111-1111-111111111111 `
+	--testCodeunitRange "50100|50105..50110" `
 	--appName "My Tests" --output TestResults.xml --useOIDC
 ```
+
+Omit `--testCodeunitRange` to run every test codeunit in the specified test app.
+The range uses standard Business Central filter syntax, allowing an agent or CI
+workflow to pass the IDs of changed test codeunits.
 
 Test execution currently requires a container using `NavUserPassword`
 authentication. The built-in toolkit import installs the toolkit in the

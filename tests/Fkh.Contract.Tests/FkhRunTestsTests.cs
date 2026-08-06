@@ -18,7 +18,8 @@ public sealed class FkhRunTestsTests
             parameter => Assert.Equal("name", parameter.Name),
             parameter => Assert.Equal("tenant", parameter.Name),
             parameter => Assert.Equal("extensionId", parameter.Name),
-            parameter => Assert.Equal("appName", parameter.Name));
+            parameter => Assert.Equal("appName", parameter.Name),
+            parameter => Assert.Equal("testCodeunitRange", parameter.Name));
     }
 
     [Fact]

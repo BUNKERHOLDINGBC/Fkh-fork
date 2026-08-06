@@ -10,7 +10,7 @@ sealed class RunTestsCommand : ClientCommand
 {
     private static readonly HashSet<string> ParameterNames = new(StringComparer.OrdinalIgnoreCase)
     {
-        "name", "tenant", "extensionId", "appName", "output"
+        "name", "tenant", "extensionId", "appName", "testCodeunitRange", "output"
     };
     private static readonly Regex TenantPattern = new("^[A-Za-z0-9][A-Za-z0-9-]{0,127}$", RegexOptions.CultureInvariant);
 
@@ -23,6 +23,7 @@ sealed class RunTestsCommand : ClientCommand
         new() { Name = "tenant", Type = "string", Description = "Business Central tenant. Default: default", Required = false },
         new() { Name = "extensionId", Type = "string", Description = "ID of the published test app.", Required = true },
         new() { Name = "appName", Type = "string", Description = "Optional test app name used for validation and reporting.", Required = false },
+        new() { Name = "testCodeunitRange", Type = "string", Description = "Optional Business Central filter selecting test codeunit IDs.", Required = false },
         new() { Name = "output", Type = "string", Description = "Local destination for JUnit XML.", Required = true }
     ];
 
@@ -154,7 +155,13 @@ sealed class RunTestsCommand : ClientCommand
         if (appName?.IndexOfAny(['\r', '\n']) >= 0 || appName?.Length > 250)
             throw new InvalidOperationException("--appName is invalid.");
 
-        return new RunTestsRequest(name, tenant, parsedExtensionId.ToString(), appName, output);
+        parameters.TryGetValue("testCodeunitRange", out var testCodeunitRange);
+        testCodeunitRange = testCodeunitRange?.Trim();
+        if (testCodeunitRange is not null
+            && (testCodeunitRange.Length == 0 || testCodeunitRange.IndexOfAny(['\r', '\n']) >= 0 || testCodeunitRange.Length > 250))
+            throw new InvalidOperationException("--testCodeunitRange is invalid.");
+
+        return new RunTestsRequest(name, tenant, parsedExtensionId.ToString(), appName, testCodeunitRange, output);
     }
 
     internal static int MaterializeResult(RunTestsResponse result, string outputPath)
@@ -309,7 +316,7 @@ sealed class RunTestsCommand : ClientCommand
 
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
-    internal sealed record RunTestsRequest(string Name, string Tenant, string ExtensionId, string? AppName, string Output)
+    internal sealed record RunTestsRequest(string Name, string Tenant, string ExtensionId, string? AppName, string? TestCodeunitRange, string Output)
     {
         public Dictionary<string, string> ToParameters()
         {
@@ -321,6 +328,8 @@ sealed class RunTestsCommand : ClientCommand
             };
             if (!string.IsNullOrWhiteSpace(AppName))
                 parameters["appName"] = AppName;
+            if (!string.IsNullOrWhiteSpace(TestCodeunitRange))
+                parameters["testCodeunitRange"] = TestCodeunitRange;
             return parameters;
         }
     }

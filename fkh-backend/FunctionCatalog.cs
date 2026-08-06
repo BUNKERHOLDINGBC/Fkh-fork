@@ -555,6 +555,14 @@ public static class FunctionCatalog
                     Description = "Optional test app name used for validation and reporting.",
                     Required = false,
                     DefaultValue = null
+                },
+                new()
+                {
+                    Name = "testCodeunitRange",
+                    Type = "string",
+                    Description = "Optional Business Central filter selecting test codeunit IDs, for example '50100|50105..50110'.",
+                    Required = false,
+                    DefaultValue = null
                 }
             }
         },

@@ -363,6 +363,7 @@ No parameters.
 | `tenant` | string | no | `default` | Business Central tenant |
 | `extensionId` | GUID | **yes** | — | Published test app ID used to select tests |
 | `appName` | string | no | — | Expected test app name for validation and reporting |
+| `testCodeunitRange` | string | no | — | Business Central filter selecting test codeunit IDs, for example `50100|50105..50110` |
 
 The authenticated caller must be authorized for the target container. While the
 detached operation is running, the endpoint returns `202 Accepted` with a

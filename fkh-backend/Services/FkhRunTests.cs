@@ -38,6 +38,7 @@ public class FkhRunTests : FkhServiceBase
             request.Tenant,
             ExtensionId = request.ExtensionId.ToString(),
             request.AppName,
+            request.TestCodeunitRange,
             TimeoutMinutes = GetTestTimeoutMinutes()
         }));
         var script = $"& 'C:\\run\\my\\Run-FkhBcTests.ps1' -RequestBase64 '{requestBase64}'";
@@ -46,7 +47,7 @@ public class FkhRunTests : FkhServiceBase
             pod.Metadata.Name,
             pod.Spec.Containers[0].Name,
             jobPrefix: "fkh-runtests",
-            jobIdInput: $"{appName}|{request.Tenant}|{request.ExtensionId}|{request.AppName}",
+            jobIdInput: $"{appName}|{request.Tenant}|{request.ExtensionId}|{request.AppName}|{request.TestCodeunitRange}",
             script: script,
             retryAfterSeconds: 5,
             retryMessage: "Tests still running...");
@@ -86,7 +87,13 @@ public class FkhRunTests : FkhServiceBase
         if (appName?.IndexOfAny(['\r', '\n']) >= 0 || appName?.Length > 250)
             throw new InvalidOperationException("appName is invalid.");
 
-        return new RunTestsRequest(tenant, extensionId, appName);
+        parameters.TryGetValue("testCodeunitRange", out var testCodeunitRange);
+        testCodeunitRange = testCodeunitRange?.Trim();
+        if (testCodeunitRange is not null
+            && (testCodeunitRange.Length == 0 || testCodeunitRange.IndexOfAny(['\r', '\n']) >= 0 || testCodeunitRange.Length > 250))
+            throw new InvalidOperationException("testCodeunitRange is invalid.");
+
+        return new RunTestsRequest(tenant, extensionId, appName, testCodeunitRange);
     }
 
     internal static RunTestsResult ParseJUnit(byte[] junitBytes)
@@ -231,6 +238,6 @@ public class FkhRunTests : FkhServiceBase
         return duration;
     }
 
-    internal sealed record RunTestsRequest(string Tenant, Guid ExtensionId, string? AppName);
+    internal sealed record RunTestsRequest(string Tenant, Guid ExtensionId, string? AppName, string? TestCodeunitRange);
     internal sealed record RunTestsResult(string Outcome, int Tests, int Failures, int Errors, int Skipped, double DurationSeconds);
 }

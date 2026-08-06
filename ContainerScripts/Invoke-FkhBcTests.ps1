@@ -18,6 +18,7 @@ try {
     $tenant = [string]$request.Tenant
     $extensionId = [Guid]::Parse([string]$request.ExtensionId)
     $appName = [string]$request.AppName
+    $testCodeunitRange = [string]$request.TestCodeunitRange
     $interactionTimeout = [TimeSpan]::FromMinutes([int]$request.TimeoutMinutes)
 
     . 'C:\run\prompt.ps1' -silent
@@ -100,6 +101,7 @@ try {
         -testSuite 'DEFAULT' `
         -extensionId $extensionId.ToString() `
         -appName $appName `
+        -testCodeunitRange $testCodeunitRange `
         -JUnitResultFileName $ResultPath `
         -detailed | Out-Null
 
