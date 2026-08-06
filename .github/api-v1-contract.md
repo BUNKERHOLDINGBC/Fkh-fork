@@ -193,6 +193,12 @@ Functions that accept file-type parameters use **`POST /<Route>`** with `multipa
 | SetSettings | `POST /SetSettings` | JSON | No | Sets a user setting (admins can set for any user, `_members`, `_admins`) |
 | ClearSettings | `POST /ClearSettings` | JSON | **Yes** | Clears settings for a user |
 
+### Current user
+
+| Function | Route | Method | Admin | Description |
+|---|---|---|---|---|
+| GetCurrentUser | `POST /GetCurrentUser` | JSON | No | Returns the authenticated Fkh username and authorization flags |
+
 ### VMs
 
 | Function | Route | Method | Admin | Description |
@@ -214,6 +220,8 @@ These are not returned by the catalog but can be invoked directly by clients tha
 |---|---|---|---|
 | GetDatabaseUploadSas | `POST /GetDatabaseUploadSas` | **Yes** | Returns a SAS URL for uploading database backups |
 | GetDatabaseDownloadSas | `POST /GetDatabaseDownloadSas` | No | Returns a read-only SAS URL for downloading database backups |
+| GetFileUploadSas | `POST /GetFileUploadSas` | **Yes** | Returns a SAS URL for uploading versioned files |
+| GetFileDownloadSas | `POST /GetFileDownloadSas` | No | Returns a read-only SAS URL for downloading versioned files |
 | Status | `POST /Status` | **Yes** | Returns full system status (nodes, containers, SQL, storage, quotas, security) |
 
 ---
@@ -432,9 +440,31 @@ No parameters.
 
 No parameters.
 
+### GetFileUploadSas (hidden)
+
+No parameters.
+
+### GetFileDownloadSas (hidden)
+
+No parameters.
+
 ### Status (hidden)
 
 No parameters.
+
+### GetCurrentUser
+
+No parameters.
+
+Response:
+
+```json
+{
+  "username": "octocat",
+  "isAdmin": true,
+  "isSupport": false
+}
+```
 
 ### StopAllContainers
 

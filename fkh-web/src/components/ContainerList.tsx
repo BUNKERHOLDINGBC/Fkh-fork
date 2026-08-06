@@ -1,7 +1,9 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ContainerInfo } from '../types';
 import { DropdownMenu } from './DropdownMenu';
 import type { MenuEntry } from './DropdownMenu';
+
+const AUTO_REFRESH_INTERVAL_MS = 60_000;
 
 interface ContainerListProps {
   containers: ContainerInfo[];
@@ -26,6 +28,28 @@ export function ContainerList({
   onStop,
   actionInProgress,
 }: ContainerListProps) {
+  const loadingRef = useRef(loading);
+  const [refreshTimerReset, setRefreshTimerReset] = useState(0);
+
+  useEffect(() => {
+    loadingRef.current = loading;
+  }, [loading]);
+
+  const refreshAndResetTimer = useCallback(() => {
+    setRefreshTimerReset(value => value + 1);
+    onRefresh();
+  }, [onRefresh]);
+
+  useEffect(() => {
+    const refreshTimer = window.setInterval(() => {
+      if (!loadingRef.current) {
+        refreshAndResetTimer();
+      }
+    }, AUTO_REFRESH_INTERVAL_MS);
+
+    return () => window.clearInterval(refreshTimer);
+  }, [refreshAndResetTimer, refreshTimerReset]);
+
   return (
     <div className="container-list">
       <div className="list-toolbar">
@@ -35,7 +59,7 @@ export function ContainerList({
             <input type="checkbox" checked={showAll} onChange={onToggleAll} />
             Show all
           </label>
-          <button className="btn btn-sm btn-secondary" onClick={onRefresh} disabled={loading}>
+          <button className="btn btn-sm btn-secondary" onClick={refreshAndResetTimer} disabled={loading}>
             {loading ? 'Loading...' : 'Refresh'}
           </button>
         </div>
@@ -48,10 +72,10 @@ export function ContainerList({
       )}
 
       <div className="container-cards">
-        {containers.map(c => (
+        {containers.map(container => (
           <ContainerCard
-            key={c.appLabel}
-            container={c}
+            key={container.appLabel}
+            container={container}
             showLabel={showAll}
             onStart={onStart}
             onStop={onStop}
@@ -83,6 +107,7 @@ function ContainerCard({
   const isStarting = statusLower.startsWith('starting') || statusLower.startsWith('pending') || statusLower.startsWith('initializing');
   const isFailed = statusLower.startsWith('failed');
   const busy = actionInProgress === container.appLabel;
+  const displayName = showLabel ? container.appLabel : container.name;
 
   const statusClass = isRunning ? 'status-running'
     : isStopped ? 'status-stopped'
@@ -95,7 +120,7 @@ function ContainerCard({
       <div className="card-header" onClick={() => setExpanded(!expanded)}>
         <div className="card-title-row">
           <span className={`status-dot ${statusClass}`} />
-          <span className="card-name">{showLabel ? container.appLabel : container.name}</span>
+          <ContainerName name={displayName} />
           <span className="card-status">{container.status}</span>
           <ContainerMenu
             container={container}
@@ -117,7 +142,7 @@ function ContainerCard({
           {container.autoStop && <DetailRow icon="⏰" label="AutoStop" value={container.autoStop} />}
           {container.repo && <DetailRow icon="📁" label="Repo" value={container.repo} />}
           {container.project && <DetailRow icon="📂" label="Project" value={container.project} />}
-          {container.webClient && (
+          {container.webClient && isRunning && (
             <div className="detail-row">
               <span className="detail-icon">🔗</span>
               <span className="detail-label">WebClient:</span>
@@ -131,6 +156,38 @@ function ContainerCard({
       )}
     </div>
   );
+}
+
+function ContainerName({ name }: { name: string }) {
+  const splitName = splitContainerName(name);
+
+  return (
+    <span className="card-name" title={name} aria-label={name}>
+      <span className="card-name-full" aria-hidden="true">{name}</span>
+      <span className="card-name-compact" aria-hidden="true">
+        <span className="card-name-prefix">{splitName.prefix}</span>
+        {splitName.suffix && (
+          <>
+            <span className="card-name-separator">-</span>
+            <span className="card-name-suffix">{splitName.suffix}</span>
+          </>
+        )}
+      </span>
+    </span>
+  );
+}
+
+function splitContainerName(name: string): { prefix: string; suffix: string } {
+  const splitIndex = name.lastIndexOf('-');
+
+  if (splitIndex <= 0 || splitIndex >= name.length - 1) {
+    return { prefix: name, suffix: '' };
+  }
+
+  return {
+    prefix: name.slice(0, splitIndex),
+    suffix: name.slice(splitIndex + 1),
+  };
 }
 
 function ContainerMenu({
