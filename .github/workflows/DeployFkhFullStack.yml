@@ -41,6 +41,11 @@ on:
         required: false
         type: string
         default: 'main'
+      resilient-apply:
+        description: 'Auto-import resources that already exist in Azure (handles manual changes / state drift)'
+        required: false
+        type: boolean
+        default: false
     secrets:
       SQL_SA_PASSWORD:
         required: true
@@ -55,6 +60,8 @@ env:
   TF_VAR_sql_sa_password: ${{ secrets.SQL_SA_PASSWORD }}
   TF_VAR_github_app_private_key: ${{ secrets.GH_APP_PRIVATE_KEY }}
   TF_VAR_create_images_repo: ${{ github.repository }}
+  TF_VAR_create_images_owner_id: ${{ github.repository_owner_id }}
+  TF_VAR_create_images_repo_id: ${{ github.repository_id }}
   ARM_USE_OIDC: true
 
 jobs:
@@ -77,6 +84,26 @@ jobs:
           repository: ${{ inputs.fkh-repo }}
           ref: ${{ inputs.fkh-ref }}
           path: fkh
+
+      # ── Compute fork status ───────────────────────────────────────────────
+      - name: Compute fork status
+        if: inputs.fkh-repo != 'Freddy-DK/Fkh'
+        id: fork
+        shell: bash
+        working-directory: fkh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          OWNER="${{ inputs.fkh-repo }}"
+          OWNER="${OWNER%%/*}"
+          if RESPONSE=$(gh api "repos/Freddy-DK/Fkh/compare/main...${OWNER}:${{ inputs.fkh-ref }}" 2>/dev/null); then
+            echo "ahead=$(echo "$RESPONSE" | jq -r '.ahead_by')" >> $GITHUB_OUTPUT
+            echo "behind=$(echo "$RESPONSE" | jq -r '.behind_by')" >> $GITHUB_OUTPUT
+            echo "merge_base_sha=$(echo "$RESPONSE" | jq -r '.merge_base_commit.sha')" >> $GITHUB_OUTPUT
+            echo "merge_base_date=$(echo "$RESPONSE" | jq -r '.merge_base_commit.commit.committer.date')" >> $GITHUB_OUTPUT
+          else
+            echo "::warning::Could not determine fork status — GitHub API call failed"
+          fi
 
       # ── Resolve tfvars ────────────────────────────────────────────────────
       - name: Resolve tfvars file
@@ -110,7 +137,10 @@ jobs:
             throw "fkhDeploymentName ('$deploymentName') must contain only lowercase letters and numbers. Uppercase, hyphens, and special characters are not allowed (Azure storage accounts require this)."
           }
           $githubAppId    = Get-TfVar "github_app_id" $varFile
-          try { $githubAppClientId = Get-TfVar "github_app_client_id" $varFile } catch { $githubAppClientId = "" }
+          $githubAppClientId = Get-TfVar "github_app_client_id" $varFile
+          if ([string]::IsNullOrWhiteSpace($githubAppClientId)) {
+            throw "github_app_client_id is required in $varFile"
+          }
           try { $stateLocation = Get-TfVar "state_location" $varFile } catch { $stateLocation = "" }
           if (-not $stateLocation) { $stateLocation = $location }
 
@@ -146,7 +176,7 @@ jobs:
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: '10.0.x'
 
       - name: Install Azure Functions Core Tools
         run: npm install -g azure-functions-core-tools@4 --unsafe-perm true
@@ -241,30 +271,39 @@ jobs:
 
       # ── Bootstrap (AKS + core infra) ──────────────────────────────────────
       - name: Terraform bootstrap apply
+        shell: pwsh
         run: |
-          terraform apply \
-            -var-file="${{ steps.tfvars.outputs.tfvars_file }}" \
-            -target=azurerm_resource_group.this \
-            -target=azurerm_kubernetes_cluster.this \
-            -target=azurerm_kubernetes_cluster_node_pool.win \
-            -target=azurerm_kubernetes_cluster_node_pool.winspot \
-            -target=azurerm_container_registry.this \
-            -target=azurerm_role_assignment.aks_acr_pull \
-            -target=azurerm_role_assignment.function_acr_push \
-            -target=azurerm_storage_account.function \
-            -target=azurerm_storage_account.dbs \
-            -target=azurerm_service_plan.function \
-            -target=azurerm_log_analytics_workspace.this \
-            -target=azurerm_application_insights.this \
-            -target=azurerm_windows_function_app.this \
-            -target=azurerm_user_assigned_identity.function \
-            -target=azurerm_federated_identity_credential.github_actions \
-            -target=azurerm_role_assignment.function_aks \
-            -target=azurerm_role_assignment.function_dbs_storage \
-            -target=azurerm_role_assignment.function_log_analytics_reader \
-            -target=data.azuread_service_principal.msgraph \
-            -target=azuread_app_role_assignment.function_graph_app_owned \
-            -auto-approve
+          $varFile = "${{ steps.tfvars.outputs.tfvars_file }}"
+          $targets = @(
+            'azurerm_resource_group.this'
+            'azurerm_kubernetes_cluster.this'
+            'azurerm_kubernetes_cluster_node_pool.win'
+            'azurerm_kubernetes_cluster_node_pool.winspot'
+            'azurerm_container_registry.this'
+            'azurerm_role_assignment.aks_acr_pull'
+            'azurerm_role_assignment.function_acr_push'
+            'azurerm_storage_account.function'
+            'azurerm_storage_account.dbs'
+            'azurerm_service_plan.function'
+            'azurerm_log_analytics_workspace.this'
+            'azurerm_application_insights.this'
+            'azurerm_windows_function_app.this'
+            'azurerm_user_assigned_identity.function'
+            'azurerm_federated_identity_credential.github_actions'
+            'azurerm_role_assignment.function_aks'
+            'azurerm_role_assignment.function_dbs_storage'
+            'azurerm_role_assignment.function_log_analytics_reader'
+            'data.azuread_service_principal.msgraph'
+            'azuread_app_role_assignment.function_graph_app_owned'
+          )
+          if ('${{ inputs.resilient-apply }}' -eq 'true') {
+            ./Invoke-ResilientApply.ps1 -VarFile $varFile -Targets $targets
+          } else {
+            $tfArgs = @('apply', '-var-file', $varFile, '-auto-approve')
+            foreach ($t in $targets) { $tfArgs += '-target'; $tfArgs += $t }
+            terraform @tfArgs
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
 
       # ── Fetch AKS credentials ────────────────────────────────────────────
       - name: Fetch AKS credentials
@@ -273,15 +312,17 @@ jobs:
           AKS_NAME="fkh-${{ steps.parse.outputs.deployment_name }}-aks"
           az aks get-credentials --resource-group "$AKS_RG" --name "$AKS_NAME" --overwrite-existing
 
-      # ── Stamp version into AKS ───────────────────────────────────────────
-      - name: Set fkh-version ConfigMap
-        run: |
-          kubectl create namespace app --dry-run=client -o yaml | kubectl apply -f -
-          kubectl create configmap fkh-version \
-            --namespace app \
-            --from-literal=version="${{ inputs.fkh-ref }}" \
-            --from-literal=deployed-at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            --dry-run=client -o yaml | kubectl apply -f -
+      # ── Refresh Azure login before ACR push ───────────────────────────────
+      # The initial OIDC login happened many long-running steps ago. The GitHub
+      # OIDC client assertion has a short lifetime (~5 min), so re-authenticate
+      # here to obtain a fresh token for `az acr login` (avoids AADSTS700024 /
+      # ACR UNAUTHORIZED).
+      - name: Azure CLI login (OIDC) – refresh for ACR
+        uses: azure/login@v3
+        with:
+          client-id: ${{ steps.parse.outputs.deploy_client_id }}
+          tenant-id: ${{ steps.parse.outputs.tenant_id }}
+          subscription-id: ${{ steps.parse.outputs.subscription_id }}
 
       # ── Build and push MSSQL FTS image to ACR ─────────────────────────────
       - name: Build and push MSSQL FTS image
@@ -296,10 +337,43 @@ jobs:
 
       # ── Full Terraform apply ──────────────────────────────────────────────
       - name: Terraform apply
+        shell: pwsh
         run: |
-          terraform apply \
-            -var-file="${{ steps.tfvars.outputs.tfvars_file }}" \
-            -auto-approve
+          $varFile = "${{ steps.tfvars.outputs.tfvars_file }}"
+          if ('${{ inputs.resilient-apply }}' -eq 'true') {
+            ./Invoke-ResilientApply.ps1 -VarFile $varFile
+          } else {
+            terraform apply -var-file $varFile -auto-approve
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+
+      # ── Stamp version into AKS ───────────────────────────────────────────
+      - name: Set fkh-version ConfigMap
+        run: |
+          NAMESPACE="$(terraform output -raw namespace)"
+
+          if ! kubectl get namespace "$NAMESPACE" >/dev/null; then
+            echo "::error::Namespace '$NAMESPACE' not found (Terraform apply likely failed)."
+            exit 1
+          fi
+
+          kubectl create configmap fkh-version \
+            --namespace app \
+            --from-literal=version="${{ inputs.fkh-ref }}" \
+            --from-literal=deployed-at="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --from-literal=deployment-repo="${{ github.repository }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
+            
+      # ── Refresh Azure login before function publish ───────────────────────
+      # Same reason as the ACR refresh above: the long-running Terraform apply
+      # can outlive the short-lived OIDC assertion, so re-authenticate before
+      # `func azure functionapp publish` (avoids AADSTS700024 / auth failures).
+      - name: Azure CLI login (OIDC) – refresh for function publish
+        uses: azure/login@v3
+        with:
+          client-id: ${{ steps.parse.outputs.deploy_client_id }}
+          tenant-id: ${{ steps.parse.outputs.tenant_id }}
+          subscription-id: ${{ steps.parse.outputs.subscription_id }}
 
       # ── Publish function code ─────────────────────────────────────────────
       - name: Publish Azure Function
@@ -331,11 +405,25 @@ jobs:
           $resourceGroupName = terraform output -raw resource_group_name
           $version = "${{ inputs.fkh-ref }}"
 
-          Write-Host "Setting FKH_VERSION=$version on $functionAppName..."
+          $deployedAt = (Get-Date -AsUTC -Format 'o')
+          $settings = @(
+            "FKH_VERSION=$version"
+            "DEPLOYMENT_REPO=${{ github.repository }}"
+            "DEPLOYED_AT=$deployedAt"
+            "FKH_FORK=${{ inputs.fkh-repo }}"
+          )
+          $forkAhead = "${{ steps.fork.outputs.ahead }}"
+          if ($forkAhead) {
+            $settings += "FKH_FORK_AHEAD=$forkAhead"
+            $settings += "FKH_FORK_BEHIND=${{ steps.fork.outputs.behind }}"
+            $settings += "FKH_FORK_MERGE_BASE_SHA=${{ steps.fork.outputs.merge_base_sha }}"
+            $settings += "FKH_FORK_MERGE_BASE_DATE=${{ steps.fork.outputs.merge_base_date }}"
+          }
+          Write-Host "Setting app settings on $functionAppName..."
           az functionapp config appsettings set `
             --name $functionAppName `
             --resource-group $resourceGroupName `
-            --settings "FKH_VERSION=$version" `
+            --settings @settings `
             --output none
 
       - name: Publish Azure Function (staging)
@@ -366,10 +454,24 @@ jobs:
 
           # Stamp version on staging too
           $version = "${{ inputs.fkh-ref }}"
+          $deployedAt = (Get-Date -AsUTC -Format 'o')
+          $settings = @(
+            "FKH_VERSION=$version"
+            "DEPLOYMENT_REPO=${{ github.repository }}"
+            "DEPLOYED_AT=$deployedAt"
+            "FKH_FORK=${{ inputs.fkh-repo }}"
+          )
+          $forkAhead = "${{ steps.fork.outputs.ahead }}"
+          if ($forkAhead) {
+            $settings += "FKH_FORK_AHEAD=$forkAhead"
+            $settings += "FKH_FORK_BEHIND=${{ steps.fork.outputs.behind }}"
+            $settings += "FKH_FORK_MERGE_BASE_SHA=${{ steps.fork.outputs.merge_base_sha }}"
+            $settings += "FKH_FORK_MERGE_BASE_DATE=${{ steps.fork.outputs.merge_base_date }}"
+          }
           az functionapp config appsettings set `
             --name $stagingAppName `
             --resource-group $resourceGroupName `
-            --settings "FKH_VERSION=$version" `
+            --settings @settings `
             --output none
 
       # ── Build and deploy web app ───────────────────────────────────────
@@ -402,7 +504,7 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@v3
         with:
-          client-id: ${{ steps.parse.outputs.github_app_id }}
+          client-id: ${{ steps.parse.outputs.github_app_client_id }}
           private-key: ${{ secrets.GH_APP_PRIVATE_KEY }}
 
       - name: Sync GitHub Actions secrets to deployment repo

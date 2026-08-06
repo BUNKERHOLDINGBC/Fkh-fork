@@ -6,6 +6,7 @@ sealed class UpdateDeploymentRepoCommand : ClientCommand
     [
         new() { Name = "deploymentRepo", Type = "string", Description = "Owner/name of the deployment repo to update (e.g. myorg/fkh-deploy)", Required = true },
         new() { Name = "fkhRepo",        Type = "string", Description = "Owner/name of the Fkh fork, optionally with @branch (e.g. myorg/Fkh@dev). Default: Freddy-DK/Fkh@latest", Required = false },
+        new() { Name = "confirm",        Type = "boolean", Description = "Skip the interactive confirmation prompt (for CI/automation)", Required = false },
     ];
 
     public override async Task<int> ExecuteAsync(string[] args, CliSettings settings, bool asJson)
@@ -24,6 +25,7 @@ sealed class UpdateDeploymentRepoCommand : ClientCommand
 
         var fkhFullRepo = parameters.TryGetValue("fkhRepo", out var fr) && !string.IsNullOrWhiteSpace(fr) ? fr : "Freddy-DK/Fkh";
         var (fkhRepo, fkhBranch) = ParseFkhRepo(fkhFullRepo);
+        var requestedFkhBranch = fkhBranch;
 
         // Verify gh is authenticated
         var (ghExit, _, ghErr) = RunProcess("gh", ["auth", "status"]);
@@ -34,43 +36,50 @@ sealed class UpdateDeploymentRepoCommand : ClientCommand
             return 1;
         }
 
-        // Resolve GitHub user account
+        var skipConfirm = parameters.TryGetValue("confirm", out var confirmVal) && string.Equals(confirmVal, "true", StringComparison.OrdinalIgnoreCase);
+
+        // Resolve GitHub user account (only used for display; non-fatal in CI mode)
         var (userExit, ghUser, _) = RunProcess("gh", ["api", "user", "--jq", ".login"]);
         ghUser = ghUser?.Trim();
         if (userExit != 0 || string.IsNullOrWhiteSpace(ghUser))
         {
-            Console.Error.WriteLine($"{Ansi.Red}Failed to determine GitHub user. Ensure 'gh auth login' is complete.{Ansi.Reset}");
-            return 1;
+            if (!skipConfirm)
+            {
+                Console.Error.WriteLine($"{Ansi.Red}Failed to determine GitHub user. Ensure 'gh auth login' is complete.{Ansi.Reset}");
+                return 1;
+            }
+            ghUser = "automation";
         }
 
         // Resolve "latest" / "preview" to actual release tags
         fkhBranch = ResolveFkhBranch(fkhRepo, fkhBranch);
-
-        // Confirm before proceeding
         Console.WriteLine();
         Console.WriteLine($"  Action:          Update deployment repo");
         Console.WriteLine($"  Deployment repo: {deployFullRepo}");
         Console.WriteLine($"  Fkh fork:        {fkhRepo}");
-        Console.WriteLine($"  Fkh branch:      {fkhBranch}");
+        Console.WriteLine($"  Fkh version:     {fkhBranch}");
         Console.WriteLine($"  GitHub account:  {ghUser}");
         Console.WriteLine();
-        Console.Write("Do you want to proceed? [y/N] ");
-        var answer = Console.ReadLine()?.Trim();
-        if (!string.Equals(answer, "y", StringComparison.OrdinalIgnoreCase) && !string.Equals(answer, "yes", StringComparison.OrdinalIgnoreCase))
+        if (!skipConfirm)
         {
-            Console.WriteLine("Aborted.");
-            return 1;
+            Console.Write("Do you want to proceed? [y/N] ");
+            var answer = Console.ReadLine()?.Trim();
+            if (!string.Equals(answer, "y", StringComparison.OrdinalIgnoreCase) && !string.Equals(answer, "yes", StringComparison.OrdinalIgnoreCase))
+            {
+                Console.WriteLine("Aborted.");
+                return 1;
+            }
+            Console.WriteLine();
         }
-        Console.WriteLine();
 
-        return await UpdateDeploymentRepoAsync(deployFullRepo, fkhRepo, fkhBranch, "Update deployment repo from Fkh template");
+        return await UpdateDeploymentRepoAsync(deployFullRepo, fkhRepo, fkhBranch, "Update deployment repo from Fkh template", fkhVersionDefault: requestedFkhBranch);
     }
 
     /// <summary>
     /// Clones the deployment repo, fetches template files from the Fkh fork,
     /// writes them (skipping deployment.tfvars), commits and pushes.
     /// </summary>
-    internal static async Task<int> UpdateDeploymentRepoAsync(string deployFullRepo, string fkhRepo, string fkhBranch, string commitMessage, bool quiet = false)
+    internal static async Task<int> UpdateDeploymentRepoAsync(string deployFullRepo, string fkhRepo, string fkhBranch, string commitMessage, bool quiet = false, string? fkhVersionDefault = null)
     {
         // 1. Verify gh is authenticated
         var (ghExit, _, ghErr) = RunProcess("gh", ["auth", "status"]);
@@ -81,7 +90,10 @@ sealed class UpdateDeploymentRepoCommand : ClientCommand
             return 1;
         }
 
-        // 2. Clone to temp directory
+        // 2. Configure git credential helper to use gh for push authentication
+        RunProcess("gh", ["auth", "setup-git"]);
+
+        // 3. Clone to temp directory
         var tempDir = Path.Combine(Path.GetTempPath(), $"fkh-deploy-{Guid.NewGuid():N}");
         Console.WriteLine($"Cloning {deployFullRepo}...");
         var (cloneExit, _, cloneErr) = RunProcess("gh", ["repo", "clone", deployFullRepo, tempDir]);
@@ -143,6 +155,8 @@ sealed class UpdateDeploymentRepoCommand : ClientCommand
                     content = content.Replace("Freddy-DK/Fkh", fkhRepo);
                     content = content.Replace("@main", $"@{fkhBranch}");
                     content = content.Replace("fkh-ref: main", $"fkh-ref: {fkhBranch}");
+                    if (relativePath.Equals(".github/workflows/UpdateFkhVersion.yml", StringComparison.OrdinalIgnoreCase))
+                        content = SetWorkflowInputDefault(content, "fkh-version", fkhVersionDefault ?? fkhBranch);
                 }
 
                 var targetPath = Path.Combine(tempDir, relativePath.Replace('/', Path.DirectorySeparatorChar));
@@ -153,13 +167,15 @@ sealed class UpdateDeploymentRepoCommand : ClientCommand
             }
 
             // 4. Configure git identity, commit and push
-            var (_, ghName, _) = RunProcess("gh", ["api", "user", "--jq", ".login"]);
-            var (_, ghEmail, _) = RunProcess("gh", ["api", "user", "--jq", ".email // (.login + \"@users.noreply.github.com\")"]);
-            ghName = ghName?.Trim(); ghEmail = ghEmail?.Trim();
-            if (!string.IsNullOrEmpty(ghName))
-                RunProcess("git", ["config", "user.name", ghName], tempDir);
-            if (!string.IsNullOrEmpty(ghEmail))
-                RunProcess("git", ["config", "user.email", ghEmail], tempDir);
+            var (nameExit, ghName, _) = RunProcess("gh", ["api", "user", "--jq", ".login"]);
+            ghName = nameExit == 0 ? ghName?.Trim() : null;
+            if (string.IsNullOrEmpty(ghName))
+                ghName = "github-actions[bot]";
+            var ghEmail = nameExit == 0 && !string.IsNullOrWhiteSpace(ghName) && ghName != "github-actions[bot]"
+                ? $"{ghName}@users.noreply.github.com"
+                : "41898282+github-actions[bot]@users.noreply.github.com";
+            RunProcess("git", ["config", "user.name", ghName], tempDir);
+            RunProcess("git", ["config", "user.email", ghEmail], tempDir);
 
             RunProcess("git", ["add", "-A"], tempDir);
 
@@ -225,6 +241,47 @@ sealed class UpdateDeploymentRepoCommand : ClientCommand
             return (fkhFullRepo[..atIndex], fkhFullRepo[(atIndex + 1)..]);
         return (fkhFullRepo, "latest");
     }
+
+    static string SetWorkflowInputDefault(string content, string inputName, string defaultValue)
+    {
+        var lines = content.Replace("\r\n", "\n").Split('\n');
+        var inInput = false;
+        var inputIndent = -1;
+
+        for (int i = 0; i < lines.Length; i++)
+        {
+            var line = lines[i];
+            var trimmed = line.TrimStart();
+            var indent = line.Length - trimmed.Length;
+
+            if (trimmed.StartsWith($"{inputName}:", StringComparison.Ordinal))
+            {
+                inInput = true;
+                inputIndent = indent;
+                continue;
+            }
+
+            if (!inInput)
+                continue;
+
+            if (trimmed.Length > 0 && indent <= inputIndent)
+            {
+                inInput = false;
+                continue;
+            }
+
+            if (trimmed.StartsWith("default:", StringComparison.Ordinal))
+            {
+                var prefix = line[..indent];
+                lines[i] = $"{prefix}default: {ToSingleQuotedYaml(defaultValue)}";
+                break;
+            }
+        }
+
+        return string.Join('\n', lines);
+    }
+
+    static string ToSingleQuotedYaml(string value) => $"'{value.Replace("'", "''")}'";
 
     /// <summary>
     /// Resolves "latest" and "preview" branch aliases to actual release tags from the given repo.

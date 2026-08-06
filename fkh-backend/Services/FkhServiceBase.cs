@@ -14,6 +14,7 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace Fkh.Services;
 
@@ -115,7 +116,7 @@ public abstract class FkhServiceBase
             var updated = new X509Certificate2Collection();
             foreach (var cert in config.SslCaCerts)
             {
-                updated.Add(new X509Certificate2(cert.RawData, (string?)null, X509KeyStorageFlags.EphemeralKeySet));
+                updated.Add(X509CertificateLoader.LoadCertificate(cert.RawData));
             }
             config.SslCaCerts = updated;
         }
@@ -306,42 +307,61 @@ public abstract class FkhServiceBase
         return appName.TrimEnd('-');
     }
 
+    protected static bool CanAccessContainer(Dictionary<string, string> parameters, string appName)
+    {
+        var githubUsername = parameters["_githubUsername"];
+        var isAdmin = parameters.TryGetValue("_isAdmin", out var adminVal)
+            && string.Equals(adminVal, "true", StringComparison.OrdinalIgnoreCase);
+        return global::Fkh.FunctionBase.CanAccessContainer(githubUsername, isAdmin, appName);
+    }
+
+    protected static bool IsCommonContainer(string appName)
+        => global::Fkh.FunctionBase.IsCommonContainer(appName);
+
     /// <summary>
     /// Resolves the app label from parameters.
-    /// If name already starts with the user's own "username-" prefix (or, for admins,
-    /// any prefix containing a '-'), it is used as the full app name.
-    /// Otherwise the username is prefixed automatically.
-    /// Non-admins are rejected if the name contains a hyphen but does not match their own prefix.
+    /// If the supplied name is accessible as a full app name, it is used as-is.
+    /// Otherwise short names are resolved by prepending the authenticated GitHub username.
     /// </summary>
     protected static string ResolveAppName(Dictionary<string, string> parameters)
     {
         var name = parameters["name"];
         var githubUsername = parameters["_githubUsername"];
-        var isAdmin = parameters.TryGetValue("_isAdmin", out var adminVal)
-            && string.Equals(adminVal, "true", StringComparison.OrdinalIgnoreCase);
+        var appName = SanitizeAppName(name);
+        var ownPrefix = $"{SanitizeAppName(githubUsername)}-";
+
+        if (appName.StartsWith(ownPrefix, StringComparison.OrdinalIgnoreCase)
+            || name.Contains('-')
+            || IsCommonContainer(appName))
+        {
+            if (!CanAccessContainer(parameters, appName))
+                throw new UnauthorizedAccessException(
+                    "You do not have permission to manage this container.");
+            return appName;
+        }
+
+        return SanitizeAppName($"{githubUsername}-{name}");
+    }
+
+    /// <summary>
+    /// Resolves the app label for a NEW container being created.
+    /// Unlike <see cref="ResolveAppName"/>, this never interprets a hyphen in the
+    /// supplied name as a reference to someone else's container — a hyphen is just
+    /// a valid character in a container name (e.g. "my-app"). The caller's own
+    /// "username-" prefix is always applied unless the supplied name already starts
+    /// with it. This guarantees every newly created container is owned by its creator
+    /// and will be found by ownership-prefix filters (listing, quotas, etc.).
+    /// </summary>
+    protected static string ResolveNewAppName(Dictionary<string, string> parameters)
+    {
+        var name = parameters["name"];
+        var githubUsername = parameters["_githubUsername"];
 
         var ownPrefix = $"{githubUsername}-";
 
-        if (name.StartsWith(ownPrefix, StringComparison.OrdinalIgnoreCase))
-        {
-            // User supplied their own full app label — use as-is
-            return SanitizeAppName(name);
-        }
-
-        if (name.Contains('-'))
-        {
-            // Name references someone else's container
-            if (!isAdmin)
-            {
-                throw new UnauthorizedAccessException(
-                    "You do not have permission to manage containers that belong to other users.");
-            }
-            // Admin can reference any container
-            return SanitizeAppName(name);
-        }
-
-        // Short name without prefix — prepend the user's username
-        return SanitizeAppName($"{githubUsername}-{name}");
+        return name.StartsWith(ownPrefix, StringComparison.OrdinalIgnoreCase)
+            ? SanitizeAppName(name)
+            : SanitizeAppName($"{githubUsername}-{name}");
     }
 
 
@@ -360,6 +380,61 @@ public abstract class FkhServiceBase
     {
         public override string ToString() =>
             string.IsNullOrWhiteSpace(Stderr) ? Stdout : $"{Stdout}\n[stderr]: {Stderr}";
+    }
+
+    /// <summary>
+    /// Sentinel written via <c>Write-Output</c> in a PowerShell script immediately before
+    /// <c>ConvertTo-Json</c> so the JSON payload can be reliably located in pod exec output.
+    /// </summary>
+    protected const string PodJsonMarker = "@@FKH_JSON@@";
+
+    private static readonly Regex AnsiEscapeRegex =
+        new("\u001B\\[[0-9;?]*[ -/]*[@-~]", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Removes ANSI escape / color sequences (e.g. PowerShell <c>$PSStyle</c> warning coloring)
+    /// from terminal output so it can be parsed safely.
+    /// </summary>
+    protected static string StripAnsi(string value) =>
+        string.IsNullOrEmpty(value) ? value : AnsiEscapeRegex.Replace(value, string.Empty);
+
+    /// <summary>
+    /// Strips ANSI codes and returns everything after the last <see cref="PodJsonMarker"/>
+    /// sentinel (or the whole cleaned output when the sentinel is absent). Use for non-JSON
+    /// single-token payloads such as base64 content.
+    /// </summary>
+    protected static string ExtractPodPayload(string stdout)
+    {
+        if (string.IsNullOrWhiteSpace(stdout))
+            return string.Empty;
+
+        var cleaned = StripAnsi(stdout);
+        var markerIndex = cleaned.LastIndexOf(PodJsonMarker, StringComparison.Ordinal);
+        return (markerIndex >= 0 ? cleaned[(markerIndex + PodJsonMarker.Length)..] : cleaned).Trim();
+    }
+
+    /// <summary>
+    /// Extracts the JSON payload from pod exec stdout. Strips ANSI codes, then takes everything
+    /// after the last <see cref="PodJsonMarker"/> sentinel when present; otherwise falls back to
+    /// the first <c>[</c> or <c>{</c>. Returns an empty string when no JSON can be located.
+    /// </summary>
+    protected static string ExtractPodJson(string stdout)
+    {
+        if (string.IsNullOrWhiteSpace(stdout))
+            return string.Empty;
+
+        var cleaned = StripAnsi(stdout);
+        var markerIndex = cleaned.LastIndexOf(PodJsonMarker, StringComparison.Ordinal);
+        if (markerIndex >= 0)
+            return cleaned[(markerIndex + PodJsonMarker.Length)..].Trim();
+
+        var arrayIndex = cleaned.IndexOf('[');
+        var objectIndex = cleaned.IndexOf('{');
+        var jsonStart = arrayIndex;
+        if (jsonStart < 0 || (objectIndex >= 0 && objectIndex < jsonStart))
+            jsonStart = objectIndex;
+
+        return jsonStart < 0 ? string.Empty : cleaned[jsonStart..].Trim();
     }
 
     protected async Task<ExecResult> ExecInMssqlPodAsync(Kubernetes client, string podName, string bashScript)
@@ -641,9 +716,10 @@ public abstract class FkhServiceBase
         Logger.LogInformation("Database '{DatabaseName}' restored successfully.", databaseName);
     }
 
-    protected async Task<ExecResult> ExecInBcPodPwshAsync(Kubernetes client, string podName, string containerName, string psScript)
+    protected async Task<ExecResult> ExecInBcPodAsync(Kubernetes client, string podName, string containerName, string psScript, bool usePwsh = true)
     {
-        var command = new[] { "pwsh", "-NoProfile", "-Command", psScript };
+        var powershellExecutable = usePwsh ? "pwsh" : "powershell";
+        var command = new[] { powershellExecutable, "-NoProfile", "-Command", psScript };
         var ws = await client.WebSocketNamespacedPodExecAsync(
             podName, Namespace, command, containerName,
             stderr: true, stdin: false, stdout: true, tty: false);
@@ -664,7 +740,7 @@ public abstract class FkhServiceBase
         var stderr = stderrTask.Result;
         if (!string.IsNullOrWhiteSpace(stderr))
         {
-            Logger.LogWarning("BC pod pwsh exec stderr: {StdErr}", stderr);
+            Logger.LogWarning("BC pod {PowerShellExecutable} exec stderr: {StdErr}", powershellExecutable, stderr);
         }
 
         return new ExecResult(stdoutTask.Result, stderr);
@@ -697,21 +773,21 @@ public abstract class FkhServiceBase
         var donePath = $"{basePath}.done";
 
         // Check if job is already complete (retry after previous timeout)
-        var doneCheck = await ExecInBcPodPwshAsync(client, podName, containerName,
+        var doneCheck = await ExecInBcPodAsync(client, podName, containerName,
             $"if (Test-Path '{donePath}') {{ 'DONE' }} else {{ 'PENDING' }}");
 
         if (doneCheck.Stdout.Trim() == "DONE")
             return await CollectDetachedResultAsync(client, podName, containerName, basePath, stdoutPath, stderrPath);
 
         // Check if job is already running (script file exists but no done marker)
-        var runningCheck = await ExecInBcPodPwshAsync(client, podName, containerName,
+        var runningCheck = await ExecInBcPodAsync(client, podName, containerName,
             $"if (Test-Path '{scriptPath}') {{ 'RUNNING' }} else {{ 'NEW' }}");
 
         if (runningCheck.Stdout.Trim() == "NEW")
         {
             // First invocation — write script and wrapper, launch detached
             var scriptBase64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(script));
-            await ExecInBcPodPwshAsync(client, podName, containerName,
+            await ExecInBcPodAsync(client, podName, containerName,
                 $"[IO.File]::WriteAllBytes('{scriptPath}', [Convert]::FromBase64String('{scriptBase64}'))");
 
             var wrapperScript = $@"
@@ -724,10 +800,10 @@ try {{
     'DONE' | Out-File '{donePath}' -NoNewline
 }}";
             var wrapperBase64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(wrapperScript));
-            await ExecInBcPodPwshAsync(client, podName, containerName,
+            await ExecInBcPodAsync(client, podName, containerName,
                 $"[IO.File]::WriteAllBytes('{wrapperPath}', [Convert]::FromBase64String('{wrapperBase64}'))");
 
-            await ExecInBcPodPwshAsync(client, podName, containerName,
+            await ExecInBcPodAsync(client, podName, containerName,
                 $"Start-Process -FilePath 'pwsh' -ArgumentList '-NoProfile','-File','{wrapperPath}' -WindowStyle Hidden");
         }
 
@@ -736,7 +812,7 @@ try {{
         {
             await Task.Delay(5_000);
 
-            var pollCheck = await ExecInBcPodPwshAsync(client, podName, containerName,
+            var pollCheck = await ExecInBcPodAsync(client, podName, containerName,
                 $"if (Test-Path '{donePath}') {{ 'DONE' }} else {{ 'PENDING' }}");
 
             if (pollCheck.Stdout.Trim() == "DONE")
@@ -750,15 +826,15 @@ try {{
         Kubernetes client, string podName, string containerName,
         string basePath, string stdoutPath, string stderrPath)
     {
-        var stdoutResult = await ExecInBcPodPwshAsync(client, podName, containerName,
+        var stdoutResult = await ExecInBcPodAsync(client, podName, containerName,
             $"if (Test-Path '{stdoutPath}') {{ Get-Content '{stdoutPath}' -Raw }} else {{ '' }}");
-        var stderrResult = await ExecInBcPodPwshAsync(client, podName, containerName,
+        var stderrResult = await ExecInBcPodAsync(client, podName, containerName,
             $"if (Test-Path '{stderrPath}') {{ Get-Content '{stderrPath}' -Raw }} else {{ '' }}");
 
         // Clean up all job files
         try
         {
-            await ExecInBcPodPwshAsync(client, podName, containerName,
+            await ExecInBcPodAsync(client, podName, containerName,
                 $"Remove-Item '{basePath}*' -Force -ErrorAction SilentlyContinue");
         }
         catch { /* best-effort cleanup */ }
