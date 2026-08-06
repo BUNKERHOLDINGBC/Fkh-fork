@@ -135,6 +135,33 @@ The command writes trustworthy, non-empty JUnit before returning. Exit code `0`
 means all tests passed, `1` means JUnit contains test failures or errors, and `2`
 means the request or test infrastructure failed.
 
+#### Measured performance
+
+A three-iteration benchmark against Business Central 25.8 published a freshly
+versioned main app and test app on every iteration, ran one AL test, securely
+validated the returned JUnit, and wrote the result to disk.
+
+| Phase | Average |
+|---|---:|
+| Build main app | 4.67 s |
+| Build test app | 4.65 s |
+| Publish main app | 7.13 s |
+| Publish test app | 4.62 s |
+| Run AL tests | 23.47 s |
+| Validate and write JUnit | 0.05 s |
+| **Fkh publish-to-result flow** | **35.27 s** |
+| **Complete build-to-result agent loop** | **57.36 s** |
+
+The complete loop ranged from **56.41 to 58.70 seconds**. A cold symbol download
+and initial compilation took an additional 42.67 seconds once. Temporary worker
+staging took 34.37 seconds and is excluded because deployed containers receive
+the worker scripts during setup.
+
+The benchmark was recorded on 2026-08-06 using fresh app versions 27.3.1.1 through
+27.3.1.3; all three runs passed and produced valid JUnit. Because `/RunTests` was
+not deployed in the benchmark environment yet, execution used `InvokeScript` as
+a proxy. Both paths use the same backend `RunDetachedInBcPodAsync` polling flow.
+
 ### Admin Features
 - Start and stop the entire AKS cluster with everything persisted
 - System status dashboard (nodes, containers, SQL, storage, quotas, security)
