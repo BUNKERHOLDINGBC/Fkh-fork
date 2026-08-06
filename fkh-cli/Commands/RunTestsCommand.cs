@@ -120,6 +120,15 @@ sealed class RunTestsCommand : ClientCommand
         if (args.Any(argument => string.Equals(argument, "--nowait", StringComparison.OrdinalIgnoreCase)))
             throw new InvalidOperationException("--nowait is not supported by runtests because JUnit must be materialized before the command returns.");
 
+        for (var index = 1; index < args.Length; index++)
+        {
+            var argument = args[index];
+            if (argument.StartsWith("--", StringComparison.Ordinal)
+                && ParameterNames.Contains(argument[2..])
+                && (index + 1 >= args.Length || args[index + 1].StartsWith("--", StringComparison.Ordinal)))
+                throw new InvalidOperationException($"Missing value for {argument}");
+        }
+
         var parameters = ParseClientArgs(args);
         var unknownParameters = parameters.Keys.Where(key => !ParameterNames.Contains(key)).ToList();
         if (unknownParameters.Count > 0)

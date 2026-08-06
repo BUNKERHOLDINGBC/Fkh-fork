@@ -41,6 +41,30 @@ public sealed class RunTestsCommandTests : IDisposable
     }
 
     [Theory]
+    [InlineData("--name")]
+    [InlineData("--tenant")]
+    [InlineData("--extensionId")]
+    [InlineData("--appName")]
+    [InlineData("--output")]
+    public void ValidateParametersRejectsOptionsWithoutValues(string option)
+    {
+        var args = new List<string>
+        {
+            "runtests",
+            "--name", "owner-container",
+            "--tenant", "default",
+            "--extensionId", "11111111-1111-1111-1111-111111111111",
+            "--appName", "Test App",
+            "--output", "result.xml"
+        };
+        args.RemoveAt(args.IndexOf(option) + 1);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => RunTestsCommand.ValidateParameters([.. args]));
+
+        Assert.Equal($"Missing value for {option}", exception.Message);
+    }
+
+    [Theory]
     [InlineData("--tennant", "default")]
     [InlineData("--open")]
     [InlineData("--nowait")]
