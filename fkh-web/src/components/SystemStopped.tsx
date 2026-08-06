@@ -4,16 +4,13 @@ import { startFkh } from '../api';
 interface SystemStoppedProps {
   backendUrl: string;
   token: string;
-  orgName: string;
-  isAdmin: boolean;
   onStarted: () => void;
 }
 
-export function SystemStopped({ backendUrl, token, orgName, isAdmin, onStarted }: SystemStoppedProps) {
+export function SystemStopped({ backendUrl, token, onStarted }: SystemStoppedProps) {
   const [starting, setStarting] = useState(false);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const deploymentLabel = orgName ? `Fkh deployment for ${orgName}` : 'Fkh deployment';
 
   const handleStart = async () => {
     setStarting(true);
@@ -25,7 +22,7 @@ export function SystemStopped({ backendUrl, token, orgName, isAdmin, onStarted }
       // Wait 5 minutes for the system to fully come online before redirecting
       setTimeout(onStarted, 300_000);
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Failed to start the Fkh deployment');
+      setError(e instanceof Error ? e.message : 'Failed to start the system');
       setStarting(false);
       setStatus(null);
     }
@@ -37,17 +34,16 @@ export function SystemStopped({ backendUrl, token, orgName, isAdmin, onStarted }
         <div className="stopped-icon">&#x23F8;</div>
         <h1>System Stopped</h1>
         <p className="stopped-description">
-          The {deploymentLabel} is currently stopped. Start the {deploymentLabel} to manage your containers.
+          The Fkh cluster is currently stopped. Start the system to manage your containers.
         </p>
         {error && <div className="error-banner">{error}</div>}
         {status && <p className="stopped-status">{status}</p>}
         <button
           className="btn btn-primary btn-lg"
           onClick={handleStart}
-          disabled={starting || !isAdmin}
-          title={!isAdmin ? 'Administrators only' : undefined}
+          disabled={starting}
         >
-          {starting ? 'Starting...' : 'Start Fkh Deployment'}
+          {starting ? 'Starting...' : 'Start System'}
         </button>
       </div>
     </div>

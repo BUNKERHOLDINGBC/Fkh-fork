@@ -4,10 +4,10 @@
 
 In this step you create and install a GitHub App for Fkh.
 
-The GitHub App is used for:
+The GitHub App is used for two things:
 
 - The Fkh backend uses it to trigger image-build workflows when a requested Business Central image is missing from Azure Container Registry.
-- The deployment workflows use it to create installation tokens for updating the deployment repo and syncing deployment outputs back as GitHub Actions secrets.
+- The deployment workflow uses it to sync deployment outputs back to the deployment repository as GitHub Actions secrets.
 - If the **web app** is enabled, users authenticate via the GitHub App's device code flow to get a user access token.
 
 > **Already have a GitHub App from another Fkh deployment?** You can reuse it. Install the existing app on the new deployment repository, note the new **Installation ID**, and continue from [3.4 — Save your values](#34--save-your-values).
@@ -18,13 +18,9 @@ The app needs repository permissions and — if the web app is enabled — one o
 
 | Scope | Permission | Access | Why it is needed |
 |---|---|---|---|
-| Repository | Contents | Read & Write | Push commits when updating the deployment repo via `UpdateFkhVersion` workflow |
-| Repository | Workflows | Read & Write | Update `.github/workflows/` files when updating the deployment repo via `UpdateFkhVersion` workflow |
 | Repository | Actions | Read & Write | Dispatch the `CreateImages` workflow from the Fkh backend, and used by the deployment workflow when syncing outputs |
 | Repository | Secrets | Read & Write | Sync deployment outputs to repository secrets at the end of `Deploy Full Stack` |
 | Organization | Members | Read | *(Web app only)* Allows the backend to check team membership for users who authenticate via the device code flow |
-
-> **Note:** Contents (Read & Write) and Workflows (Read & Write) are only required if you use the `UpdateFkhVersion` workflow to automatically update your deployment repo. If you update workflow files using the fkh CLI manually, these two permissions can be left at **No access**.
 
 ---
 
@@ -45,8 +41,6 @@ The app needs repository permissions and — if the web app is enabled — one o
 
 | Permission | Access |
 |---|---|
-| Contents | Read & Write |
-| Workflows | Read & Write |
 | Actions | Read & Write |
 | Secrets | Read & Write |
 
@@ -99,7 +93,7 @@ Record these values for Step 5:
 | Value | Where to find it |
 |---|---|
 | App ID | GitHub App settings page, near the top |
-| Client ID | GitHub App settings page, below the App ID |
+| Client ID | GitHub App settings page, below the App ID *(needed only if web app is enabled)* |
 | Installation ID | The number at the end of the installation URL |
 | Private Key | The `.pem` file downloaded in 3.2 |
 

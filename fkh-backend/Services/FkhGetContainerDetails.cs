@@ -11,10 +11,14 @@ public class FkhGetContainerDetails : FkhServiceBase
     public async Task<object> GetContainerDetailsAsync(Dictionary<string, string> parameters)
     {
         var name = parameters["name"];
+        var githubUsername = parameters["_githubUsername"];
+        var isAdmin = parameters.TryGetValue("_isAdmin", out var adminValue)
+            && string.Equals(adminValue, "true", StringComparison.OrdinalIgnoreCase);
 
         var client = await GetKubernetesClientAsync();
 
         // Find the deployment matching this container name
+        var usernamePrefix = $"{githubUsername.ToLowerInvariant()}-";
         var appName = ResolveAppName(parameters);
         var deploymentName = $"{appName}-deployment";
 
@@ -30,9 +34,9 @@ public class FkhGetContainerDetails : FkhServiceBase
 
         // Verify ownership unless admin
         var appLabel = deployment.Spec.Template.Metadata.Labels.TryGetValue("app", out var app) ? app : "";
-        if (!CanAccessContainer(parameters, appLabel))
+        if (!isAdmin && !appLabel.StartsWith(usernamePrefix, StringComparison.OrdinalIgnoreCase))
         {
-            throw new UnauthorizedAccessException($"You do not have permission to access container '{name}'.");
+            throw new UnauthorizedAccessException($"Container '{name}' does not belong to you.");
         }
 
         // DevScope from annotation

@@ -130,73 +130,37 @@ aad_app_additional_owner  = ""
 # Values are case-sensitive.
 
 # Member teams — users in these teams can provision containers
-# Format: { org = "<github-org>", team = "<team-slug>" }
-# The team slug is visible in the team URL: https://github.com/orgs/<org>/teams/<team-slug>
 allowed_org_teams = [
-  # { org = "my-company",    team = "Fkh-members" },
-  # { org = "partner-org",   team = "Fkh-members" }
+  { org = "my-company",    team = "Fkh-members" },
+  { org = "partner-org",   team = "Fkh-members" }
 ]
 
 # Admin teams — members get admin access (and also have normal access)
-# Format: { org = "<github-org>", team = "<team-slug>" }
-# The team slug is visible in the team URL: https://github.com/orgs/<org>/teams/<team-slug>
 admin_org_teams = [
-  # { org = "my-company",    team = "Fkh-admins" }
+  { org = "my-company",    team = "Fkh-admins" }
 ]
 
 # Support teams — members get support access (permissions defined in the backend)
-# Format: { org = "<github-org>", team = "<team-slug>" }
-# The team slug is visible in the team URL: https://github.com/orgs/<org>/teams/<team-slug>
 support_org_teams = [
-  # { org = "my-company", team = "Fkh-supporters" }
+  { org = "my-company", team = "Fkh-supporters" }
 ]
 
 # Explicit users — grant access by GitHub username without team membership
-# Format: { user = "<github-username>", role = "<role>" }
 # Role must be admin, member, or support
 allowed_users = [
-  # { user = "octocat", role = "member" },
-  # { user = "support-agent", role = "support" }
-]
-
-# Common containers — container app name patterns that all members can access.
-# Patterns are matched against the full Kubernetes app name after Fkh sanitizes names
-# to lowercase and converts dots/underscores to dashes.
-# Use * to match any number of characters and ? to match exactly one character.
-# Examples: "common-*" matches common-bc and common-demo; "demo-??" matches demo-us.
-common_containers = [
-  # "common-*"
+  { user = "octocat", role = "member" },
+  { user = "support-agent", role = "support" }
 ]
 
 # Repositories — GitHub repos allowed to call Fkh via OIDC from GitHub Actions
 # Please note that the AUTH token provided must be the ID token
 allowed_oidc_repos = [
-  # "my-company/my-bc-app"
-]
-
-# Azure DevOps — service connections allowed to call Fkh via OIDC from Azure Pipelines.
-# Create the service connection in Azure DevOps:
-#   Project Settings → Service connections → New → Azure Resource Manager
-#     → Workload Identity Federation (manual)
-#   - Service connection name: must match devops_connection_name below
-#   - Application (client) ID: use the ado_identity_client_id Terraform output
-#   - Tenant ID: your Azure AD tenant
-#   - Subscription ID/Name: your Azure subscription
-#   Save as draft, then copy the "Subject identifier" value into entra_subject below.
-#   Deploy Terraform to create the federated credential, then verify the connection in ADO.
-allowed_ado_connections = [
-  # {
-  #   devops_org_id          = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"   # Azure DevOps organization ID (open https://dev.azure.com/<org>/_apis/connectiondata and use the instanceId value)
-  #   devops_org             = "my-org"                                 # Azure DevOps organization name
-  #   devops_project         = "my-project"                             # Azure DevOps project name
-  #   devops_connection_name = "fkh-oidc"                               # Service connection name (must match exactly)
-  #   entra_subject          = "/eid1/c/pub/t/..."                      # Subject identifier from the ADO service connection form
-  # }
+  "my-company/my-bc-app"
 ]
 
 # GitHub App — triggers image-build workflows in this deployment repo
 github_app_id              = "1234567"  # paste your App ID here
-github_app_client_id       = "Iv1.0000000000000000"  # Client ID of the GitHub App. Find it on the GitHub App settings page.
+github_app_client_id       = ""          # Client ID of the GitHub App (for web app OAuth login). Find it on the GitHub App settings page.
 # github_app_private_key   = ""  # set as GitHub Secret: GH_APP_PRIVATE_KEY
 github_app_installation_id = "123456789"  # paste your Installation ID here
 

@@ -59,22 +59,23 @@ foreach ($user in $users) {{
         PermissionSets = $permSets
     }}
 }}
-Write-Output '{PodJsonMarker}'
-ConvertTo-Json -InputObject $result -Depth 5 -Compress
+ConvertTo-Json -InputObject $result -Depth 5
 ";
 
         var result = await ExecInBcPodAsync(client, podName, containerName, script);
 
         if (!string.IsNullOrWhiteSpace(result.Stderr))
         {
-            throw new InvalidOperationException($"Failed to get user info from container '{appName}':\n{StripAnsi(result.Stderr).TrimEnd()}");
+            throw new InvalidOperationException($"Failed to get user info from container '{appName}':\n{result.Stderr.TrimEnd()}");
         }
 
-        // Locate the JSON payload, ignoring ANSI color codes and any info/warning
-        // lines the pod may emit before the ConvertTo-Json output.
-        var jsonText = ExtractPodJson(result.Stdout);
+        // Parse the JSON array output
+        var jsonStart = result.Stdout.IndexOf('[');
+        var jsonStartObj = result.Stdout.IndexOf('{');
+        if (jsonStart < 0 || (jsonStartObj >= 0 && jsonStartObj < jsonStart))
+            jsonStart = jsonStartObj;
 
-        if (string.IsNullOrWhiteSpace(jsonText))
+        if (jsonStart < 0)
         {
             return new
             {
@@ -84,6 +85,7 @@ ConvertTo-Json -InputObject $result -Depth 5 -Compress
             };
         }
 
+        var jsonText = result.Stdout[jsonStart..].TrimEnd();
         using var doc = JsonDocument.Parse(jsonText);
         var users = new List<object>();
 
@@ -105,4 +107,32 @@ ConvertTo-Json -InputObject $result -Depth 5 -Compress
         };
     }
 
+    private async Task<ExecResult> ExecInBcPodAsync(Kubernetes client, string podName, string containerName, string psScript)
+    {
+        var command = new[] { "powershell", "-NoProfile", "-Command", psScript };
+        var ws = await client.WebSocketNamespacedPodExecAsync(
+            podName, Namespace, command, containerName,
+            stderr: true, stdin: false, stdout: true, tty: false);
+
+        using var demux = new k8s.StreamDemuxer(ws);
+        demux.Start();
+
+        var stdoutStream = demux.GetStream(1, null);
+        var stderrStream = demux.GetStream(2, null);
+
+        using var stdoutReader = new StreamReader(stdoutStream);
+        using var stderrReader = new StreamReader(stderrStream);
+
+        var stdoutTask = stdoutReader.ReadToEndAsync();
+        var stderrTask = stderrReader.ReadToEndAsync();
+        await Task.WhenAll(stdoutTask, stderrTask);
+
+        var stderr = stderrTask.Result;
+        if (!string.IsNullOrWhiteSpace(stderr))
+        {
+            Logger.LogWarning("BC pod exec stderr: {StdErr}", stderr);
+        }
+
+        return new ExecResult(stdoutTask.Result, stderr);
+    }
 }

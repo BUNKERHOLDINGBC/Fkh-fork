@@ -366,8 +366,6 @@ static class ClientCommands
         new PublishAppCommand(),
         new UploadDatabaseCommand(),
         new DownloadDatabaseCommand(),
-        new UploadFileCommand(),
-        new DownloadFileCommand(),
         new StatusCommand(),
         new OpenCommand(),
         new EditCommand(),
