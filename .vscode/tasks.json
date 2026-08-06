@@ -1,0 +1,71 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "validate-test-contract-release",
+			"type": "shell",
+			"command": "C:\\Users\\alrm\\AppData\\Local\\Microsoft\\dotnet\\dotnet.exe",
+			"args": [
+				"test",
+				"tests\\Fkh.Contract.Tests\\Fkh.Contract.Tests.csproj",
+				"--configuration",
+				"Release"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "validate-build-cli-net8-release",
+			"type": "shell",
+			"command": "C:\\Users\\alrm\\AppData\\Local\\Microsoft\\dotnet\\dotnet.exe",
+			"args": [
+				"build",
+				"fkh-cli\\fkh-cli.csproj",
+				"--configuration",
+				"Release",
+				"--framework",
+				"net8.0"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "validate-ps-parser-containerscripts",
+			"type": "shell",
+			"command": "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$files = @('ContainerScripts/Run-FkhBcTests.ps1','ContainerScripts/Invoke-FkhBcTests.ps1'); foreach ($f in $files) { $resolved = (Resolve-Path $f).Path; $tokens = $null; $errors = $null; [void][System.Management.Automation.Language.Parser]::ParseFile($resolved, [ref]$tokens, [ref]$errors); Write-Output \"FILE=$f\"; Write-Output \"RESOLVED=$resolved\"; Write-Output \"TOKENS=$(@($tokens).Count)\"; Write-Output \"PARSE_ERRORS=$(@($errors).Count)\"; if (@($errors).Count -gt 0) { foreach ($e in $errors) { Write-Output (\"  LINE={0};COLUMN={1};ERRORID={2};MESSAGE={3}\" -f $e.Extent.StartLineNumber, $e.Extent.StartColumnNumber, $e.ErrorId, $e.Message) } } else { Write-Output \"  No parse errors.\" }; Write-Output \"---\" }"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "validate-ps-parser-containerscripts-2",
+			"type": "shell",
+			"command": "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+			"args": [
+				"-NoProfile",
+				"-Command",
+				"$files = @(\"ContainerScripts/Run-FkhBcTests.ps1\",\"ContainerScripts/Invoke-FkhBcTests.ps1\"); foreach ($f in $files) { $resolved = (Resolve-Path $f).Path; $tokens = $null; $errors = $null; [void][System.Management.Automation.Language.Parser]::ParseFile($resolved, [ref]$tokens, [ref]$errors); Write-Output \"FILE=$f\"; Write-Output \"RESOLVED=$resolved\"; Write-Output \"TOKENS=$(@($tokens).Count)\"; Write-Output \"PARSE_ERRORS=$(@($errors).Count)\"; if (@($errors).Count -gt 0) { foreach ($e in $errors) { Write-Output (\"  LINE={0};COLUMN={1};ERRORID={2};MESSAGE={3}\" -f $e.Extent.StartLineNumber, $e.Extent.StartColumnNumber, $e.ErrorId, $e.Message) } } else { Write-Output \"  No parse errors.\" }; Write-Output \"---\" }"
+			],
+			"isBackground": false
+		},
+		{
+			"label": "validate-ps-parser-containerscripts-3",
+			"type": "shell",
+			"command": "$files = @(\"ContainerScripts/Run-FkhBcTests.ps1\",\"ContainerScripts/Invoke-FkhBcTests.ps1\"); foreach ($f in $files) { $resolved = (Resolve-Path $f).Path; $tokens = $null; $errors = $null; [void][System.Management.Automation.Language.Parser]::ParseFile($resolved, [ref]$tokens, [ref]$errors); Write-Output \"FILE=$f\"; Write-Output \"RESOLVED=$resolved\"; Write-Output \"TOKENS=$(@($tokens).Count)\"; Write-Output \"PARSE_ERRORS=$(@($errors).Count)\"; if (@($errors).Count -gt 0) { foreach ($e in $errors) { Write-Output (\"  LINE={0};COLUMN={1};ERRORID={2};MESSAGE={3}\" -f $e.Extent.StartLineNumber, $e.Extent.StartColumnNumber, $e.ErrorId, $e.Message) } } else { Write-Output \"  No parse errors.\" }; Write-Output \"---\" }",
+			"isBackground": false
+		},
+		{
+			"label": "validate-ps-parser-containerscripts-4",
+			"type": "shell",
+			"command": "$files = @('ContainerScripts/Run-FkhBcTests.ps1','ContainerScripts/Invoke-FkhBcTests.ps1'); foreach ($f in $files) { $resolved = (Resolve-Path $f).Path; $tokens = $null; $errors = $null; [void][System.Management.Automation.Language.Parser]::ParseFile($resolved, [ref]$tokens, [ref]$errors); Write-Output \"FILE=$f\"; Write-Output \"RESOLVED=$resolved\"; Write-Output \"TOKENS=$(@($tokens).Count)\"; Write-Output \"PARSE_ERRORS=$(@($errors).Count)\"; if (@($errors).Count -gt 0) { foreach ($e in $errors) { Write-Output (\"  LINE={0};COLUMN={1};ERRORID={2};MESSAGE={3}\" -f $e.Extent.StartLineNumber, $e.Extent.StartColumnNumber, $e.ErrorId, $e.Message) } } else { Write-Output \"  No parse errors.\" }; Write-Output \"---\" }",
+			"isBackground": false
+		},
+		{
+			"label": "validate-ps-parser-containerscripts-5",
+			"type": "shell",
+			"command": "$files = @('ContainerScripts/Run-FkhBcTests.ps1','ContainerScripts/Invoke-FkhBcTests.ps1'); foreach ($f in $files) { $resolved = (Resolve-Path $f).Path; $tokens = $null; $errors = $null; [void][System.Management.Automation.Language.Parser]::ParseFile($resolved, [ref]$tokens, [ref]$errors); Write-Output ('FILE=' + $f); Write-Output ('RESOLVED=' + $resolved); Write-Output ('TOKENS=' + @($tokens).Count); Write-Output ('PARSE_ERRORS=' + @($errors).Count); if (@($errors).Count -gt 0) { foreach ($e in $errors) { Write-Output ([string]::Format('  LINE={0};COLUMN={1};ERRORID={2};MESSAGE={3}', $e.Extent.StartLineNumber, $e.Extent.StartColumnNumber, $e.ErrorId, $e.Message)) } } else { Write-Output '  No parse errors.' }; Write-Output '---' }",
+			"isBackground": false
+		}
+	]
+}

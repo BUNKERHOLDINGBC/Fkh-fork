@@ -39,8 +39,16 @@ sealed class RunTestsCommand : ClientCommand
             return 2;
         }
 
-        if (File.Exists(request.Output))
-            File.Delete(request.Output);
+        try
+        {
+            if (File.Exists(request.Output))
+                File.Delete(request.Output);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
+        {
+            Console.Error.WriteLine($"{Ansi.Red}Could not prepare JUnit output '{request.Output}': {ex.Message}{Ansi.Reset}");
+            return 2;
+        }
 
         var backendUrl = ValidateBackendUrl(settings.BackendUrl);
         if (backendUrl is null)
@@ -90,7 +98,12 @@ sealed class RunTestsCommand : ClientCommand
                     return 2;
                 }
 
-                var exitCode = MaterializeResult(result, request.Output);
+                var exitCode = MaterializeResult(result, request.Output, out var materializationError);
+                if (exitCode == 2)
+                {
+                    Console.Error.WriteLine($"{Ansi.Red}{materializationError}{Ansi.Reset}");
+                    return 2;
+                }
                 WriteSummary(result, asJson);
                 return exitCode;
             }
@@ -136,12 +149,22 @@ sealed class RunTestsCommand : ClientCommand
     }
 
     internal static int MaterializeResult(RunTestsResponse result, string outputPath)
+        => MaterializeResult(result, outputPath, out _);
+
+    internal static int MaterializeResult(RunTestsResponse result, string outputPath, out string? error)
     {
+        error = null;
         if (string.Equals(result.Outcome, "infrastructureFailure", StringComparison.OrdinalIgnoreCase))
+        {
+            error = "Backend reported a test infrastructure failure.";
             return 2;
+        }
 
         if (string.IsNullOrWhiteSpace(result.JunitBase64))
+        {
+            error = "Backend returned no JUnit.";
             return 2;
+        }
 
         byte[] junitBytes;
         bool junitFailed;
@@ -152,6 +175,7 @@ sealed class RunTestsCommand : ClientCommand
         }
         catch (Exception ex) when (ex is FormatException or XmlException or InvalidOperationException)
         {
+            error = $"Backend returned invalid JUnit: {ex.Message}";
             return 2;
         }
 
@@ -162,22 +186,33 @@ sealed class RunTestsCommand : ClientCommand
             _ => (bool?)null
         };
         if (expectedFailure is null || expectedFailure.Value != junitFailed)
+        {
+            error = "Backend test outcome does not match JUnit.";
             return 2;
+        }
 
-        var directory = Path.GetDirectoryName(Path.GetFullPath(outputPath));
-        if (!string.IsNullOrWhiteSpace(directory))
-            Directory.CreateDirectory(directory);
-
-        var tempPath = $"{outputPath}.{Guid.NewGuid():N}.tmp";
         try
         {
-            File.WriteAllBytes(tempPath, junitBytes);
-            File.Move(tempPath, outputPath, overwrite: true);
+            var directory = Path.GetDirectoryName(Path.GetFullPath(outputPath));
+            if (!string.IsNullOrWhiteSpace(directory))
+                Directory.CreateDirectory(directory);
+
+            var tempPath = $"{outputPath}.{Guid.NewGuid():N}.tmp";
+            try
+            {
+                File.WriteAllBytes(tempPath, junitBytes);
+                File.Move(tempPath, outputPath, overwrite: true);
+            }
+            finally
+            {
+                if (File.Exists(tempPath))
+                    File.Delete(tempPath);
+            }
         }
-        finally
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
         {
-            if (File.Exists(tempPath))
-                File.Delete(tempPath);
+            error = $"Could not write JUnit to '{outputPath}': {ex.Message}";
+            return 2;
         }
 
         return result.Outcome.ToLowerInvariant() switch

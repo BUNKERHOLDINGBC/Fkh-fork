@@ -87,10 +87,46 @@ A GitHub-authenticated Azure Function acts as the provisioning gate; Terraform m
 - Deployment repo creation and update (syncs workflow templates from your Fkh fork)
 - `--nowait` mode for long-running operations
 
-Run tests from a published test app inside an existing container:
+The typical coding-agent loop publishes freshly built app packages, runs the
+published test app, and uses the JUnit result to decide whether to continue
+coding or complete the task:
+
+```mermaid
+sequenceDiagram
+	actor Agent
+	participant Build as AL build
+	participant CLI as fkh CLI
+	participant API as Fkh backend
+	participant BC as Business Central container
+
+	Agent->>Build: Build main app and test app
+	Build-->>Agent: .app packages
+	Agent->>CLI: publishapp main app
+	CLI->>API: Upload and publish
+	API->>BC: Publish, sync, and install
+	Agent->>CLI: publishapp test app
+	CLI->>API: Upload and publish
+	API->>BC: Publish, sync, and install
+	Agent->>CLI: runtests with test app ID
+	CLI->>API: POST /RunTests
+	API->>BC: Run matching AL tests
+	BC-->>API: JUnit and bounded diagnostics
+	API-->>CLI: Counts, outcome, and JUnit
+	CLI-->>Agent: Save TestResults.xml
+
+	alt All tests pass
+		CLI-->>Agent: Exit 0 - complete the task
+	else An AL test fails
+		CLI-->>Agent: Exit 1 - inspect JUnit and continue coding
+	else Test infrastructure fails
+		CLI-->>Agent: Exit 2 - report infrastructure failure
+	end
+```
 
 ```powershell
-fkh runtests --name my-container --tenant default `
+fkh publishapp --name mycontainer --appFile .\MyApp.app --install
+fkh publishapp --name mycontainer --appFile .\MyTests.app --install
+fkh runtests --name mycontainer --tenant default `
 	--extensionId 11111111-1111-1111-1111-111111111111 `
 	--appName "My Tests" --output TestResults.xml --useOIDC
 ```

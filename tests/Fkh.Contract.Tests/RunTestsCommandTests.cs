@@ -1,6 +1,8 @@
 using System.Text;
 using Xunit;
 
+namespace Fkh.Contract.Tests;
+
 public sealed class RunTestsCommandTests : IDisposable
 {
     private readonly string _tempDirectory = Path.Combine(Path.GetTempPath(), $"fkh-runtests-{Guid.NewGuid():N}");
@@ -141,6 +143,27 @@ public sealed class RunTestsCommandTests : IDisposable
         var exitCode = RunTestsCommand.MaterializeResult(response, outputPath);
 
         Assert.Equal(2, exitCode);
+        Assert.False(File.Exists(outputPath));
+    }
+
+    [Fact]
+    public void MaterializeResultReturnsInfrastructureExitForUnwritableDestination()
+    {
+        Directory.CreateDirectory(_tempDirectory);
+        var blockingFile = Path.Combine(_tempDirectory, "not-a-directory");
+        File.WriteAllText(blockingFile, "block");
+        var outputPath = Path.Combine(blockingFile, "TestResults.xml");
+        var junit = "<testsuite tests=\"1\" failures=\"0\" errors=\"0\"><testcase name=\"Green\" /></testsuite>";
+        var response = new RunTestsCommand.RunTestsResponse
+        {
+            Outcome = "passed",
+            JunitBase64 = Convert.ToBase64String(Encoding.UTF8.GetBytes(junit))
+        };
+
+        var exitCode = RunTestsCommand.MaterializeResult(response, outputPath, out var error);
+
+        Assert.Equal(2, exitCode);
+        Assert.StartsWith("Could not write JUnit", error);
         Assert.False(File.Exists(outputPath));
     }
 

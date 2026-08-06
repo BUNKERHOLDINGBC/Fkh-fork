@@ -6,6 +6,46 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+function Get-BoundedFileContent {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string] $Path,
+
+        [Parameter(Mandatory = $true)]
+        [long] $MaxBytes
+    )
+
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        return ''
+    }
+
+    $stream = [IO.File]::Open($Path, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::ReadWrite)
+    try {
+        $truncated = $stream.Length -gt $MaxBytes
+        if ($truncated) {
+            $stream.Seek(-$MaxBytes, [IO.SeekOrigin]::End) | Out-Null
+        }
+
+        $reader = [IO.StreamReader]::new($stream, [Text.Encoding]::UTF8, $true, 4096, $true)
+        try {
+            $content = $reader.ReadToEnd()
+        } finally {
+            $reader.Dispose()
+        }
+
+        if ($truncated) {
+            return "[truncated]`r`n$content"
+        }
+        return $content
+    } finally {
+        $stream.Dispose()
+    }
+}
+
+$maxJUnitBytes = 10MB
+$maxStdoutBytes = [long]([Math]::Ceiling($maxJUnitBytes / 3.0) * 4) + 256KB
+$maxStderrBytes = 32KB
+
 try {
     $requestJson = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($RequestBase64))
     $request = $requestJson | ConvertFrom-Json
@@ -49,8 +89,8 @@ try {
     }
     $process.WaitForExit()
 
-    $stdout = if (Test-Path -LiteralPath $stdoutPath) { Get-Content -LiteralPath $stdoutPath -Raw } else { '' }
-    $stderr = if (Test-Path -LiteralPath $stderrPath) { Get-Content -LiteralPath $stderrPath -Raw } else { '' }
+    $stdout = Get-BoundedFileContent -Path $stdoutPath -MaxBytes $maxStdoutBytes
+    $stderr = Get-BoundedFileContent -Path $stderrPath -MaxBytes $maxStderrBytes
     if ($process.ExitCode -ne 0) {
         $message = if ([string]::IsNullOrWhiteSpace($stderr)) { 'The test worker failed without diagnostics.' } else { $stderr.Trim() }
         throw $message

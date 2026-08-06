@@ -10,6 +10,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $clientContext = $null
 $sslVerificationDisabled = $false
+$maxJUnitBytes = 10MB
 
 try {
     $requestJson = [Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($RequestBase64))
@@ -104,6 +105,10 @@ try {
 
     if (-not (Test-Path -LiteralPath $ResultPath -PathType Leaf)) {
         throw 'Business Central test execution did not create JUnit.'
+    }
+    $junitFile = Get-Item -LiteralPath $ResultPath
+    if ($junitFile.Length -gt $maxJUnitBytes) {
+        throw "Business Central test execution created JUnit larger than $maxJUnitBytes bytes."
     }
     $junitBytes = [IO.File]::ReadAllBytes($ResultPath)
     if ($junitBytes.Length -eq 0) {
