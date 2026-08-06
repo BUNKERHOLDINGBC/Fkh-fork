@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { createReadSettingsOptions, readSettings, getRepoName, getProjects } from './readALGoSettings';
 import { ProjectsTreeProvider, ProjectTreeItem, ContainersTreeProvider, ContainerTreeItem, ImagesTreeProvider, ImageTreeItem, VMsTreeProvider, VMTreeItem } from './containersTreeProvider';
-import { updateLaunchJsonAfterCreate } from './updateLaunchJson';
+import { updateLaunchJsonAfterCreate, removeLaunchJsonAfterRemove } from './updateLaunchJson';
 import { PROTOCOL_VERSION, CLIENT_APP } from './protocol';
 
 let functionCatalog: FunctionCatalogResponse | undefined;
@@ -206,6 +206,7 @@ export function activate(context: vscode.ExtensionContext) {
     vscode.commands.registerCommand('fkh.removeContainer', async (item: ContainerTreeItem | ProjectTreeItem) => {
       if (!item.containerInfo) { return; }
       const name = item.containerInfo.appLabel;
+      const project = item.containerInfo.project;
       const confirm = await vscode.window.showWarningMessage(
         `Are you sure you want to remove '${name}'? This will delete the container and its database.`,
         { modal: true },
@@ -213,6 +214,15 @@ export function activate(context: vscode.ExtensionContext) {
       );
       if (confirm !== 'Remove') { return; }
       await invokeFunctionByName('RemoveContainer', { name });
+      // Clean up the launch configuration for this container. This runs even if
+      // the backend call failed (e.g. the container was already gone), so a
+      // stale configuration doesn't linger. It is skipped only when the user
+      // cancels the confirmation above.
+      try {
+        await removeLaunchJsonAfterRemove(name, project);
+      } catch (err) {
+        logOutput(`[RemoveLaunchJson] ${err instanceof Error ? err.message : String(err)}`, true);
+      }
     }),
     vscode.commands.registerCommand('fkh.waitForContainer', async (item: ContainerTreeItem | ProjectTreeItem) => {
       if (!item.containerInfo) { return; }
@@ -893,7 +903,9 @@ async function showContainerLog(appLabel: string, containerName: string): Promis
     },
     async () => {
       try {
-        const body: FunctionInvokeRequest = { parameters: { name: containerName } };
+        // Send the full app label so the backend resolves the exact container,
+        // even when the short name contains hyphens.
+        const body: FunctionInvokeRequest = { parameters: { name: appLabel } };
         const response = await fetch(`${baseUrl}/GetContainerLog`, {
           method: 'POST',
           headers: {
@@ -949,7 +961,9 @@ async function downloadContainerEventLog(appLabel: string, containerName: string
     },
     async () => {
       try {
-        const body: FunctionInvokeRequest = { parameters: { name: containerName } };
+        // Send the full app label so the backend resolves the exact container,
+        // even when the short name contains hyphens.
+        const body: FunctionInvokeRequest = { parameters: { name: appLabel } };
         const response = await fetch(`${baseUrl}/GetContainerEventLog`, {
           method: 'POST',
           headers: {

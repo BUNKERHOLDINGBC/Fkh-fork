@@ -35,6 +35,13 @@ Note: --useOIDC is exclusive — when specified, no other auth methods are tried
 var asJson = args.Contains("--asJson", StringComparer.OrdinalIgnoreCase);
 var useOidc = args.Contains("--useOIDC", StringComparer.OrdinalIgnoreCase);
 
+#if NET8_0
+if (!asJson && (args.Length == 0 || !string.Equals(args[0], "--completions", StringComparison.OrdinalIgnoreCase)))
+{
+    Console.Error.WriteLine($"{Ansi.Yellow}Warning: You are running the .NET 8 build of fkh. .NET 10 is the preferred runtime; install .NET 10 to use the preferred build.{Ansi.Reset}");
+}
+#endif
+
 try
 {
     if (args.Length > 0 && string.Equals(args[0], "--version", StringComparison.OrdinalIgnoreCase))
@@ -42,7 +49,16 @@ try
         var version = typeof(FunctionCatalogResponse).Assembly.GetCustomAttribute<System.Reflection.AssemblyInformationalVersionAttribute>()?.InformationalVersion
             ?? typeof(FunctionCatalogResponse).Assembly.GetName().Version?.ToString()
             ?? "unknown";
-        Console.WriteLine($"Client:  {version}");
+        // Strip build metadata (+hash) and leading zeros from segments
+        var plusIndex = version.IndexOf('+');
+        if (plusIndex >= 0) version = version[..plusIndex];
+        version = string.Join('.', version.Split('.').Select(s => s.TrimStart('0') is "" ? "0" : s.TrimStart('0')));
+
+        string? backendVer = null, backendDeployedAt = null, clusterVer = null, clusterDeployedAt = null;
+        string? deploymentRepo = null, fkhFork = null, backendUrl = null;
+        int? forkAhead = null, forkBehind = null;
+        string? mergeBaseSha = null, mergeBaseDate = null;
+        bool backendAvailable = false;
 
         try
         {
@@ -53,6 +69,7 @@ try
             verSettings.User = FindArgValue(args, "ghUser") ?? Environment.GetEnvironmentVariable("GH_USER");
 
             var verEndpoint = $"{verSettings.BackendUrl!.TrimEnd('/')}/GetVersion";
+            backendUrl = verSettings.BackendUrl;
             var verTokenProvider = new TokenProvider(useOidc: useOidc, ghUser: verSettings.User);
             var verToken = await verTokenProvider.GetTokenAsync();
 
@@ -66,23 +83,72 @@ try
             var verResponse = await verClient.SendAsync(verRequest);
             if (verResponse.IsSuccessStatusCode)
             {
+                backendAvailable = true;
                 var verBody = await verResponse.Content.ReadAsStringAsync();
                 var verData = JsonSerializer.Deserialize<JsonElement>(verBody);
-                var backendVer = verData.TryGetProperty("backendVersion", out var bv) ? bv.GetString() : null;
-                var clusterVer = verData.TryGetProperty("clusterVersion", out var cv) ? cv.GetString() : null;
-                Console.WriteLine($"Backend: {backendVer ?? "unknown"}");
-                Console.WriteLine($"Cluster: {clusterVer ?? "unknown"}");
+                backendVer = verData.TryGetProperty("backendVersion", out var bv) ? bv.GetString() : null;
+                backendDeployedAt = verData.TryGetProperty("backendDeployedAt", out var bda) ? bda.GetString() : null;
+                clusterVer = verData.TryGetProperty("clusterVersion", out var cv) ? cv.GetString() : null;
+                clusterDeployedAt = verData.TryGetProperty("clusterDeployedAt", out var cda) ? cda.GetString() : null;
+                deploymentRepo = verData.TryGetProperty("deploymentRepo", out var dr) ? dr.GetString() : null;
+                fkhFork = verData.TryGetProperty("fkhFork", out var ff) ? ff.GetString() : null;
+                if (verData.TryGetProperty("forkStatus", out var fs) && fs.ValueKind == JsonValueKind.Object)
+                {
+                    forkAhead = fs.TryGetProperty("ahead", out var a) ? a.GetInt32() : null;
+                    forkBehind = fs.TryGetProperty("behind", out var b) ? b.GetInt32() : null;
+                    mergeBaseSha = fs.TryGetProperty("mergeBaseSha", out var ms) ? ms.GetString() : null;
+                    mergeBaseDate = fs.TryGetProperty("mergeBaseDate", out var md) ? md.GetString() : null;
+                }
             }
-            else
+        }
+        catch { }
+
+        if (asJson)
+        {
+            var jsonObj = new Dictionary<string, object?>
+            {
+                ["client_version"] = version,
+                ["backend_url"] = backendUrl,
+                ["backend_version"] = backendVer,
+                ["backend_deployed_at"] = backendDeployedAt,
+                ["cluster_version"] = clusterVer,
+                ["cluster_deployed_at"] = clusterDeployedAt,
+                ["deployment_repo"] = deploymentRepo,
+                ["fkh_fork"] = fkhFork,
+                ["fork_ahead"] = forkAhead,
+                ["fork_behind"] = forkBehind,
+                ["fork_merge_base_sha"] = mergeBaseSha,
+                ["fork_merge_base_date"] = mergeBaseDate,
+            };
+            Console.WriteLine(JsonSerializer.Serialize(jsonObj, new JsonSerializerOptions { WriteIndented = true, DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull }));
+        }
+        else
+        {
+            Console.WriteLine($"Client:  {version}");
+            if (!backendAvailable)
             {
                 Console.WriteLine("Backend: (unavailable)");
                 Console.WriteLine("Cluster: (unavailable)");
             }
-        }
-        catch
-        {
-            Console.WriteLine("Backend: (unavailable)");
-            Console.WriteLine("Cluster: (unavailable)");
+            else
+            {
+                Console.WriteLine($"Backend: {backendVer ?? "unknown"}{FormatDeployedAt(backendDeployedAt)}");
+                Console.WriteLine($"Cluster: {clusterVer ?? "unknown"}{FormatDeployedAt(clusterDeployedAt)}");
+                if (!string.IsNullOrEmpty(backendUrl))
+                    Console.WriteLine($"URL:     {backendUrl}");
+                if (!string.IsNullOrEmpty(deploymentRepo))
+                    Console.WriteLine($"Repo:    {deploymentRepo}");
+                if (!string.IsNullOrEmpty(fkhFork))
+                {
+                    Console.WriteLine($"Fork:    {fkhFork}");
+                    if (forkAhead is not null)
+                    {
+                        Console.WriteLine($"         {forkAhead} ahead, {forkBehind} behind Freddy-DK/Fkh");
+                        if (!string.IsNullOrEmpty(mergeBaseSha))
+                            Console.WriteLine($"         merge base: {mergeBaseSha?[..7]}{FormatDeployedAt(mergeBaseDate)}");
+                    }
+                }
+            }
         }
         return 0;
     }
@@ -411,6 +477,10 @@ static ParsedArgs ParseArgs(string[] args, FunctionCatalogResponse catalog)
         function.Parameters.Where(p => string.Equals(p.Type, "boolean", StringComparison.OrdinalIgnoreCase)).Select(p => p.Name),
         StringComparer.OrdinalIgnoreCase);
 
+    // 'confirm' is a reserved boolean flag that skips the interactive prompt for confirmation-required functions.
+    if (function.RequiresConfirmation)
+        booleanParams.Add("confirm");
+
     for (var i = 1; i < args.Length; i++)
     {
         var arg = args[i];
@@ -562,6 +632,11 @@ static async Task<FunctionCatalogResponse> GetFunctionCatalogAsync(string? backe
 static void EnsureRequiredParameters(FunctionDefinition function, Dictionary<string, string> parameters)
 {
     var knownNames = function.Parameters.Select(p => p.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+    // 'confirm' is a reserved flag that skips the interactive prompt for confirmation-required functions.
+    if (function.RequiresConfirmation)
+        knownNames.Add("confirm");
+
     var unknown = parameters.Keys.Where(k => !knownNames.Contains(k)).ToList();
     if (unknown.Count > 0)
     {
@@ -651,17 +726,33 @@ static void PrintCommandUsage(FunctionDefinition function)
         Console.WriteLine("Parameters:");
         foreach (var parameter in function.Parameters)
         {
-            var requiredText = parameter.Required ? "required" : "optional";
-            var defaultText = string.IsNullOrWhiteSpace(parameter.DefaultValue)
-                ? string.Empty
-                : $", default='{parameter.DefaultValue}'";
-            Console.WriteLine(
-                $"    --{parameter.Name} <{parameter.Type}> [{requiredText}{defaultText}]");
+            var isFlag = string.Equals(parameter.Type, "boolean", StringComparison.OrdinalIgnoreCase);
+            if (isFlag)
+            {
+                Console.WriteLine(
+                    $"    --{parameter.Name} [flag]");
+            }
+            else
+            {
+                var requiredText = parameter.Required ? "required" : "optional";
+                var defaultText = string.IsNullOrWhiteSpace(parameter.DefaultValue)
+                    ? string.Empty
+                    : $", default='{parameter.DefaultValue}'";
+                Console.WriteLine(
+                    $"    --{parameter.Name} <{parameter.Type}> [{requiredText}{defaultText}]");
+            }
             Console.WriteLine(
                 $"        {parameter.Description}");
         }
     }
     Console.WriteLine();
+    if (function.RequiresConfirmation &&
+        !function.Parameters.Any(p => string.Equals(p.Name, "confirm", StringComparison.OrdinalIgnoreCase)))
+    {
+        Console.WriteLine("Confirmation:");
+        Console.WriteLine("    --confirm           Skip the interactive confirmation prompt");
+        Console.WriteLine();
+    }
     PrintCommonOptions();
 }
 
@@ -676,8 +767,16 @@ static void PrintClientCommandUsage(ClientCommand cmd)
         Console.WriteLine("Parameters:");
         foreach (var param in cmd.Parameters)
         {
+            var isFlag = string.Equals(param.Type, "boolean", StringComparison.OrdinalIgnoreCase);
             var requiredText = param.Required ? "required" : "optional";
-            Console.WriteLine($"    --{param.Name} <{param.Type}> [{requiredText}]");
+            if (isFlag)
+            {
+                Console.WriteLine($"    --{param.Name} [flag, {requiredText}]");
+            }
+            else
+            {
+                Console.WriteLine($"    --{param.Name} <{param.Type}> [{requiredText}]");
+            }
             Console.WriteLine($"        {param.Description}");
         }
     }
@@ -976,6 +1075,14 @@ static void FormatElement(StringBuilder sb, JsonElement element, int indent)
             sb.AppendLine($"{prefix}{element}");
             break;
     }
+}
+
+static string FormatDeployedAt(string? deployedAt)
+{
+    if (string.IsNullOrEmpty(deployedAt)) return "";
+    if (DateTimeOffset.TryParse(deployedAt, out var dto))
+        return $" (deployed {dto.ToLocalTime():yyyy-MM-dd HH:mm})";
+    return $" (deployed {deployedAt})";
 }
 
 static CliSettings LoadSettings()
