@@ -64,7 +64,10 @@ locals {
     ADMIN_ORG_TEAMS                          = jsonencode(var.admin_org_teams)
     SUPPORT_ORG_TEAMS                        = jsonencode(var.support_org_teams)
     ALLOWED_USERS                            = jsonencode(var.allowed_users)
+    COMMON_CONTAINERS                        = jsonencode(var.common_containers)
     ALLOWED_OIDC_REPOS                       = jsonencode(var.allowed_oidc_repos)
+    ALLOWED_ADO_CONNECTIONS                  = jsonencode(var.allowed_ado_connections)
+    ADO_IDENTITY_CLIENT_ID                   = length(var.allowed_ado_connections) > 0 ? azurerm_user_assigned_identity.ado[0].client_id : ""
     AKS_LOCATION                             = var.location
     CONTACT_EMAIL_FOR_LETSENCRYPT             = var.contact_email_for_letsencrypt
     GITHUB_APP_ID                            = var.github_app_id
@@ -77,6 +80,7 @@ locals {
     LOG_ANALYTICS_WORKSPACE_ID               = azurerm_log_analytics_workspace.this.id
     CONTAINER_DEFAULT_CPU                     = var.container_default_cpu
     CONTAINER_DEFAULT_MEMORY                  = var.container_default_memory
+    FKH_TEST_TIMEOUT_MINUTES                 = tostring(var.test_timeout_minutes)
     AAD_TENANT_ID                            = var.tenant_id
     AAD_AUTH_IS_MULTITENANT                   = tostring(var.aad_auth_is_multitenant)
     AAD_APP_NAME_PREFIX                       = var.aad_app_name_prefix
