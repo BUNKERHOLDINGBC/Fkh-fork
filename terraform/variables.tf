@@ -218,35 +218,9 @@ variable "allowed_users" {
   }
 }
 
-variable "common_containers" {
-  description = "Container app name wildcard patterns that every member can access. Supports * for any number of characters and ? for one character."
-  type        = list(string)
-  default     = []
-}
-
 variable "allowed_oidc_repos" {
   description = "List of GitHub repositories (org/repo) allowed to authenticate via OIDC from GitHub Actions workflows."
-  type        = list(string)
-  default     = []
-}
-
-variable "allowed_ado_connections" {
-  description = <<-EOT
-    Azure DevOps service connections allowed to authenticate via OIDC.
-    Each entry requires a Workload Identity Federation service connection in Azure DevOps.
-
-    Create the service connection in Azure DevOps:
-      Project Settings → Service connections → New → Azure Resource Manager
-        → Workload Identity Federation (manual)
-      Set the Client ID to the ado_identity_client_id Terraform output.
-  EOT
-  type = list(object({
-    devops_org_id          = string
-    devops_org             = string
-    devops_project         = string
-    devops_connection_name = string
-    entra_subject          = optional(string, "")
-  }))
+  type    = list(string)
   default = []
 }
 
@@ -267,7 +241,7 @@ variable "github_app_id" {
 }
 
 variable "github_app_client_id" {
-  description = "Client ID of the GitHub App. Used by GitHub Actions app-token workflows and OAuth login in the web app. Find it on the GitHub App settings page."
+  description = "Client ID of the GitHub App, used for OAuth login in the web app. Find it on the GitHub App settings page."
   type        = string
   default     = ""
 }
@@ -285,18 +259,6 @@ variable "github_app_installation_id" {
 
 variable "create_images_repo" {
   description = "GitHub org/repo of the deployment repository where the CreateImages workflow runs. Automatically set from github.repository context when deploying via GitHub Actions."
-  type        = string
-  default     = ""
-}
-
-variable "create_images_owner_id" {
-  description = "Numeric GitHub organization/owner ID of the deployment repository. Automatically set from the github.repository_owner_id context when deploying via GitHub Actions. When set together with create_images_repo_id, an additional federated credential using the immutable ID-form subject ('repo:Org@ownerId/Repo@repoId:ref:refs/heads/main') is created so OIDC keeps working after an org/repo rename."
-  type        = string
-  default     = ""
-}
-
-variable "create_images_repo_id" {
-  description = "Numeric GitHub repository ID of the deployment repository. Automatically set from the github.repository_id context when deploying via GitHub Actions. See create_images_owner_id."
   type        = string
   default     = ""
 }

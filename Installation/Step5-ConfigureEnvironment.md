@@ -133,10 +133,6 @@ support_org_teams = [
 allowed_users = [
   # { user = "octocat", role = "member" }
 ]
-
-common_containers = [
-  # "common-*"
-]
 ```
 
 | Setting | What it controls |
@@ -145,11 +141,8 @@ common_containers = [
 | `admin_org_teams` | Teams whose members get admin access and normal access |
 | `support_org_teams` | Teams whose members get support access |
 | `allowed_users` | Explicit GitHub usernames and roles (`admin`, `member`, or `support`) |
-| `common_containers` | Container app name patterns that all members can access |
 
 > **Important:** organization and team names are case-sensitive.
-
-`common_containers` patterns are matched against the full sanitized container app name. Use `*` to match any number of characters and `?` to match exactly one character. For example, `common-*` matches `common-bc` and `common-demo`, while `demo-??` matches `demo-us`.
 
 ### OIDC repositories
 
@@ -167,14 +160,12 @@ Leave this list empty if you do not need that scenario.
 
 ```hcl
 github_app_id              = "123456"
-github_app_client_id       = "Iv1.0000000000000000"
 github_app_installation_id = "12345678"
 ```
 
 | Setting | Where to find it |
 |---|---|
 | `github_app_id` | Step 3.4 → GitHub App settings page |
-| `github_app_client_id` | Step 3.4 → GitHub App settings page |
 | `github_app_installation_id` | Step 3.4 → final number in the GitHub App installation URL |
 
 Do not put the GitHub App private key in `deployment.tfvars`. You will store it as a GitHub Secret.

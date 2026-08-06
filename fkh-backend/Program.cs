@@ -36,12 +36,6 @@ var host = new HostBuilder()
         services.AddSingleton<FkhWaitForContainer>();
         services.AddSingleton<FkhGetDatabaseUploadSas>();
         services.AddSingleton<FkhGetDatabaseDownloadSas>();
-        services.AddSingleton<FkhGetFileUploadSas>();
-        services.AddSingleton<FkhGetFileDownloadSas>();
-        services.AddSingleton<FkhRemoveDatabase>();
-        services.AddSingleton<FkhRemoveFile>();
-        services.AddSingleton<FkhListDatabases>();
-        services.AddSingleton<FkhListFiles>();
         services.AddSingleton<FkhBackupTenantDatabase>();
         services.AddSingleton<FkhRestoreTenantDatabase>();
         services.AddSingleton<FkhDismountTenant>();
@@ -56,7 +50,6 @@ var host = new HostBuilder()
         services.AddSingleton<FkhCopyFileFromContainer>();
         services.AddSingleton<FkhCopyFileToContainer>();
         services.AddSingleton<FkhGetAppInfo>();
-        services.AddSingleton<FkhGetCurrentUser>();
         services.AddSingleton<FkhGetUser>();
         services.AddSingleton<FkhNewUser>();
         services.AddSingleton<FkhGetContainerDetails>();

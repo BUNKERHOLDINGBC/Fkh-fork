@@ -55,7 +55,7 @@ public class FkhCreateContainer : FkhServiceBase
 
         var imageTag = GetImageTag(artifactUrl);
         var fullImage = $"{AcrLoginServer}/{AcrRepository}:{imageTag}";
-        var appName = ResolveNewAppName(parameters);
+        var appName = ResolveAppName(parameters);
         var databaseName = appName;
 
         if (!Regex.IsMatch(databaseName, @"^[a-zA-Z0-9_-]+$"))

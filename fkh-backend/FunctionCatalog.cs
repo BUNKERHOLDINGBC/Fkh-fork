@@ -273,7 +273,7 @@ public static class FunctionCatalog
         new FunctionDefinition
         {
             Name = "ListContainers",
-            Description = "Lists containers. By default lists only your own containers. Set 'all' to 'true' to include common containers for members, or all containers for admins.",
+            Description = "Lists containers. By default lists only your own containers. Set 'all' to 'true' to list all containers.",
             Route = "ListContainers",
             Parameters = new List<FunctionParameterDefinition>
             {
@@ -281,7 +281,7 @@ public static class FunctionCatalog
                 {
                     Name = "all",
                     Type = "boolean",
-                    Description = "Include common containers for members, or all containers for admins.",
+                    Description = "List all containers instead of only your own.",
                     Required = false,
                     DefaultValue = null
                 },
@@ -595,93 +595,6 @@ public static class FunctionCatalog
         },
         new FunctionDefinition
         {
-            Name = "GetFileUploadSas",
-            Description = "Returns a SAS URL for uploading versioned files to blob storage. Admin only.",
-            Route = "GetFileUploadSas",
-            Hidden = true,
-            AdminOnly = true,
-            Parameters = new List<FunctionParameterDefinition>()
-        },
-        new FunctionDefinition
-        {
-            Name = "GetFileDownloadSas",
-            Description = "Returns a read-only SAS URL for downloading versioned files from blob storage.",
-            Route = "GetFileDownloadSas",
-            Hidden = true,
-            Parameters = new List<FunctionParameterDefinition>()
-        },
-        new FunctionDefinition
-        {
-            Name = "RemoveDatabase",
-            Description = "Removes an uploaded database backup version from blob storage and updates the version manifest (all.json). Specify the database as 'name/version', or just 'name' to remove the latest version (latest is then repointed to the previous version). Admin only.",
-            Route = "RemoveDatabase",
-            AdminOnly = true,
-            RequiresConfirmation = true,
-            Parameters = new List<FunctionParameterDefinition>
-            {
-                new()
-                {
-                    Name = "database",
-                    Type = "string",
-                    Description = "Database to remove as 'name/version', or just 'name' to remove the latest version.",
-                    Required = true
-                }
-            }
-        },
-        new FunctionDefinition
-        {
-            Name = "RemoveFile",
-            Description = "Removes an uploaded file version from blob storage and updates the version manifest (all.json). Specify the file as 'name/version', or just 'name' to remove the latest version (latest is then repointed to the previous version). Admin only.",
-            Route = "RemoveFile",
-            AdminOnly = true,
-            RequiresConfirmation = true,
-            Parameters = new List<FunctionParameterDefinition>
-            {
-                new()
-                {
-                    Name = "file",
-                    Type = "string",
-                    Description = "File to remove as 'name/version', or just 'name' to remove the latest version.",
-                    Required = true
-                }
-            }
-        },
-        new FunctionDefinition
-        {
-            Name = "ListDatabases",
-            Description = "Lists uploaded database backups in blob storage. Filter with 'name/version' where both sides support '*' (any characters) and '?' (single character) wildcards: '*/latest' (default) lists the latest version of every database, '*/*' lists all versions of all databases, 'name/*' lists all versions of a database, and patterns like 'My*/latest' or 'cronus??/*' are supported. 'version' also accepts the keyword 'latest'.",
-            Route = "ListDatabases",
-            Parameters = new List<FunctionParameterDefinition>
-            {
-                new()
-                {
-                    Name = "database",
-                    Type = "string",
-                    Description = "Filter as 'name/version'. Both sides support '*' and '?' wildcards; 'version' also accepts 'latest'. Defaults to '*/latest'.",
-                    Required = false,
-                    DefaultValue = "*/latest"
-                }
-            }
-        },
-        new FunctionDefinition
-        {
-            Name = "ListFiles",
-            Description = "Lists uploaded files in blob storage. Filter with 'name/version' where both sides support '*' (any characters) and '?' (single character) wildcards: '*/latest' (default) lists the latest version of every file, '*/*' lists all versions of all files, 'name/*' lists all versions of a file, and patterns like 'My*/latest' or 'log??/*' are supported. 'version' also accepts the keyword 'latest'.",
-            Route = "ListFiles",
-            Parameters = new List<FunctionParameterDefinition>
-            {
-                new()
-                {
-                    Name = "file",
-                    Type = "string",
-                    Description = "Filter as 'name/version'. Both sides support '*' and '?' wildcards; 'version' also accepts 'latest'. Defaults to '*/latest'.",
-                    Required = false,
-                    DefaultValue = "*/latest"
-                }
-            }
-        },
-        new FunctionDefinition
-        {
             Name = "ListPrepulled",
             Description = "Lists images currently configured for pre-pulling on Windows nodes. Admin only.",
             Route = "ListPrepulled",
@@ -729,13 +642,6 @@ public static class FunctionCatalog
             Name = "GetVersion",
             Description = "Returns backend and cluster version information.",
             Route = "GetVersion",
-            Parameters = new List<FunctionParameterDefinition>()
-        },
-        new FunctionDefinition
-        {
-            Name = "GetCurrentUser",
-            Description = "Returns the authenticated Fkh username and authorization flags.",
-            Route = "GetCurrentUser",
             Parameters = new List<FunctionParameterDefinition>()
         },
         new FunctionDefinition
@@ -856,7 +762,17 @@ public static class FunctionCatalog
             Route = "StopFkh",
             AdminOnly = true,
             RequiresConfirmation = true,
-            Parameters = new List<FunctionParameterDefinition>()
+            Parameters = new List<FunctionParameterDefinition>
+            {
+                new()
+                {
+                    Name = "confirm",
+                    Type = "boolean",
+                    Description = "Confirm that you want to stop the cluster.",
+                    Required = false,
+                    DefaultValue = null
+                }
+            }
         },
         new FunctionDefinition
         {
@@ -1019,14 +935,6 @@ public static class FunctionCatalog
                     Description = "Filter by app ID (exact match).",
                     Required = false,
                     DefaultValue = null
-                },
-                new()
-                {
-                    Name = "sort",
-                    Type = "boolean",
-                    Description = "Sort apps so dependencies are returned before apps that depend on them.",
-                    Required = false,
-                    DefaultValue = "false"
                 }
             }
         },

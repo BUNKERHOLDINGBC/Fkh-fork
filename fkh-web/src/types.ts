@@ -21,12 +21,6 @@ export interface FunctionCatalogResponse {
   functions: FunctionDefinition[];
 }
 
-export interface CurrentUserResponse {
-  username: string;
-  isAdmin: boolean;
-  isSupport: boolean;
-}
-
 export interface ContainerInfo {
   appLabel: string;
   name: string;

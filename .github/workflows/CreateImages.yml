@@ -1,6 +1,13 @@
 name: Create Images
 
 on:
+  workflow_dispatch:
+    inputs:
+      artifactUrls:
+        description: 'Comma-separated list of artifact URLs'
+        required: true
+        type: string
+
   workflow_call:
     inputs:
       artifactUrls:

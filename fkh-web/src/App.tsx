@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { GitHubUser, ContainerInfo } from './types';
 import { getStoredToken, storeToken, clearToken, validateToken } from './auth';
-import { resolveBackendUrl, getOrgNameFromUrl, listContainers, invokeFunction, getCurrentUser, SystemStoppedError, AuthorizationError } from './api';
+import { resolveBackendUrl, getOrgNameFromUrl, listContainers, invokeFunction, SystemStoppedError } from './api';
 import { Login } from './components/Login.tsx';
 import { Header } from './components/Header.tsx';
 import { ContainerList } from './components/ContainerList.tsx';
@@ -18,7 +18,6 @@ export function App() {
   const [user, setUser] = useState<GitHubUser | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [checking, setChecking] = useState(true);
-  const [loginMessage, setLoginMessage] = useState<string | null>(null);
 
   const [backendUrl] = useState(() => resolveBackendUrl());
   const orgName = backendUrl ? getOrgNameFromUrl(backendUrl) : '';
@@ -27,7 +26,6 @@ export function App() {
   const [containersLoading, setContainersLoading] = useState(false);
   const [containersError, setContainersError] = useState<string | null>(null);
   const [showAll, setShowAll] = useState(false);
-  const [isAdmin, setIsAdmin] = useState(false);
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
   const [systemStopped, setSystemStopped] = useState(false);
 
@@ -51,14 +49,13 @@ export function App() {
 
   // Handle successful authentication
   const handleToken = useCallback(async (newToken: string) => {
-    setLoginMessage(null);
     const u = await validateToken(newToken);
     if (u) {
       storeToken(newToken);
       setToken(newToken);
       setUser(u);
     } else {
-      setLoginMessage('Invalid token - GitHub rejected it.');
+      setContainersError('Invalid token — GitHub rejected it.');
     }
   }, []);
 
@@ -68,46 +65,7 @@ export function App() {
     setUser(null);
     setContainers([]);
     setContainersError(null);
-    setShowAll(false);
-    setIsAdmin(false);
-    setLoginMessage(null);
   }, []);
-
-  const handleAuthFailure = useCallback((error: AuthorizationError) => {
-    clearToken();
-    setToken(null);
-    setUser(null);
-    setContainers([]);
-    setContainersError(null);
-    setShowAll(false);
-    setIsAdmin(false);
-    setLoginMessage(error.message);
-  }, []);
-
-  useEffect(() => {
-    if (!token || !backendUrl) {
-      setIsAdmin(false);
-      return;
-    }
-
-    let cancelled = false;
-    getCurrentUser(backendUrl, token)
-      .then(currentUser => {
-        if (cancelled) return;
-        setIsAdmin(currentUser.isAdmin);
-      })
-      .catch(e => {
-        if (cancelled) return;
-        setIsAdmin(false);
-        if (e instanceof AuthorizationError) {
-          handleAuthFailure(e);
-        } else {
-          setContainersError(e instanceof Error ? e.message : 'Failed to load current user');
-        }
-      });
-
-    return () => { cancelled = true; };
-  }, [token, backendUrl, handleAuthFailure]);
 
   // Fetch containers
   const fetchContainers = useCallback(async (all?: boolean) => {
@@ -121,8 +79,6 @@ export function App() {
     } catch (e) {
       if (e instanceof SystemStoppedError) {
         setSystemStopped(true);
-      } else if (e instanceof AuthorizationError) {
-        handleAuthFailure(e);
       } else {
         setContainersError(e instanceof Error ? e.message : 'Failed to load containers');
       }
@@ -131,10 +87,6 @@ export function App() {
       setContainersLoading(false);
     }
   }, [token, backendUrl, showAll]);
-
-  const handleRefreshContainers = useCallback(() => {
-    fetchContainers();
-  }, [fetchContainers]);
 
   // Load containers once authenticated
   useEffect(() => {
@@ -152,18 +104,12 @@ export function App() {
         setContainersError(null);
         listContainers(backendUrl, token, next)
           .then(r => setContainers(r.containers ?? []))
-          .catch(e => {
-            if (e instanceof AuthorizationError) {
-              handleAuthFailure(e);
-            } else {
-              setContainersError(e instanceof Error ? e.message : 'Failed');
-            }
-          })
+          .catch(e => setContainersError(e instanceof Error ? e.message : 'Failed'))
           .finally(() => setContainersLoading(false));
       }
       return next;
     });
-  }, [token, backendUrl, handleAuthFailure]);
+  }, [token, backendUrl]);
 
   const handleStart = useCallback(async (name: string) => {
     if (!token || !backendUrl) return;
@@ -174,8 +120,6 @@ export function App() {
     } catch (e) {
       if (e instanceof SystemStoppedError) {
         setSystemStopped(true);
-      } else if (e instanceof AuthorizationError) {
-        handleAuthFailure(e);
       } else {
         setContainersError(e instanceof Error ? e.message : 'Start failed');
       }
@@ -193,8 +137,6 @@ export function App() {
     } catch (e) {
       if (e instanceof SystemStoppedError) {
         setSystemStopped(true);
-      } else if (e instanceof AuthorizationError) {
-        handleAuthFailure(e);
       } else {
         setContainersError(e instanceof Error ? e.message : 'Stop failed');
       }
@@ -205,21 +147,18 @@ export function App() {
 
   const handleStopFkh = useCallback(async () => {
     if (!token || !backendUrl) return;
-    const deploymentLabel = orgName ? `the Fkh deployment for ${orgName}` : 'the Fkh deployment';
-    if (!window.confirm(`Are you sure you want to stop ${deploymentLabel}? All containers will become unavailable.`)) return;
+    if (!window.confirm('Are you sure you want to stop the entire Fkh system? All containers will become unavailable.')) return;
     try {
-      await invokeFunction(backendUrl, token, 'StopFkh', { confirm: 'true' });
+      await invokeFunction(backendUrl, token, 'StopFkh', {});
       setSystemStopped(true);
     } catch (e) {
       if (e instanceof SystemStoppedError) {
         setSystemStopped(true);
-      } else if (e instanceof AuthorizationError) {
-        handleAuthFailure(e);
       } else {
-        setContainersError(e instanceof Error ? e.message : 'Stop Fkh Deployment failed');
+        setContainersError(e instanceof Error ? e.message : 'Stop Fkh failed');
       }
     }
-  }, [token, backendUrl, handleAuthFailure, orgName]);
+  }, [token, backendUrl]);
 
   // Loading spinner while checking stored token
   if (checking) {
@@ -232,7 +171,7 @@ export function App() {
 
   // Not authenticated — show login
   if (!user || !token) {
-    return <Login backendUrl={backendUrl} clientId={getClientId()} message={loginMessage} onToken={handleToken} onPat={handleToken} />;
+    return <Login backendUrl={backendUrl} clientId={getClientId()} onToken={handleToken} onPat={handleToken} />;
   }
 
   // No backend URL configured
@@ -253,13 +192,11 @@ export function App() {
   if (systemStopped) {
     return (
       <div className="app">
-        <Header user={user} orgName={orgName} backendUrl={backendUrl} isAdmin={isAdmin} onStopFkh={handleStopFkh} onSignOut={handleSignOut} />
+        <Header user={user} orgName={orgName} backendUrl={backendUrl} onStopFkh={handleStopFkh} onSignOut={handleSignOut} />
         <main className="app-main">
           <SystemStopped
             backendUrl={backendUrl}
             token={token}
-            orgName={orgName}
-            isAdmin={isAdmin}
             onStarted={() => {
               setSystemStopped(false);
               fetchContainers();
@@ -272,7 +209,7 @@ export function App() {
 
   return (
     <div className="app">
-      <Header user={user} orgName={orgName} backendUrl={backendUrl} isAdmin={isAdmin} onStopFkh={handleStopFkh} onSignOut={handleSignOut} />
+      <Header user={user} orgName={orgName} backendUrl={backendUrl} onStopFkh={handleStopFkh} onSignOut={handleSignOut} />
       <main className="app-main">
         <ContainerList
           containers={containers}
@@ -280,7 +217,7 @@ export function App() {
           error={containersError}
           showAll={showAll}
           onToggleAll={handleToggleAll}
-          onRefresh={handleRefreshContainers}
+          onRefresh={() => fetchContainers()}
           onStart={handleStart}
           onStop={handleStop}
           actionInProgress={actionInProgress}
