@@ -27,7 +27,41 @@ public sealed class RunTestsCommandTests : IDisposable
         Assert.Equal("tenant-2", request.Tenant);
         Assert.Equal("11111111-1111-1111-1111-111111111111", request.ExtensionId);
         Assert.Equal("Test App", request.AppName);
+        Assert.Equal(30, request.TimeoutMinutes);
         Assert.Equal(outputPath, request.Output);
+    }
+
+    [Fact]
+    public void ValidateParametersAcceptsTimeoutMinutes()
+    {
+        var request = RunTestsCommand.ValidateParameters(
+        [
+            "runtests",
+            "--name", "owner-container",
+            "--extensionId", "11111111-1111-1111-1111-111111111111",
+            "--timeoutMinutes", "90",
+            "--output", "result.xml"
+        ]);
+
+        Assert.Equal(90, request.TimeoutMinutes);
+        Assert.Equal("90", request.ToParameters()["timeoutMinutes"]);
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("121")]
+    [InlineData("-5")]
+    [InlineData("abc")]
+    public void ValidateParametersRejectsInvalidTimeoutMinutes(string timeoutMinutes)
+    {
+        Assert.Throws<InvalidOperationException>(() => RunTestsCommand.ValidateParameters(
+        [
+            "runtests",
+            "--name", "owner-container",
+            "--extensionId", "11111111-1111-1111-1111-111111111111",
+            "--timeoutMinutes", timeoutMinutes,
+            "--output", "result.xml"
+        ]));
     }
 
     [Theory]

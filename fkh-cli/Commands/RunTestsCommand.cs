@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -10,9 +11,11 @@ sealed class RunTestsCommand : ClientCommand
 {
     private static readonly HashSet<string> ParameterNames = new(StringComparer.OrdinalIgnoreCase)
     {
-        "name", "tenant", "extensionId", "appName", "testCodeunitRange", "output"
+        "name", "tenant", "extensionId", "appName", "testCodeunitRange", "timeoutMinutes", "output"
     };
     private static readonly Regex TenantPattern = new("^[A-Za-z0-9][A-Za-z0-9-]{0,127}$", RegexOptions.CultureInvariant);
+    private const int DefaultTimeoutMinutes = 30;
+    private const int MaxTimeoutMinutes = 120;
 
     public override string Name => "RunTests";
     public override string Description => "Runs tests from a published test app inside a Business Central container.";
@@ -24,6 +27,7 @@ sealed class RunTestsCommand : ClientCommand
         new() { Name = "extensionId", Type = "string", Description = "ID of the published test app.", Required = true },
         new() { Name = "appName", Type = "string", Description = "Optional test app name used for validation and reporting.", Required = false },
         new() { Name = "testCodeunitRange", Type = "string", Description = "Optional Business Central filter selecting test codeunit IDs.", Required = false },
+        new() { Name = "timeoutMinutes", Type = "string", Description = "Hard timeout for the test run inside the container (1-120). Default: 30", Required = false },
         new() { Name = "output", Type = "string", Description = "Local destination for JUnit XML.", Required = true }
     ];
 
@@ -161,7 +165,15 @@ sealed class RunTestsCommand : ClientCommand
             && (testCodeunitRange.Length == 0 || testCodeunitRange.IndexOfAny(['\r', '\n']) >= 0 || testCodeunitRange.Length > 250))
             throw new InvalidOperationException("--testCodeunitRange is invalid.");
 
-        return new RunTestsRequest(name, tenant, parsedExtensionId.ToString(), appName, testCodeunitRange, output);
+        var timeoutMinutes = DefaultTimeoutMinutes;
+        if (parameters.TryGetValue("timeoutMinutes", out var timeoutValue) && !string.IsNullOrWhiteSpace(timeoutValue))
+        {
+            if (!int.TryParse(timeoutValue.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out timeoutMinutes)
+                || timeoutMinutes < 1 || timeoutMinutes > MaxTimeoutMinutes)
+                throw new InvalidOperationException($"--timeoutMinutes must be a whole number between 1 and {MaxTimeoutMinutes}.");
+        }
+
+        return new RunTestsRequest(name, tenant, parsedExtensionId.ToString(), appName, testCodeunitRange, timeoutMinutes, output);
     }
 
     internal static int MaterializeResult(RunTestsResponse result, string outputPath)
@@ -316,7 +328,7 @@ sealed class RunTestsCommand : ClientCommand
 
     private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
-    internal sealed record RunTestsRequest(string Name, string Tenant, string ExtensionId, string? AppName, string? TestCodeunitRange, string Output)
+    internal sealed record RunTestsRequest(string Name, string Tenant, string ExtensionId, string? AppName, string? TestCodeunitRange, int TimeoutMinutes, string Output)
     {
         public Dictionary<string, string> ToParameters()
         {
@@ -324,7 +336,8 @@ sealed class RunTestsCommand : ClientCommand
             {
                 ["name"] = Name,
                 ["tenant"] = Tenant,
-                ["extensionId"] = ExtensionId
+                ["extensionId"] = ExtensionId,
+                ["timeoutMinutes"] = TimeoutMinutes.ToString(CultureInfo.InvariantCulture)
             };
             if (!string.IsNullOrWhiteSpace(AppName))
                 parameters["appName"] = AppName;

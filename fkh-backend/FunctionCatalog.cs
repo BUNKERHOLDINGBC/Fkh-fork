@@ -563,6 +563,14 @@ public static class FunctionCatalog
                     Description = "Optional Business Central filter selecting test codeunit IDs, for example '50100|50105..50110'.",
                     Required = false,
                     DefaultValue = null
+                },
+                new()
+                {
+                    Name = "timeoutMinutes",
+                    Type = "string",
+                    Description = "Hard timeout for the test run inside the container, between 1 and 120 minutes.",
+                    Required = false,
+                    DefaultValue = "30"
                 }
             }
         },

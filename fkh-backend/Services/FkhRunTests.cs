@@ -14,6 +14,8 @@ public class FkhRunTests : FkhServiceBase
 {
     private const int MaxJUnitBytes = 10 * 1024 * 1024;
     private const int MaxDiagnosticCharacters = 32 * 1024;
+    private const int DefaultTimeoutMinutes = 30;
+    private const int MaxTimeoutMinutes = 120;
     private const string JUnitMarker = "FKH_JUNIT_BASE64:";
     private static readonly Regex TenantPattern = new("^[A-Za-z0-9][A-Za-z0-9-]{0,127}$", RegexOptions.CultureInvariant);
 
@@ -39,7 +41,7 @@ public class FkhRunTests : FkhServiceBase
             ExtensionId = request.ExtensionId.ToString(),
             request.AppName,
             request.TestCodeunitRange,
-            TimeoutMinutes = GetTestTimeoutMinutes()
+            request.TimeoutMinutes
         }));
         var script = $"& 'C:\\run\\my\\Run-FkhBcTests.ps1' -RequestBase64 '{requestBase64}'";
         var detachedResult = await RunDetachedInBcPodAsync(
@@ -47,7 +49,7 @@ public class FkhRunTests : FkhServiceBase
             pod.Metadata.Name,
             pod.Spec.Containers[0].Name,
             jobPrefix: "fkh-runtests",
-            jobIdInput: $"{appName}|{request.Tenant}|{request.ExtensionId}|{request.AppName}|{request.TestCodeunitRange}",
+            jobIdInput: $"{appName}|{request.Tenant}|{request.ExtensionId}|{request.AppName}|{request.TestCodeunitRange}|{request.TimeoutMinutes}",
             script: script,
             retryAfterSeconds: 5,
             retryMessage: "Tests still running...");
@@ -93,7 +95,15 @@ public class FkhRunTests : FkhServiceBase
             && (testCodeunitRange.Length == 0 || testCodeunitRange.IndexOfAny(['\r', '\n']) >= 0 || testCodeunitRange.Length > 250))
             throw new InvalidOperationException("testCodeunitRange is invalid.");
 
-        return new RunTestsRequest(tenant, extensionId, appName, testCodeunitRange);
+        var timeoutMinutes = DefaultTimeoutMinutes;
+        if (parameters.TryGetValue("timeoutMinutes", out var timeoutValue) && !string.IsNullOrWhiteSpace(timeoutValue))
+        {
+            if (!int.TryParse(timeoutValue.Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out timeoutMinutes)
+                || timeoutMinutes < 1 || timeoutMinutes > MaxTimeoutMinutes)
+                throw new InvalidOperationException($"timeoutMinutes must be a whole number between 1 and {MaxTimeoutMinutes}.");
+        }
+
+        return new RunTestsRequest(tenant, extensionId, appName, testCodeunitRange, timeoutMinutes);
     }
 
     internal static RunTestsResult ParseJUnit(byte[] junitBytes)
@@ -152,15 +162,6 @@ public class FkhRunTests : FkhServiceBase
         => string.Equals(pod.Status?.Phase, "Running", StringComparison.OrdinalIgnoreCase)
             && pod.Status?.ContainerStatuses?.Count > 0
             && pod.Status.ContainerStatuses.All(status => status.Ready);
-
-    private static int GetTestTimeoutMinutes()
-    {
-        var configured = Environment.GetEnvironmentVariable("FKH_TEST_TIMEOUT_MINUTES");
-        return int.TryParse(configured, NumberStyles.None, CultureInfo.InvariantCulture, out var minutes)
-            && minutes is >= 1 and <= 120
-                ? minutes
-                : 30;
-    }
 
     private static (byte[] JUnitBytes, string[] Log) ExtractResult(string stdout)
     {
@@ -238,6 +239,6 @@ public class FkhRunTests : FkhServiceBase
         return duration;
     }
 
-    internal sealed record RunTestsRequest(string Tenant, Guid ExtensionId, string? AppName, string? TestCodeunitRange);
+    internal sealed record RunTestsRequest(string Tenant, Guid ExtensionId, string? AppName, string? TestCodeunitRange, int TimeoutMinutes);
     internal sealed record RunTestsResult(string Outcome, int Tests, int Failures, int Errors, int Skipped, double DurationSeconds);
 }

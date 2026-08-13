@@ -19,7 +19,8 @@ public sealed class FkhRunTestsTests
             parameter => Assert.Equal("tenant", parameter.Name),
             parameter => Assert.Equal("extensionId", parameter.Name),
             parameter => Assert.Equal("appName", parameter.Name),
-            parameter => Assert.Equal("testCodeunitRange", parameter.Name));
+            parameter => Assert.Equal("testCodeunitRange", parameter.Name),
+            parameter => Assert.Equal("timeoutMinutes", parameter.Name));
     }
 
     [Fact]
@@ -118,6 +119,43 @@ public sealed class FkhRunTestsTests
         {
             ["tenant"] = "default",
             ["extensionId"] = extensionId
+        }));
+    }
+
+    [Fact]
+    public void ValidateParametersDefaultsTimeoutMinutes()
+    {
+        var request = FkhRunTests.ValidateParameters(new Dictionary<string, string>
+        {
+            ["extensionId"] = "11111111-1111-1111-1111-111111111111"
+        });
+
+        Assert.Equal(30, request.TimeoutMinutes);
+    }
+
+    [Fact]
+    public void ValidateParametersAcceptsTimeoutMinutes()
+    {
+        var request = FkhRunTests.ValidateParameters(new Dictionary<string, string>
+        {
+            ["extensionId"] = "11111111-1111-1111-1111-111111111111",
+            ["timeoutMinutes"] = "90"
+        });
+
+        Assert.Equal(90, request.TimeoutMinutes);
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("121")]
+    [InlineData("-5")]
+    [InlineData("abc")]
+    public void ValidateParametersRejectsInvalidTimeoutMinutes(string timeoutMinutes)
+    {
+        Assert.Throws<InvalidOperationException>(() => FkhRunTests.ValidateParameters(new Dictionary<string, string>
+        {
+            ["extensionId"] = "11111111-1111-1111-1111-111111111111",
+            ["timeoutMinutes"] = timeoutMinutes
         }));
     }
 }

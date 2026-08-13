@@ -140,6 +140,10 @@ Omit `--testCodeunitRange` to run every test codeunit in the specified test app.
 The range uses standard Business Central filter syntax, allowing an agent or CI
 workflow to pass the IDs of changed test codeunits.
 
+A test run is aborted inside the container after 30 minutes. Pass
+`--timeoutMinutes <1-120>` to use a different hard timeout for long-running
+suites.
+
 Test execution currently requires a container using `NavUserPassword`
 authentication. The built-in toolkit import installs the toolkit in the
 `default` tenant; for another tenant, install the Test Runner app there before
