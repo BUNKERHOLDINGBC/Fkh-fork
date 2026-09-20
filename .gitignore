@@ -6,6 +6,12 @@ fkh-cli/obj/
 tests/**/bin/
 tests/**/obj/
 
+# Test build output and results
+tests/**/bin/
+tests/**/obj/
+TestResults/
+*.trx
+
 # Language server cache
 *.lscache
 

@@ -140,6 +140,14 @@ public static class FunctionCatalog
                     Description = "Email address for Azure AD authentication. When set, the container uses AAD auth instead of NavUserPassword. Requires AAD App Registration setup — see docs/AadAuthentication.md.",
                     Required = false,
                     DefaultValue = null
+                },
+                new()
+                {
+                    Name = "openports",
+                    Type = "string",
+                    Description = "Comma-separated list of service ports to open on the load balancer. Each entry is a port number (1-65535) or a known name: soap (7047), odata (7048), dev (7049), snapshot (7083). The web ports 80/443 are always open.",
+                    Required = false,
+                    DefaultValue = "soap,odata,dev"
                 }
             }
         },
@@ -334,6 +342,56 @@ public static class FunctionCatalog
             Description = "Revokes your external SQL Server access immediately, removing the LoadBalancer service and network policy.",
             Route = "RevokeSqlAccess",
             Parameters = new List<FunctionParameterDefinition>()
+        },
+        new FunctionDefinition
+        {
+            Name = "AllowWinRmAccess",
+            Description = "Opens external WinRM (PowerShell remoting, port 5986) access to a container for your IP address. Creates a temporary LoadBalancer service and network policy.",
+            Route = "AllowWinRmAccess",
+            Parameters = new List<FunctionParameterDefinition>
+            {
+                new()
+                {
+                    Name = "name",
+                    Type = "string",
+                    Description = "Name of the container to open WinRM access to.",
+                    Required = true,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "ip",
+                    Type = "string",
+                    Description = "Your public IP address (e.g. 203.0.113.10). VSIX and CLI auto-detect this.",
+                    Required = false,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "hours",
+                    Type = "string",
+                    Description = "Hours to keep WinRM access open (e.g. '2'). Access is auto-revoked after this period.",
+                    Required = false,
+                    DefaultValue = "2"
+                }
+            }
+        },
+        new FunctionDefinition
+        {
+            Name = "RevokeWinRmAccess",
+            Description = "Revokes your external WinRM access immediately, removing the LoadBalancer service and network policy. Revokes all your WinRM tunnels unless a specific container is named.",
+            Route = "RevokeWinRmAccess",
+            Parameters = new List<FunctionParameterDefinition>
+            {
+                new()
+                {
+                    Name = "name",
+                    Type = "string",
+                    Description = "Name of the container whose WinRM tunnel to revoke. If omitted, all your WinRM tunnels are revoked.",
+                    Required = false,
+                    DefaultValue = null
+                }
+            }
         },
         new FunctionDefinition
         {
@@ -913,7 +971,17 @@ public static class FunctionCatalog
             Route = "StopFkh",
             AdminOnly = true,
             RequiresConfirmation = true,
-            Parameters = new List<FunctionParameterDefinition>()
+            Parameters = new List<FunctionParameterDefinition>
+            {
+                new()
+                {
+                    Name = "autostart",
+                    Type = "string",
+                    Description = "When to automatically start the cluster again, overriding the next scheduled start. Use '<n>h' for hours from now (e.g. '8h') or a time of day (e.g. '06:00'). Leave empty to follow the schedule.",
+                    Required = false,
+                    DefaultValue = null
+                }
+            }
         },
         new FunctionDefinition
         {
@@ -921,7 +989,17 @@ public static class FunctionCatalog
             Description = "Starts a previously stopped AKS cluster. Restores all nodes and workloads. Admin only.",
             Route = "StartFkh",
             AdminOnly = true,
-            Parameters = new List<FunctionParameterDefinition>()
+            Parameters = new List<FunctionParameterDefinition>
+            {
+                new()
+                {
+                    Name = "autostop",
+                    Type = "string",
+                    Description = "When to automatically stop the cluster again, overriding the next scheduled stop. Use '<n>h' for hours from now (e.g. '4h') or a time of day (e.g. '18:00'). Leave empty to follow the schedule.",
+                    Required = false,
+                    DefaultValue = null
+                }
+            }
         },
         new FunctionDefinition
         {
@@ -1357,6 +1435,63 @@ public static class FunctionCatalog
                     DefaultValue = "false"
                 }
             }
+        },
+        new FunctionDefinition
+        {
+            Name = "GetSecret",
+            Description = "Gets a secret value from the deployment's Key Vault by name. Reads your personal secret (prefixed with your GitHub username) if it exists, otherwise falls back to the organization secret (prefixed with the org name). Returns an empty string if neither exists.",
+            Route = "GetSecret",
+            Parameters = new List<FunctionParameterDefinition>
+            {
+                new()
+                {
+                    Name = "name",
+                    Type = "string",
+                    Description = "Name of the secret to read from the Key Vault. May not contain a dash.",
+                    Required = true,
+                    DefaultValue = null
+                }
+            }
+        },
+        new FunctionDefinition
+        {
+            Name = "SetSecret",
+            Description = "Adds, updates, or removes a secret in the deployment's Key Vault. By default sets a personal secret scoped to your GitHub username (prefixed with your username); use --allusers to set an organization-wide secret (prefixed with the org name), which is admin only. Pass an empty secret value to remove the secret.",
+            Route = "SetSecret",
+            Parameters = new List<FunctionParameterDefinition>
+            {
+                new()
+                {
+                    Name = "name",
+                    Type = "string",
+                    Description = "Name of the secret to set in the Key Vault. May not contain a dash.",
+                    Required = true,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "secret",
+                    Type = "string",
+                    Description = "The secret value to store (plain text). Pass an empty value to remove the secret.",
+                    Required = false,
+                    DefaultValue = null
+                },
+                new()
+                {
+                    Name = "allusers",
+                    Type = "boolean",
+                    Description = "Set an organization-wide secret scoped to the org name instead of a personal secret. Admin only.",
+                    Required = false,
+                    DefaultValue = "false"
+                }
+            }
+        },
+        new FunctionDefinition
+        {
+            Name = "ListSecrets",
+            Description = "Lists the names of all secrets in the deployment's Key Vault. Organization-wide secrets (prefixed with the org name) are returned under 'allUsers', followed by your personal secrets (prefixed with your GitHub username) under a key named after your username. OIDC only lists organization secrets.",
+            Route = "ListSecrets",
+            Parameters = new List<FunctionParameterDefinition>()
         }
     };
 

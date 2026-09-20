@@ -50,6 +50,7 @@ state_location  = ""             # Azure region for the Terraform state resource
 #                                                                                   |___/     
 aks_sku_tier                 = "Free"             # Free (dev/test, no SLA) | Standard (99.95% SLA) | Premium (99.99% SLA)
 acr_sku                      = "Basic"            # Basic (dev/test) | Standard (production) | Premium (geo-replication)
+keyvault_sku                 = "Standard"         # Standard (software-protected) | Premium (HSM-backed)
 linux_vm_size                = "Standard_D4s_v5"  # v6 not supported for sqlserver
 windows_vm_size              = "Standard_D4s_v5"  # v6 not supported for hyhervisor gen1
 windows_min_node_count       = 0                  # Set to 1 to keep a warm Windows node (~$70-100/mo)
@@ -211,6 +212,22 @@ github_app_installation_id = "123456789"  # paste your Installation ID here
 #                                                      |___/     
 # Default user settings (deployed to settings/usersettings.json in storage)
 # _members = defaults for all users, _admins = defaults for admin users
+#
+# Optional: auto start/stop the cluster on a schedule to save cost. Add a "Uptime"
+# block under "_admins" (runtime 'setsettings' changes override this default and are
+# preserved across 'terraform apply'):
+#   "_admins": {
+#     "MaxContainers": 10,
+#     "Uptime": {
+#       "TimeZone": "Central European Standard Time",
+#       "Weekdays": { "Mon": "06:00-18:00", "Tue": "06:00-18:00", "Wed": "06:00-18:00", "Thu": "06:00-18:00", "Fri": "06:00-18:00", "Sat": "-18:00", "Sun": "-18:00" },
+#       "UseNagerHolidays": { "Countries": "DK", "Types": "Public,Bank" }
+#     }
+#   }
+# Each weekday value is one of:
+#   "HH:mm-HH:mm" - auto-start at the first time, auto-stop at the second.
+#   "HH:mm-"      - start-only: auto-start at the time, never auto-stop (manual stop).
+#   "-HH:mm"      - stop-only: auto-stop at the time, never auto-start (manual start).
 default_user_settings = <<-EOT
   {
     "_members": {

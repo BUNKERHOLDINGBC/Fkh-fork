@@ -21,6 +21,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Fkh.Contract.Tests" />
+    <InternalsVisibleTo Include="Fkh.Cli.UnitTests" />
   </ItemGroup>
 
   <ItemGroup>

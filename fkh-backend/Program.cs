@@ -26,6 +26,7 @@ var host = new HostBuilder()
         services.AddSingleton<FkhGetContainerEventLog>();
         services.AddSingleton<FkhAutoStop>();
         services.AddSingleton<FkhAllowSqlAccess>();
+        services.AddSingleton<FkhAllowWinRmAccess>();
         services.AddSingleton<FkhListImages>();
         services.AddSingleton<FkhCreateImage>();
         services.AddSingleton<FkhRemoveImage>();
@@ -53,6 +54,8 @@ var host = new HostBuilder()
         services.AddSingleton<FkhPrepull>();
         services.AddSingleton<FkhUserSettings>();
         services.AddSingleton<FkhClusterControl>();
+        services.AddSingleton<FkhHolidayService>();
+        services.AddSingleton<FkhClusterSchedule>();
         services.AddSingleton<FkhGetVersion>();
         services.AddSingleton<FkhCopyFileFromContainer>();
         services.AddSingleton<FkhCopyFileToContainer>();
@@ -61,6 +64,7 @@ var host = new HostBuilder()
         services.AddSingleton<FkhGetUser>();
         services.AddSingleton<FkhNewUser>();
         services.AddSingleton<FkhGetContainerDetails>();
+        services.AddSingleton<FkhKeyVault>();
     })
     .Build();
 
