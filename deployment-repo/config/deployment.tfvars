@@ -20,6 +20,22 @@
 # Needs to be lower case, letters and numbers only
 fkhDeploymentName = "myorg"
 
+# Registration (required) — lets the Fkh author contact you about security patches and important updates.
+# Sent to the central fkh-usage service on every deployment and linked to your deployment's anonymous
+# usage data (which contains no names, emails, URLs or IPs)
+# company, name, githubUser, email and phone are required.
+registration = {
+  company    = ""   # e.g. "My Company"
+  name       = ""   # Contact person, e.g. "Jane Doe"
+  githubUser = ""   # Contact person's GitHub username, e.g. "janedoe"
+  email      = ""   # e.g. "jane@example.com"
+  phone      = ""   # e.g. "+45 12345678"
+  address    = ""   # Optional, e.g. "Street 1, 1234 City"
+  country    = ""   # Optional, e.g. "Denmark"
+  website    = ""   # Optional, e.g. "https://example.com"
+  notes      = ""   # Optional
+}
+
 
 #                                   _____      _   _   _                 
 #     /\                           / ____|    | | | | (_)                
@@ -64,6 +80,20 @@ windows_spot_enabled         = false              # Set to true to add a Spot pr
 windows_spot_vm_size         = "Standard_D2ds_v5" # VM size for spot nodes
 windows_spot_min_node_count  = 0                  # Minimum spot nodes (0 = scale to zero when idle)
 windows_spot_max_node_count  = 10                 # Maximum spot nodes the autoscaler can scale to
+
+# Kubernetes version — minor version only (e.g. "1.35"). Patches are applied automatically in the
+# maintenance window below; minor upgrades only happen when you change this value (one minor at a time).
+# Windows Server 2022 nodes are supported up to 1.36.
+kubernetes_version = "1.35"
+
+# Maintenance window — weekly slot where AKS may apply Kubernetes patches and node OS image updates.
+# Nodes are drained during updates, so running BC containers restart. duration is in hours (min 4).
+aks_maintenance_window = {
+  day_of_week = "Sunday"
+  start_time  = "02:00"
+  duration    = 4
+  utc_offset  = "+01:00"
+}
 
 # Images to pre-pull on Windows nodes (speeds up container creation)
 windows_prepull_images = [
