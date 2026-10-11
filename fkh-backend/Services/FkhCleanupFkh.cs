@@ -27,22 +27,27 @@ public class FkhCleanupFkh : FkhServiceBase
             .ToList();
 
         var podName = await FindMssqlPodAsync(client);
+        var freeBytesBefore = forceProvided ? await GetFreeBytesAsync(client, podName) : null;
         var databaseRows = await QuerySqlRowsAsync(client, podName,
             "SET NOCOUNT ON; " +
-            $"SELECT name, CASE WHEN create_date <= DATEADD(HOUR, -{GracePeriodHours}, GETDATE()) THEN 1 ELSE 0 END " +
-            "FROM sys.databases WHERE database_id > 4 ORDER BY name; " +
+            $"SELECT d.name, CASE WHEN d.create_date <= DATEADD(HOUR, -{GracePeriodHours}, GETDATE()) THEN 1 ELSE 0 END, " +
+            "(SELECT SUM(CAST(mf.size AS bigint)) * 8192 FROM sys.master_files mf WHERE mf.database_id = d.database_id) " +
+            "FROM sys.databases d WHERE d.database_id > 4 ORDER BY d.name; " +
             "PRINT N'CLEANUP_DATABASE_LIST_COMPLETE'",
             "CLEANUP_DATABASE_LIST_COMPLETE");
 
         var databaseStates = databaseRows
-            .Where(row => row.Length >= 2 && (row[1] == "0" || row[1] == "1"))
-            .Select(row => (Name: row[0], IsStale: row[1] == "1"))
+            .Where(row => row.Length >= 3 && (row[1] == "0" || row[1] == "1"))
+            .Select(row => (Name: row[0], IsStale: row[1] == "1", SizeBytes: ParseBytes(row[2])))
             .ToList();
 
         var orphanedDatabases = FindOrphanDatabaseNames(
             databaseStates.Where(database => database.IsStale).Select(database => database.Name), appNames);
         var recentOrphanedDatabases = FindOrphanDatabaseNames(
             databaseStates.Where(database => !database.IsStale).Select(database => database.Name), appNames);
+        var orphanedDatabaseBytes = databaseStates
+            .Where(database => orphanedDatabases.Contains(database.Name, StringComparer.OrdinalIgnoreCase))
+            .Sum(database => database.SizeBytes);
 
         var deletedDatabases = new List<string>();
         var databaseFailures = new List<string>();
@@ -74,16 +79,22 @@ public class FkhCleanupFkh : FkhServiceBase
         var bakFiles = await CleanupBakFilesAsync(client, podName, !forceProvided);
         var logRows = await QuerySqlRowsAsync(client, podName,
             "SET NOCOUNT ON; " +
-            "SELECT d.name, mf.name FROM sys.databases d " +
+            "CREATE TABLE #logspace (DatabaseName sysname, LogSizeMb float, LogUsedPercent float, Status int); " +
+            "INSERT INTO #logspace EXEC('DBCC SQLPERF(LOGSPACE)'); " +
+            "SELECT d.name, mf.name, " +
+            "CAST(CAST(mf.size AS bigint) * 8192 * (100 - ISNULL(l.LogUsedPercent, 100)) / 100 AS bigint) " +
+            "FROM sys.databases d " +
             "JOIN sys.master_files mf ON d.database_id = mf.database_id " +
+            "LEFT JOIN #logspace l ON l.DatabaseName = d.name " +
             "WHERE d.database_id > 4 AND d.state = 0 AND mf.type = 1 ORDER BY d.name, mf.name; " +
             "PRINT N'CLEANUP_LOG_LIST_COMPLETE'",
             "CLEANUP_LOG_LIST_COMPLETE");
 
         var logsForDeployedApps = logRows
-            .Where(row => row.Length >= 2 && IsManagedDatabaseName(row[0])
+            .Where(row => row.Length >= 3 && IsManagedDatabaseName(row[0])
                 && IsDatabaseForAnyApp(row[0], appNames))
             .ToList();
+        var reclaimableLogBytes = logsForDeployedApps.Sum(row => ParseBytes(row[2]));
 
         var logShrinkAttempts = new List<string>();
         var shrinkFailures = new List<string>();
@@ -108,6 +119,20 @@ public class FkhCleanupFkh : FkhServiceBase
             }
         }
 
+        string? spaceFreed = null;
+        string? estimatedSpaceToFree = null;
+        if (forceProvided)
+        {
+            var freeBytesAfter = await GetFreeBytesAsync(client, podName);
+            spaceFreed = freeBytesBefore is long before && freeBytesAfter is long after
+                ? FormatBytes(after - before)
+                : "unknown (could not read free disk space)";
+        }
+        else
+        {
+            estimatedSpaceToFree = FormatBytes(orphanedDatabaseBytes + bakFiles.TotalBytes + reclaimableLogBytes);
+        }
+
         return new
         {
             ForceProvided = forceProvided,
@@ -115,6 +140,8 @@ public class FkhCleanupFkh : FkhServiceBase
                 ? "Force was provided; cleanup actions were applied where possible."
                 : "Force was not provided; preview only. Add --force to perform cleanup.",
             GracePeriodHours,
+            SpaceFreed = spaceFreed,
+            EstimatedSpaceToFree = estimatedSpaceToFree,
             OrphanedDatabases = forceProvided ? deletedDatabases : orphanedDatabases,
             RecentOrphanedDatabases = recentOrphanedDatabases,
             DatabaseFailures = databaseFailures,
@@ -170,21 +197,58 @@ public class FkhCleanupFkh : FkhServiceBase
         return await ExecInMssqlPodAsync(client, podName, script);
     }
 
-    private async Task<(List<string> Files, string? Failure)> CleanupBakFilesAsync(
+    private async Task<(List<string> Files, long TotalBytes, string? Failure)> CleanupBakFilesAsync(
         Kubernetes client, string podName, bool dryRun)
     {
-        var action = dryRun ? "-print" : "-print -delete";
+        var action = dryRun ? "-printf '%s\\t%p\\n'" : "-printf '%s\\t%p\\n' -delete";
         var script = $"find /var/opt/mssql/data -maxdepth 1 -type f -name '*.bak' -mmin +{GracePeriodHours * 60} {action} " +
             "&& echo 'BAK_CLEANUP_COMPLETE'";
         var result = await ExecInMssqlPodAsync(client, podName, script);
         if (!result.Stdout.Contains("BAK_CLEANUP_COMPLETE", StringComparison.Ordinal))
-            return ([], result.ToString());
+            return ([], 0, result.ToString());
 
-        var files = result.Stdout
+        var entries = result.Stdout
             .Split('\n', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(line => line != "BAK_CLEANUP_COMPLETE")
+            .Select(line => line.Split('\t', 2))
+            .Where(parts => parts.Length == 2)
             .ToList();
-        return (files, null);
+        return (entries.Select(parts => parts[1]).ToList(), entries.Sum(parts => ParseBytes(parts[0])), null);
+    }
+
+    private async Task<long?> GetFreeBytesAsync(Kubernetes client, string podName)
+    {
+        try
+        {
+            // Data and log may live on separate volumes; count each filesystem once.
+            var result = await ExecInMssqlPodAsync(client, podName,
+                "df -B1 --output=source,avail /var/opt/mssql/data /var/opt/mssql/log 2>/dev/null " +
+                "| tail -n +2 | sort -u | awk '{s+=$2} END {print s}'");
+            return long.TryParse(result.Stdout.Trim(), out var bytes) && bytes > 0 ? bytes : null;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Could not read free disk space on the MSSQL pod.");
+            return null;
+        }
+    }
+
+    private static long ParseBytes(string value) =>
+        long.TryParse(value, out var bytes) && bytes > 0 ? bytes : 0;
+
+    internal static string FormatBytes(long bytes)
+    {
+        string[] units = ["B", "KB", "MB", "GB", "TB"];
+        double size = Math.Abs(bytes);
+        var unit = 0;
+        while (size >= 1024 && unit < units.Length - 1)
+        {
+            size /= 1024;
+            unit++;
+        }
+        var sign = bytes < 0 ? "-" : "";
+        return unit == 0
+            ? $"{sign}{size:0} {units[unit]}"
+            : $"{sign}{size.ToString("0.0", System.Globalization.CultureInfo.InvariantCulture)} {units[unit]}";
     }
 
     private static string QuoteSqlIdentifier(string identifier) =>

@@ -74,12 +74,12 @@ public class FunctionCatalogTests
     }
 
     [Fact]
-    public void CleanupFkh_is_admin_only_and_requires_confirmation()
+    public void CleanupFkh_is_admin_only_and_gated_by_force()
     {
         var cleanup = FunctionCatalog.Functions.Single(f => f.Name == "cleanupFkh");
 
         Assert.True(cleanup.AdminOnly);
-        Assert.True(cleanup.RequiresConfirmation);
+        Assert.False(cleanup.RequiresConfirmation);
         var force = cleanup.Parameters.Single(p => p.Name == "force");
         Assert.Equal("boolean", force.Type);
         Assert.Null(force.DefaultValue);

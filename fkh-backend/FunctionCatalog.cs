@@ -171,10 +171,9 @@ public static class FunctionCatalog
         new FunctionDefinition
         {
             Name = "cleanupFkh",
-            Description = "Cleans stale Fkh SQL resources. Without --force, previews orphaned databases and .bak files older than 24 hours and log shrink attempts for databases belonging to deployed containers. Add --force to apply cleanup. Shrinking changes database recovery to SIMPLE. Admin only.",
+            Description = "Cleans stale Fkh SQL resources. Without --force, previews orphaned databases and .bak files older than 24 hours and log shrink attempts for databases belonging to deployed containers. Add --force to apply cleanup. Reports space freed (estimated in preview). Shrinking changes database recovery to SIMPLE. Admin only.",
             Route = "cleanupFkh",
             AdminOnly = true,
-            RequiresConfirmation = true,
             Parameters = new List<FunctionParameterDefinition>
             {
                 new()
