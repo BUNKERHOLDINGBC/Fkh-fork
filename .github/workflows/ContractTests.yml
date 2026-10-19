@@ -7,6 +7,7 @@ on:
       - 'fkh-backend/**'
       - 'fkh-cli/**'
       - 'tests/Fkh.Contract.Tests/**'
+      - 'tests/Directory.Build.props'
       - '.github/workflows/ContractTests.yml'
   push:
     branches: [main]
@@ -15,6 +16,7 @@ on:
       - 'fkh-backend/**'
       - 'fkh-cli/**'
       - 'tests/Fkh.Contract.Tests/**'
+      - 'tests/Directory.Build.props'
       - '.github/workflows/ContractTests.yml'
   workflow_dispatch:
 
@@ -33,7 +35,9 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 10.0.x
+          dotnet-version: |
+            8.0.x
+            10.0.x
 
       - name: Run contract tests
-        run: dotnet test tests/Fkh.Contract.Tests/Fkh.Contract.Tests.csproj --configuration Release
+        run: dotnet run --project tests/Fkh.Contract.Tests/Fkh.Contract.Tests.csproj -c Release
