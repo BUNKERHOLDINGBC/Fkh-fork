@@ -59,15 +59,20 @@ try {
     [xml]$customSettings = [IO.File]::ReadAllText($customSettingsPath)
     $publicWebBaseUrl = $customSettings.SelectSingleNode("//appSettings/add[@key='PublicWebBaseUrl']").Value.TrimEnd('/')
     $credentialType = $customSettings.SelectSingleNode("//appSettings/add[@key='ClientServicesCredentialType']").Value
-    if ($credentialType -ne 'NavUserPassword') {
+    if ($credentialType -notin @('NavUserPassword', 'AccessControlService')) {
         throw "Container test execution does not support '$credentialType' client authentication."
     }
     if ([string]::IsNullOrWhiteSpace($env:username) -or [string]::IsNullOrWhiteSpace($env:password)) {
         throw 'The container administrator credentials are unavailable.'
     }
 
-    $uri = [Uri]$publicWebBaseUrl
-    $serviceUrl = "$($uri.Scheme)://localhost:$($uri.Port)$($uri.AbsolutePath.TrimEnd('/'))/cs?tenant=$([Uri]::EscapeDataString($tenant))"
+    if ($credentialType -eq 'AccessControlService') {
+        $serviceUrl = & 'C:\run\my\Initialize-FkhTestInstance.ps1' -Tenant $tenant | Select-Object -Last 1
+    }
+    else {
+        $uri = [Uri]$publicWebBaseUrl
+        $serviceUrl = "$($uri.Scheme)://localhost:$($uri.Port)$($uri.AbsolutePath.TrimEnd('/'))/cs?tenant=$([Uri]::EscapeDataString($tenant))"
+    }
     $securePassword = New-Object Security.SecureString
     foreach ($character in $env:password.ToCharArray()) {
         $securePassword.AppendChar($character)
