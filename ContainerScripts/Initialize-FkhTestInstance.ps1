@@ -7,6 +7,10 @@ param(
 
 # AAD service tiers refuse app-only tokens in UI sessions, so tests use a localhost-only NavUserPassword tier on the same database.
 $ErrorActionPreference = 'Stop'
+if ($PSVersionTable.PSVersion.Major -lt 6) {
+    # Started from pwsh, PSModulePath includes PowerShell 7 module folders that break Windows PowerShell (e.g. Get-Acl).
+    $env:PSModulePath = (($env:PSModulePath -split ';') | Where-Object { $_ -and $_ -notmatch '\\PowerShell\\' }) -join ';'
+}
 if (-not (Get-Command Get-NAVServerInstance -ErrorAction SilentlyContinue)) {
     . 'C:\run\prompt.ps1' -silent
 }
@@ -43,6 +47,12 @@ try {
     if ($Remove) {
         if (Get-NAVWebServerInstance -WebServerInstance $instance -ErrorAction SilentlyContinue) {
             Write-Host "Removing the '$instance' test web client."
+            $appcmd = "$env:windir\System32\inetsrv\appcmd.exe"
+            $appPool = & $appcmd list app "/site.name:$instance" /text:apppool.name | Select-Object -First 1
+            & $appcmd stop site "/site.name:$instance" | Out-Null
+            if ($appPool) {
+                & $appcmd stop apppool "/apppool.name:$appPool" | Out-Null
+            }
             Remove-NAVWebServerInstance -WebServerInstance $instance | Out-Null
         }
         if (Get-NAVServerInstance -ServerInstance $instance -ErrorAction SilentlyContinue) {
